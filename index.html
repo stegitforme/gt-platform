@@ -1217,6 +1217,12 @@ function importOVData() {
     status.textContent = 'Imported: ' + updated + ' updated, ' + added + ' new tickers'
     status.style.color = '#00d68f'
     
+    // Sanitize imported data
+    const _smap = {'Tech':'Technology','Comms':'Communication','Disc':'Discretionary','Staples':'Consumer Staples'}
+    Object.keys(OV).forEach(tk => {
+      if(OV[tk].fg < 5) OV[tk].fg = 50
+      if(_smap[OV[tk].s]) OV[tk].s = _smap[OV[tk].s]
+    })
     runFilter()
     setApi('OVTLYR data refreshed: ' + updated + ' updated, ' + added + ' new �&middot; ' + keys.length + ' total', 'ok')
     
