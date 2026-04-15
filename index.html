@@ -265,7 +265,7 @@ tr:hover td{background:#171b22;cursor:pointer}
         <div class="field" style="margin:0"><label>Min signal %</label><input type="number" id="f-sig" value="100"></div>
         <div class="field" style="margin:0"><label>F&G min</label><input type="number" id="f-fg-min" value="15"></div>
         <div class="field" style="margin:0"><label>F&G max</label><input type="number" id="f-fg-max" value="75"></div>
-        <div class="field" style="margin:0"><label>Max spread $</label><input type="number" id="f-spread" value="0.50" step="0.05"></div>
+        <div class="field" style="margin:0"><label style="display:flex;align-items:center;gap:4px">Max spread <span id="f-spread-type" onclick="toggleSpreadType()" style="cursor:pointer;background:#171b22;border:1px solid rgba(255,255,255,.15);border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700;color:#f0c040;user-select:none">$</span></label><input type="number" id="f-spread" value="0.50" step="0.05"></div>
         <div class="field" style="margin:0"><label>Min OI</label><input type="number" id="f-oi" value="250"></div>
         <div class="field" style="margin:0"><label>Min 30D vol</label><input type="number" id="f-vol" value="1000000"></div>
       </div>
@@ -737,7 +737,7 @@ function renderChecklist() {
     // For group score, skip null items (not yet evaluated)
     const gp = g.items.filter(i => i.pass === true).length
     const gt = g.items.filter(i => i.pass !== null).length
-    html += '<div class="chk-group" style="color:' + g.gc + '">' + g.g + ' &nbsp;�.&nbsp; ' + gp + '/' + gt + '</div>'
+    html += '<div class="chk-group" style="color:' + g.gc + '">' + g.g + '  �.  ' + gp + '/' + gt + '</div>'
     g.items.forEach(i => {
       if(i.pass !== null) { total++; if(i.pass) passing++ }
       // null = pending (grey), true = pass (green), false = fail (red)
@@ -1352,6 +1352,7 @@ async function fetchScreenerPrices(tickers) {
   setApi('Prices loaded: ' + fetched + ' tickers', 'ok')
 }
 
+function toggleSpreadType(){var el=document.getElementById("f-spread-type");if(!el)return;if(el.textContent.trim()==="$"){el.textContent="%";var i=document.getElementById("f-spread");if(i&&+i.value<=2)i.value="10"}else{el.textContent="$";var i=document.getElementById("f-spread");if(i&&+i.value>=5)i.value="0.50"}runFilter()}
 function resetFilters() {
   document.getElementById('f-sig').value = 100
   document.getElementById('f-fg-min').value = 15
@@ -1438,7 +1439,7 @@ function renderLevels(entry, atr) {
     '<div style="height:1px;background:rgba(255,255,255,.07);margin:5px 0"></div>' +
     lvlRow('bg-o','#ff8c42','Stop loss  �.5 ATR  �.  orange line', sl, pct(sl)) +
     lvlRow('bg-r','#ff4560','Emergency exit  2� ATR  �.  red line', em, pct(em)) +
-    '<div style="margin-top:8px;padding:7px 11px;background:#171b22;border-radius:6px;font-size:11px;color:#555c6e">ATR(14) = <span style="color:#e8eaf0;font-family:\'SF Mono\',monospace">$' + atr.toFixed(2) + '</span> &nbsp;�.&nbsp; �.5 ATR = <span style="color:#ff8c42;font-family:\'SF Mono\',monospace">$' + h.toFixed(2) + '</span></div>'
+    '<div style="margin-top:8px;padding:7px 11px;background:#171b22;border-radius:6px;font-size:11px;color:#555c6e">ATR(14) = <span style="color:#e8eaf0;font-family:\'SF Mono\',monospace">$' + atr.toFixed(2) + '</span>  �.  �.5 ATR = <span style="color:#ff8c42;font-family:\'SF Mono\',monospace">$' + h.toFixed(2) + '</span></div>'
 }
 
 function copyLevels() {
@@ -1519,10 +1520,10 @@ async function fetchTicker(ticker) {
   const emaLbl = emaOk ? ' Bullish stack' : ' Not aligned'
   st.innerHTML =
     '<span style="color:#00d68f"> ' + ticker + '</span>' +
-    ' &nbsp;�.&nbsp; ATR: <span style="color:#e8eaf0">$' + atr + '</span>' +
-    ' &nbsp;�.&nbsp; Price: <span style="color:#e8eaf0">$' + price.toFixed(2) + '</span><br>' +
-    'EMA10: ' + (e10||'') + ' &nbsp;�.&nbsp; EMA20: ' + (e20||'') + ' &nbsp;�.&nbsp; EMA50: ' + e50str +
-    ' &nbsp;�.&nbsp; <span style="color:' + emaCol + '">' + emaLbl + '</span>'
+    '  �.  ATR: <span style="color:#e8eaf0">$' + atr + '</span>' +
+    '  �.  Price: <span style="color:#e8eaf0">$' + price.toFixed(2) + '</span><br>' +
+    'EMA10: ' + (e10||'') + '  �.  EMA20: ' + (e20||'') + '  �.  EMA50: ' + e50str +
+    '  �.  <span style="color:' + emaCol + '">' + emaLbl + '</span>'
   st.style.color = ''
 
   setApi(ticker + ' loaded �. ATR $' + atr + ' �. Price $' + price.toFixed(2), 'ok')
@@ -2381,7 +2382,7 @@ setTimeout(() => fetchEarningsCalendar().catch(e => console.log('Earnings init:'
     </div>
     <button class="btn btn-gold" onclick="saveApiKey()" style="margin-top:8px">Connect &amp; Launch</button>
     <div style="margin-top:10px;font-size:11px;color:#555c6e;text-align:center">
-      <a href="https://polygon.io/dashboard/api-keys" target="_blank" style="color:#555c6e">Get a free API key at polygon.io &rarr;</a>
+      <a href="https://polygon.io/dashboard/api-keys" target="_blank" style="color:#555c6e">Get a free API key at polygon.io -></a>
     </div>
   </div>
 </div>
