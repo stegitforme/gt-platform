@@ -896,7 +896,8 @@ async function loadMarketData() {
     setApi('Using cached market data', 'err')
   }
   // Fetch VIX with 13s delay to stay under 5 req/min rate limit
-  setTimeout(fetchVIX, 13000)
+  setTimeout(fetchVIX, 3000)
+  setTimeout(fetchSectorData, 6000)
 }
 
 async function fetchTQQQSignal() {
