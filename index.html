@@ -682,8 +682,8 @@ const OV = {
   RBA:{r:110,fg:22.0,s:'Industrials',v:1178345,earn:false},
 }
 
-const WIDE_SPREADS = new Set(['AMAT','ATI','CAT','DE','GS','COHR','TT','CLS','MOD','WSM'])
-const BULL_SECTORS = new Set(['Financials','Materials','Real Estate','Industrials'])
+const WIDE_SPREADS = new Set() // Spread filtering uses live Polygon data
+const BULL_SECTORS = new Set(['Financials','Materials','Real Estate','Industrials','Technology','Communication','Discretionary'])
 
 const SECTORS = [
   {n:'Financials',p:72.8,c:+4.94,bull:true},
@@ -1261,7 +1261,11 @@ function runFilter() {
     if(d.fg < fgMin || d.fg > fgMax) return null
     if(d.v < minVol) return null
     if(noEarn && !earnOk) return null
-    if(bullOnly && !BULL_SECTORS.has(d.s)) return null
+    if(bullOnly) {
+      const liveSector = SECTORS.find(s => s.n === d.s || d.s.startsWith(s.n))
+      const isBull = liveSector ? liveSector.bull : BULL_SECTORS.has(d.s)
+      if(!isBull) return null
+    }
     if(noWide && !spreadOk) return null
     const score = Math.min(40, d.r/20) + (d.fg>=15&&d.fg<=65?20:5) + (earnOk?20:0) + (spreadOk?10:0) + (d.v>3e6?10:5)
     return {t, d, spreadOk, earnOk, score}
