@@ -190,7 +190,7 @@ tr:hover td{background:#171b22;cursor:pointer}
       </div>
       <div class="card">
         <div class="card-head">
-          <span class="card-title">Sector Breadth (OVTLYR �&middot; 10 EMA)</span>
+          <span class="card-title">Sector Breadth (OVTLYR �. 10 EMA)</span>
           <button class="btn btn-ghost" style="font-size:10px;padding:3px 9px" id="btn-sectors" onclick="fetchSectorData()">Refresh live</button>
         </div>
         <div class="card-body" id="sector-body" style="padding:8px 14px"></div>
@@ -235,7 +235,7 @@ tr:hover td{background:#171b22;cursor:pointer}
             <b style="color:#f0c040">One-time bookmarklet setup:</b><br>
             1. Click "Copy bookmarklet" button<br>
             2. Chrome bookmarks bar � right-click � "Add page..."<br>
-            3. Name: <b style="color:#e8eaf0">GT Scrape</b> �&middot; URL: paste the copied code<br>
+            3. Name: <b style="color:#e8eaf0">GT Scrape</b> �. URL: paste the copied code<br>
             4. Save  the bookmark now lives in your bar<br><br>
             <b style="color:#f0c040">Daily refresh (takes ~10 seconds):</b><br>
             1. Open <a href="https://console.ovtlyr.com" target="_blank" style="color:#4da6ff">console.ovtlyr.com</a> Screener and wait for data to load<br>
@@ -265,7 +265,7 @@ tr:hover td{background:#171b22;cursor:pointer}
         <div class="field" style="margin:0"><label>Min signal %</label><input type="number" id="f-sig" value="100"></div>
         <div class="field" style="margin:0"><label>F&G min</label><input type="number" id="f-fg-min" value="15"></div>
         <div class="field" style="margin:0"><label>F&G max</label><input type="number" id="f-fg-max" value="75"></div>
-        <div class="field" style="margin:0"><label style="display:flex;align-items:center;gap:4px">Max spread <span id="f-spread-type" onclick="toggleSpreadType()" style="cursor:pointer;background:#171b22;border:1px solid rgba(255,255,255,.15);border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700;color:#f0c040;user-select:none">$</span></label><input type="number" id="f-spread" value="0.50" step="0.05"></div>
+        <div class="field" style="margin:0"><label>Max spread $</label><input type="number" id="f-spread" value="0.50" step="0.05"></div>
         <div class="field" style="margin:0"><label>Min OI</label><input type="number" id="f-oi" value="250"></div>
         <div class="field" style="margin:0"><label>Min 30D vol</label><input type="number" id="f-vol" value="1000000"></div>
       </div>
@@ -703,7 +703,7 @@ const CHECKS = [
     {id:'spy-sig', l:'SPY signal: Buy',              pass:true,  n:'OVTLYR buy signal on $SPY'},
     {id:'spy-ema', l:'SPY 10EMA > 20EMA',            pass:true,  n:'Short-term trend above medium  auto-updated from API'},
     {id:'spy-50',  l:'SPY price > 50EMA',            pass:true,  n:'Price above key support  auto-updated from API'},
-    {id:'breadth', l:'Market breadth 2575%',        pass:true,  n:'Under 25 = NO TRADES �&middot; Over 75 = reduce risk'},
+    {id:'breadth', l:'Market breadth 2575%',        pass:true,  n:'Under 25 = NO TRADES �. Over 75 = reduce risk'},
     {id:'brd-dir', l:'Breadth 10EMA bullish cross',  pass:true,  n:'Breadth trending upward'},
   ]},
   {g:'Sector (30%)', gc:'#f0c040', items:[
@@ -737,7 +737,7 @@ function renderChecklist() {
     // For group score, skip null items (not yet evaluated)
     const gp = g.items.filter(i => i.pass === true).length
     const gt = g.items.filter(i => i.pass !== null).length
-    html += '<div class="chk-group" style="color:' + g.gc + '">' + g.g + ' &nbsp;�&middot;&nbsp; ' + gp + '/' + gt + '</div>'
+    html += '<div class="chk-group" style="color:' + g.gc + '">' + g.g + ' &nbsp;�.&nbsp; ' + gp + '/' + gt + '</div>'
     g.items.forEach(i => {
       if(i.pass !== null) { total++; if(i.pass) passing++ }
       // null = pending (grey), true = pass (green), false = fail (red)
@@ -805,7 +805,7 @@ function updateMorningPanel() {
   if(mmVix) {
     const v = parseFloat(vixVal)
     const vc = v < 20 ? '#00d68f' : v < 28 ? '#ff8c42' : '#ff4560'
-    mmVix.innerHTML = 'VIX <span style="color:' + vc + '">' + (vixVal||'') + '</span>' + (v < 20 ? ' �&middot; calm' : v < 28 ? ' �&middot; caution' : ' �&middot; fear')
+    mmVix.innerHTML = 'VIX <span style="color:' + vc + '">' + (vixVal||'') + '</span>' + (v < 20 ? ' �. calm' : v < 28 ? ' �. caution' : ' �. fear')
   }
 
   // Breadth
@@ -855,7 +855,7 @@ function updateMorningPanel() {
   if(mmDec) {
     mmDec.style.background = isGo ? 'rgba(0,214,143,.1)' : 'rgba(255,69,96,.1)'
     mmDec.style.color = isGo ? '#00d68f' : '#ff4560'
-    mmDec.textContent = isGo ? 'GO  conditions favorable �&middot; safe to open new trades' : 'NO-GO  wait for conditions to improve'
+    mmDec.textContent = isGo ? 'GO  conditions favorable �. safe to open new trades' : 'NO-GO  wait for conditions to improve'
   }
 
   // Timestamp
@@ -886,11 +886,11 @@ async function loadMarketData() {
       const sc = document.getElementById('spy-c')
       sc.textContent = (chg>=0?'+':'') + chg.toFixed(2) + '%'
       sc.style.color = chg >= 0 ? '#00d68f' : '#ff4560'
-      document.getElementById('mkt-updated').textContent = 'Live �&middot; ' + new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})
+      document.getElementById('mkt-updated').textContent = 'Live �. ' + new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})
       setCheck('spy-ema', !!(e10 && e20 && e10 > e20))
       setCheck('spy-50',  !!(e50 && price > e50))
       renderChecklist()
-      setApi('SPY $' + price.toFixed(2) + ' �&middot; EMA10:' + e10 + ' EMA20:' + e20 + (e50?' EMA50:'+e50:' (need more history for EMA50)'), 'ok')
+      setApi('SPY $' + price.toFixed(2) + ' �. EMA10:' + e10 + ' EMA20:' + e20 + (e50?' EMA50:'+e50:' (need more history for EMA50)'), 'ok')
     }
   } catch(e) {
     setApi('Using cached market data', 'err')
@@ -991,12 +991,12 @@ async function fetchTQQQSignal() {
           '</div>' +
         '</div>' +
       '</div>' +
-      '<div style="font-size:11px;color:#555c6e">Based on '+n+' trading days of QQQ data �&middot; 200MA uses '+ma200window+' days �&middot; Vol uses '+vol20window+' days �&middot; Run every Friday before market close</div>'
+      '<div style="font-size:11px;color:#555c6e">Based on '+n+' trading days of QQQ data �. 200MA uses '+ma200window+' days �. Vol uses '+vol20window+' days �. Run every Friday before market close</div>'
 
     if(body) body.innerHTML = html
     const upd = document.getElementById('tqqq-updated')
     if(upd) upd.textContent = 'Updated ' + new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})
-    setApi('TQQQ Signal: '+tqqqPct+'% TQQQ / '+sgov+'% SGOV �&middot; Vol '+annualVol+'% �&middot; QQQ '+(aboveMa?'above':'below')+' 200MA', 'ok')
+    setApi('TQQQ Signal: '+tqqqPct+'% TQQQ / '+sgov+'% SGOV �. Vol '+annualVol+'% �. QQQ '+(aboveMa?'above':'below')+' 200MA', 'ok')
 
   } catch(e) {
     if(body) body.innerHTML = '<div style="font-size:12px;color:#ff4560;text-align:center;padding:8px">Error: '+e.message+'</div>'
@@ -1032,7 +1032,7 @@ async function fetchVIX() {
       ec.style.color = chg <= 0 ? '#00d68f' : '#ff4560'
     }
     setCheck('vix-low', vixEst < 25)
-    setApi('VIX ~' + vixEst.toFixed(2) + ' est. via VIXY $' + vixy.toFixed(2) + ' �&middot; ' + (chg<=0?'falling �':'rising �'), 'ok')
+    setApi('VIX ~' + vixEst.toFixed(2) + ' est. via VIXY $' + vixy.toFixed(2) + ' �. ' + (chg<=0?'falling �':'rising �'), 'ok')
   } catch(e) {
     const el = document.getElementById('vix-v')
     if(el) el.textContent = ''
@@ -1092,7 +1092,7 @@ async function fetchSectorData() {
   }
 
   if(btn) { btn.textContent = 'Refresh live'; btn.disabled = false }
-  setApi('Sectors: ' + bullCount + '/10 bullish �&middot; ' + updated + ' updated', 'ok')
+  setApi('Sectors: ' + bullCount + '/10 bullish �. ' + updated + ' updated', 'ok')
 }
 
 function showBreadthUpdate() {
@@ -1224,7 +1224,7 @@ function importOVData() {
       if(_smap[OV[tk].s]) OV[tk].s = _smap[OV[tk].s]
     })
     runFilter()
-    setApi('OVTLYR data refreshed: ' + updated + ' updated, ' + added + ' new �&middot; ' + keys.length + ' total', 'ok')
+    setApi('OVTLYR data refreshed: ' + updated + ' updated, ' + added + ' new �. ' + keys.length + ' total', 'ok')
     
   } catch(err) {
     status.textContent = 'Parse error: ' + err.message + '  check JSON format'
@@ -1352,7 +1352,6 @@ async function fetchScreenerPrices(tickers) {
   setApi('Prices loaded: ' + fetched + ' tickers', 'ok')
 }
 
-function toggleSpreadType(){var el=document.getElementById("f-spread-type");if(!el)return;if(el.textContent.trim()==="$"){el.textContent="%";var i=document.getElementById("f-spread");if(i&&+i.value<=2)i.value="10"}else{el.textContent="$";var i=document.getElementById("f-spread");if(i&&+i.value>=5)i.value="0.50"}runFilter()}
 function resetFilters() {
   document.getElementById('f-sig').value = 100
   document.getElementById('f-fg-min').value = 15
@@ -1409,7 +1408,7 @@ function calc() {
   const g30  = cap * 0.30
 
   document.getElementById('m-cts').textContent  = cts
-  document.getElementById('m-cts-s').textContent= '�'+Math.round(delta*100)+' �&middot; 2�ATR=$'+(2*atr).toFixed(2)
+  document.getElementById('m-cts-s').textContent= '�'+Math.round(delta*100)+' �. 2�ATR=$'+(2*atr).toFixed(2)
   document.getElementById('m-cap').textContent  = cap > 0 ? '$'+Math.round(cap).toLocaleString() : ''
   document.getElementById('m-cap-s').textContent= optcost > 0 ? '$'+optcost+' � '+cts+' � 100' : 'enter option cost'
   document.getElementById('m-risk').textContent = '$'+Math.round(baseRisk).toLocaleString()
@@ -1437,9 +1436,9 @@ function renderLevels(entry, atr) {
     lvlRow('bg-b','#4da6ff','1� ATR roll point', r2, pct(r2)) +
     lvlRow('bg-b','#4da6ff','2� ATR roll point', r3, pct(r3)) +
     '<div style="height:1px;background:rgba(255,255,255,.07);margin:5px 0"></div>' +
-    lvlRow('bg-o','#ff8c42','Stop loss  �.5 ATR  �&middot;  orange line', sl, pct(sl)) +
-    lvlRow('bg-r','#ff4560','Emergency exit  2� ATR  �&middot;  red line', em, pct(em)) +
-    '<div style="margin-top:8px;padding:7px 11px;background:#171b22;border-radius:6px;font-size:11px;color:#555c6e">ATR(14) = <span style="color:#e8eaf0;font-family:\'SF Mono\',monospace">$' + atr.toFixed(2) + '</span> &nbsp;�&middot;&nbsp; �.5 ATR = <span style="color:#ff8c42;font-family:\'SF Mono\',monospace">$' + h.toFixed(2) + '</span></div>'
+    lvlRow('bg-o','#ff8c42','Stop loss  �.5 ATR  �.  orange line', sl, pct(sl)) +
+    lvlRow('bg-r','#ff4560','Emergency exit  2� ATR  �.  red line', em, pct(em)) +
+    '<div style="margin-top:8px;padding:7px 11px;background:#171b22;border-radius:6px;font-size:11px;color:#555c6e">ATR(14) = <span style="color:#e8eaf0;font-family:\'SF Mono\',monospace">$' + atr.toFixed(2) + '</span> &nbsp;�.&nbsp; �.5 ATR = <span style="color:#ff8c42;font-family:\'SF Mono\',monospace">$' + h.toFixed(2) + '</span></div>'
 }
 
 function copyLevels() {
@@ -1520,13 +1519,13 @@ async function fetchTicker(ticker) {
   const emaLbl = emaOk ? ' Bullish stack' : ' Not aligned'
   st.innerHTML =
     '<span style="color:#00d68f"> ' + ticker + '</span>' +
-    ' &nbsp;�&middot;&nbsp; ATR: <span style="color:#e8eaf0">$' + atr + '</span>' +
-    ' &nbsp;�&middot;&nbsp; Price: <span style="color:#e8eaf0">$' + price.toFixed(2) + '</span><br>' +
-    'EMA10: ' + (e10||'') + ' &nbsp;�&middot;&nbsp; EMA20: ' + (e20||'') + ' &nbsp;�&middot;&nbsp; EMA50: ' + e50str +
-    ' &nbsp;�&middot;&nbsp; <span style="color:' + emaCol + '">' + emaLbl + '</span>'
+    ' &nbsp;�.&nbsp; ATR: <span style="color:#e8eaf0">$' + atr + '</span>' +
+    ' &nbsp;�.&nbsp; Price: <span style="color:#e8eaf0">$' + price.toFixed(2) + '</span><br>' +
+    'EMA10: ' + (e10||'') + ' &nbsp;�.&nbsp; EMA20: ' + (e20||'') + ' &nbsp;�.&nbsp; EMA50: ' + e50str +
+    ' &nbsp;�.&nbsp; <span style="color:' + emaCol + '">' + emaLbl + '</span>'
   st.style.color = ''
 
-  setApi(ticker + ' loaded �&middot; ATR $' + atr + ' �&middot; Price $' + price.toFixed(2), 'ok')
+  setApi(ticker + ' loaded �. ATR $' + atr + ' �. Price $' + price.toFixed(2), 'ok')
   calc()
 
   // Check earnings via ticker details
@@ -1634,11 +1633,11 @@ async function fetchOptions(ticker) {
 
     ol.innerHTML =
       'Strike: $'+strike+
-      ' �&middot; OI: '+oi.toLocaleString()+
-      ' �&middot; Delta: '+(delta ? delta.toFixed(2) : 'n/a')+
-      ' �&middot; IV: '+(iv ? (iv*100).toFixed(1)+'%' : 'n/a')+
-      ' �&middot; Last: $'+(best.day?.close||'')+
-      ' �&middot; '+spreadStr
+      ' �. OI: '+oi.toLocaleString()+
+      ' �. Delta: '+(delta ? delta.toFixed(2) : 'n/a')+
+      ' �. IV: '+(iv ? (iv*100).toFixed(1)+'%' : 'n/a')+
+      ' �. Last: $'+(best.day?.close||'')+
+      ' �. '+spreadStr
 
     // Update checklist
     setCheck('opt-oi', oi >= 250)
@@ -1797,7 +1796,7 @@ function mkLevel(cls, dot, label, price, dist) {
 function renderTrades() {
   const open   = TRADES.filter(t => t.status === 'open')
   const closed = TRADES.filter(t => t.status === 'closed')
-  document.getElementById('trade-count').textContent = open.length + ' open �&middot; ' + closed.length + ' closed'
+  document.getElementById('trade-count').textContent = open.length + ' open �. ' + closed.length + ' closed'
 
   if(!TRADES.length) {
     document.getElementById('trades-list').innerHTML =
@@ -1862,7 +1861,7 @@ function renderTrades() {
             mkMini('+30% target', basis>0?'+$'+Math.round(basis*.3).toLocaleString():'', 'g') +
             mkMini(t.pnl!==undefined ? 'Realized P/L' : 'ATR', t.pnl!==undefined ? (t.pnl>=0?'+$':'-$')+Math.abs(Math.round(t.pnl)).toLocaleString() : '$'+t.atr, t.pnl!==undefined?(t.pnl>=0?'g':'r'):'') +
           '</div>' +
-          (t.rolls.length ? '<div style="margin-top:9px;padding-top:9px;border-top:1px solid rgba(255,255,255,.06)"><div style="font-size:10px;color:#555c6e;margin-bottom:4px">ROLLS</div>' + t.rolls.map(r=>'<div style="font-size:11px;color:#8b91a0;font-family:\'SF Mono\',monospace">'+r.date+' �&middot; $'+r.from.toFixed(2)+' � $'+r.to.toFixed(2)+'</div>').join('') + '</div>' : '') +
+          (t.rolls.length ? '<div style="margin-top:9px;padding-top:9px;border-top:1px solid rgba(255,255,255,.06)"><div style="font-size:10px;color:#555c6e;margin-bottom:4px">ROLLS</div>' + t.rolls.map(r=>'<div style="font-size:11px;color:#8b91a0;font-family:\'SF Mono\',monospace">'+r.date+' �. $'+r.from.toFixed(2)+' � $'+r.to.toFixed(2)+'</div>').join('') + '</div>' : '') +
           (t.notes ? '<div style="margin-top:7px;font-size:11px;color:#555c6e;border-top:1px solid rgba(255,255,255,.06);padding-top:7px">' + t.notes + '</div>' : '') +
         '</div>' +
       '</div>' +
@@ -1973,7 +1972,7 @@ async function refreshAllPnL() {
 
   document.getElementById('pnl-refresh-btn').textContent = 'Refresh P&L'
   document.getElementById('pnl-refresh-btn').disabled = false
-  setApi('P&L updated: ' + updated + '/' + trades.length + ' trades �&middot; last ' + new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}), 'ok')
+  setApi('P&L updated: ' + updated + '/' + trades.length + ' trades �. last ' + new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}), 'ok')
 }
 
 //    PORTFOLIO                                          
@@ -2312,7 +2311,7 @@ function renderPortfolio() {
       (p.gt === false ? '<div title="Long-term hold (click to mark as GT)" onclick="event.stopPropagation();tagPosition(\'' + p.raw + '\',true)" style="width:14px;height:14px;border-radius:3px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);cursor:pointer;flex-shrink:0;margin-right:4px;display:flex;align-items:center;justify-content:center"><span style="font-size:7px;color:#555c6e">LT</span></div>' :
        p.gt === true  ? '<div title="GOGO position (click to mark as Long-term)" onclick="event.stopPropagation();tagPosition(\'' + p.raw + '\',false)" style="width:14px;height:14px;border-radius:3px;background:rgba(240,192,64,.15);border:1px solid rgba(240,192,64,.3);cursor:pointer;flex-shrink:0;margin-right:4px;display:flex;align-items:center;justify-content:center"><span style="font-size:7px;color:#f0c040">GT</span></div>' :
        '<div title="Click to tag as GT or Long-term" onclick="event.stopPropagation();tagPosition(\'' + p.raw + '\',true)" style="width:14px;height:14px;border-radius:3px;background:rgba(255,255,255,.03);border:1px dashed rgba(255,255,255,.08);cursor:pointer;flex-shrink:0;margin-right:4px"></div>') +
-      '<div style="font-family:\'SF Mono\',monospace;font-weight:600;width:110px;flex-shrink:0">' + p.t + typeTag + (p.e ? '<div style="font-size:10px;color:#555c6e;font-weight:400">' + p.e + (p.c > 1 ? ' �&middot; ' + p.c + 'ct' : '') + '</div>' : '') + '</div>' +
+      '<div style="font-family:\'SF Mono\',monospace;font-weight:600;width:110px;flex-shrink:0">' + p.t + typeTag + (p.e ? '<div style="font-size:10px;color:#555c6e;font-weight:400">' + p.e + (p.c > 1 ? ' �. ' + p.c + 'ct' : '') + '</div>' : '') + '</div>' +
       (val ? '<div style="font-family:\'SF Mono\',monospace;font-size:11px;color:#555c6e;width:70px;flex-shrink:0">' + val + '</div>' : '<div style="width:70px;flex-shrink:0"></div>') +
       '<div style="font-family:\'SF Mono\',monospace;font-size:12px;font-weight:500;flex:1;color:' + pc + '">' + ps + ' <span style="font-size:10px;opacity:.8">' + pcs + '</span></div>' +
       '<div style="font-size:11px;color:' + tc + ';width:80px;text-align:right">' + ts + ' today</div>' +
