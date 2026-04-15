@@ -718,10 +718,10 @@ const CHECKS = [
     {id:'stk-mom', l:'Price above prior day low',    pass:true,  n:'Momentum / slingshot setup'},
   ]},
   {g:'Option Chain', gc:'#ff8c42', items:[
-    {id:'opt-exp', l:'Expiration e 21 days',         pass:true,  n:'Start at 21+ DTE'},
+    {id:'opt-exp', l:'Expiration >= 21 days',         pass:true,  n:'Start at 21+ DTE'},
     {id:'opt-oi',  l:'OI e 46� contract count',    pass:true,  n:'Or minimum 250 OI  auto-updated from API'},
     {id:'opt-sp',  l:'Bid/ask spread < $0.50',       pass:true,  n:'OVTLYR liquidity rule  auto-updated during market hours'},
-    {id:'opt-ex',  l:'Extrinsic value d 20%',        pass:true,  n:'Keep cost efficient'},
+    {id:'opt-ex',  l:'Extrinsic value <= 20%',        pass:true,  n:'Keep cost efficient'},
     {id:'opt-dl',  l:'Delta ~80',                    pass:true,  n:'Target delta per cheat sheet  auto-updated from API'},
     {id:'no-earn', l:'No earnings within 21 days',   pass:true,  n:'Earnings risk = exit signal  auto-updated from API'},
   ]},
