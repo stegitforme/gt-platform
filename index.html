@@ -683,7 +683,7 @@ const OV = {
 }
 
 const WIDE_SPREADS = new Set() // Spread filtering uses live Polygon data
-const BULL_SECTORS = new Set(['Financials','Materials','Real Estate','Industrials','Technology','Communication','Discretionary'])
+const BULL_SECTORS = new Set(['Financials','Materials','Real Estate','Industrials','Technology','Tech','Communication','Discretionary','Staples','Consumer Staples','Energy'])
 
 const SECTORS = [
   {n:'Financials',p:72.8,c:+4.94,bull:true},
@@ -1205,11 +1205,6 @@ function importOVData() {
       }
     })
     
-    // Sanitize fg: values < 5 are Capital Efficiency not F&G, default to 50
-    Object.keys(OV).forEach(t => { if(OV[t].fg < 5) OV[t].fg = 50; })
-    // Normalize sector names
-    const _smap = {'Tech':'Technology','Comms':'Communication','Disc':'Discretionary'}
-    Object.keys(OV).forEach(t => { if(_smap[OV[t].s]) OV[t].s = _smap[OV[t].s] })
     // Persist to localStorage
     const saveData = { ov: OV, importedAt: new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'}) }
     localStorage.setItem('gt_ov_data', JSON.stringify(saveData))
