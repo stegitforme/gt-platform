@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Golden Ticket Trading Platform</title>
+<title>GOGO Trading Platform</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:system-ui,-apple-system,sans-serif;background:#0a0c0f;color:#e8eaf0;font-size:14px}
@@ -101,19 +101,19 @@ tr:hover td{background:#171b22;cursor:pointer}
   <div class="logo">
     <div class="logo-mark">GT</div>
     <div>
-      <div class="logo-name">Golden Ticket</div>
+      <div class="logo-name">GOGO</div>
       <div class="logo-sub">Trading Platform v1.2</div>
     </div>
   </div>
   <div style="display:flex;align-items:center;gap:12px">
-    <div class="pill" id="mkt-pill" style="background:rgba(0,214,143,.12);color:#00d68f;border:1px solid rgba(0,214,143,.25)">● Market Open</div>
+    <div class="pill" id="mkt-pill" style="background:rgba(0,214,143,.12);color:#00d68f;border:1px solid rgba(0,214,143,.25)">â Market Open</div>
     <div style="font-family:\'SF Mono\',monospace;font-size:11px;color:#555c6e" id="clock">--:-- ET</div>
   </div>
 </div>
 
 <div id="api-bar">
-  <span style="margin-left:auto;font-size:10px;color:#333a4a;cursor:pointer" onclick="localStorage.removeItem('gt_api_key');location.reload()" title="Reset API key">⚙ key</span><div id="api-dot"></div>
-  <span id="api-msg">Ready — enter a ticker to fetch live data</span>
+  <span style="margin-left:auto;font-size:10px;color:#333a4a;cursor:pointer" onclick="localStorage.removeItem('gt_api_key');location.reload()" title="Reset API key">â key</span><div id="api-dot"></div>
+  <span id="api-msg">Ready â enter a ticker to fetch live data</span>
 </div>
 
 <div class="nav">
@@ -124,14 +124,14 @@ tr:hover td{background:#171b22;cursor:pointer}
   <button onclick="show('portfolio',this)">Portfolio</button>
 </div>
 
-<!-- ═══ MARKET ═══════════════════════════════════ -->
+<!-- âââ MARKET âââââââââââââââââââââââââââââââââââ -->
 <div id="market" class="page active">
 
   <div id="go-banner" class="go-banner go">
-    <div id="go-icon" class="go-icon" style="background:rgba(0,214,143,.15);color:#00d68f">▲</div>
+    <div id="go-icon" class="go-icon" style="background:rgba(0,214,143,.15);color:#00d68f">â²</div>
     <div style="flex:1">
-      <div id="go-title" style="font-size:14px;font-weight:600;color:#00d68f">GO — Market conditions favorable</div>
-      <div id="go-sub" style="font-size:12px;color:#8b91a0;margin-top:2px">All Golden Ticket criteria met. Safe to open new trades.</div>
+      <div id="go-title" style="font-size:14px;font-weight:600;color:#00d68f">GO â Market conditions favorable</div>
+      <div id="go-sub" style="font-size:12px;color:#8b91a0;margin-top:2px">All GOGO criteria met. Safe to open new trades.</div>
     </div>
     <div style="display:flex;gap:6px">
       <button class="btn btn-ghost" style="font-size:11px" onclick="loadMarketData()">Refresh</button>
@@ -150,9 +150,9 @@ tr:hover td{background:#171b22;cursor:pointer}
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px">
       <div style="background:#171b22;border-radius:6px;padding:10px 12px">
         <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e;margin-bottom:5px">Market</div>
-        <div id="mm-spy" style="font-size:13px;font-family:'SF Mono',monospace;color:#e8eaf0">SPY —</div>
-        <div id="mm-vix" style="font-size:12px;color:#555c6e;margin-top:2px">VIX —</div>
-        <div id="mm-breadth" style="font-size:12px;color:#555c6e;margin-top:2px">Breadth —</div>
+        <div id="mm-spy" style="font-size:13px;font-family:'SF Mono',monospace;color:#e8eaf0">SPY â</div>
+        <div id="mm-vix" style="font-size:12px;color:#555c6e;margin-top:2px">VIX â</div>
+        <div id="mm-breadth" style="font-size:12px;color:#555c6e;margin-top:2px">Breadth â</div>
       </div>
       <div style="background:#171b22;border-radius:6px;padding:10px 12px">
         <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e;margin-bottom:5px">Open Trades</div>
@@ -169,8 +169,8 @@ tr:hover td{background:#171b22;cursor:pointer}
   <div class="grid2" style="margin-bottom:14px">
     <div class="card">
       <div class="card-head">
-        <span class="card-title">Golden Ticket Checklist</span>
-        <span id="chk-score" style="font-size:11px;color:#555c6e;font-family:\'SF Mono\',monospace">—/18</span>
+        <span class="card-title">GOGO Checklist</span>
+        <span id="chk-score" style="font-size:11px;color:#555c6e;font-family:\'SF Mono\',monospace">â/18</span>
       </div>
       <div class="card-body" id="chk-body" style="padding:10px 14px"></div>
     </div>
@@ -179,18 +179,18 @@ tr:hover td{background:#171b22;cursor:pointer}
         <div class="card-head"><span class="card-title">Market Overview</span><span id="mkt-updated" style="font-size:10px;color:#555c6e"></span></div>
         <div class="card-body">
           <div class="grid3">
-            <div class="metric"><div class="metric-label">SPY ETF</div><div id="spy-v" class="metric-value g">—</div><div id="spy-c" class="metric-sub">loading...</div></div>
-            <div class="metric"><div class="metric-label">VIX</div><div id="vix-v" class="metric-value g">—</div><div id="vix-c" class="metric-sub">loading...</div></div>
-            <div class="metric"><div class="metric-label">Fear & Greed</div><div class="metric-value o">~35</div><div class="metric-sub">Fear zone ↑</div></div>
+            <div class="metric"><div class="metric-label">SPY ETF</div><div id="spy-v" class="metric-value g">â</div><div id="spy-c" class="metric-sub">loading...</div></div>
+            <div class="metric"><div class="metric-label">VIX</div><div id="vix-v" class="metric-value g">â</div><div id="vix-c" class="metric-sub">loading...</div></div>
+            <div class="metric"><div class="metric-label">Fear & Greed</div><div class="metric-value o">~35</div><div class="metric-sub">Fear zone â</div></div>
             <div class="metric"><div class="metric-label">Nasdaq</div><div class="metric-value g">23,592</div><div class="metric-sub">+1.78%</div></div>
-            <div class="metric"><div class="metric-label">Breadth</div><div id="brd-v" class="metric-value g">47.7%</div><div class="metric-sub">Full stocks ↑</div></div>
-            <div class="metric"><div class="metric-label">Bull Sectors</div><div id="bull-sectors-val" class="metric-value g">—</div><div id="bull-sectors-sub" class="metric-sub">click Refresh live</div></div>
+            <div class="metric"><div class="metric-label">Breadth</div><div id="brd-v" class="metric-value g">47.7%</div><div class="metric-sub">Full stocks â</div></div>
+            <div class="metric"><div class="metric-label">Bull Sectors</div><div id="bull-sectors-val" class="metric-value g">â</div><div id="bull-sectors-sub" class="metric-sub">click Refresh live</div></div>
           </div>
         </div>
       </div>
       <div class="card">
         <div class="card-head">
-          <span class="card-title">Sector Breadth (OVTLYR · 10 EMA)</span>
+          <span class="card-title">Sector Breadth (OVTLYR Â· 10 EMA)</span>
           <button class="btn btn-ghost" style="font-size:10px;padding:3px 9px" id="btn-sectors" onclick="fetchSectorData()">Refresh live</button>
         </div>
         <div class="card-body" id="sector-body" style="padding:8px 14px"></div>
@@ -213,7 +213,7 @@ tr:hover td{background:#171b22;cursor:pointer}
     </div>
   </div>
 
-<!-- ═══ SCREENER ══════════════════════════════════ -->
+<!-- âââ SCREENER ââââââââââââââââââââââââââââââââââ -->
 <div id="screener" class="page">
   <!-- OVTLYR Data Refresh Panel -->
   <div class="card" style="margin-bottom:12px">
@@ -225,8 +225,8 @@ tr:hover td{background:#171b22;cursor:pointer}
       <div style="display:grid;grid-template-columns:1fr auto;gap:12px;align-items:start">
         <div>
           <div style="font-size:12px;color:#8b91a0;margin-bottom:8px;line-height:1.6">
-            <b style="color:#e8eaf0">Step 1:</b> Click "Copy bookmarklet" → add to Chrome bookmarks bar as a bookmark (paste code as URL).<br>
-            <b style="color:#e8eaf0">Step 2:</b> Go to <a href="https://console.ovtlyr.com" target="_blank" style="color:#4da6ff">console.ovtlyr.com</a> Screener → click the bookmarklet → JSON copied to clipboard.<br>
+            <b style="color:#e8eaf0">Step 1:</b> Click "Copy bookmarklet" â add to Chrome bookmarks bar as a bookmark (paste code as URL).<br>
+            <b style="color:#e8eaf0">Step 2:</b> Go to <a href="https://console.ovtlyr.com" target="_blank" style="color:#4da6ff">console.ovtlyr.com</a> Screener â click the bookmarklet â JSON copied to clipboard.<br>
             <b style="color:#e8eaf0">Step 3:</b> Paste below and click Import to refresh all signal % and F&amp;G scores.
           </div>
           <textarea id="ov-paste" rows="3" placeholder='Paste OVTLYR JSON here... {"NVDA":{"r":752,"fg":33.9},...}' style="width:100%;background:#0a0c0f;border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:8px;font-size:11px;color:#e8eaf0;font-family:monospace;resize:vertical;outline:none;box-sizing:border-box"></textarea>
@@ -234,13 +234,13 @@ tr:hover td{background:#171b22;cursor:pointer}
           <div id="bookmarklet-help" style="display:none;margin-top:10px;padding:10px;background:#0a0c0f;border-radius:6px;font-size:11px;color:#8b91a0;line-height:1.8">
             <b style="color:#f0c040">One-time bookmarklet setup:</b><br>
             1. Click "Copy bookmarklet" button<br>
-            2. Chrome bookmarks bar → right-click → "Add page..."<br>
-            3. Name: <b style="color:#e8eaf0">GT Scrape</b> · URL: paste the copied code<br>
-            4. Save — the bookmark now lives in your bar<br><br>
+            2. Chrome bookmarks bar â right-click â "Add page..."<br>
+            3. Name: <b style="color:#e8eaf0">GT Scrape</b> Â· URL: paste the copied code<br>
+            4. Save â the bookmark now lives in your bar<br><br>
             <b style="color:#f0c040">Daily refresh (takes ~10 seconds):</b><br>
             1. Open <a href="https://console.ovtlyr.com" target="_blank" style="color:#4da6ff">console.ovtlyr.com</a> Screener and wait for data to load<br>
-            2. Click the GT Scrape bookmark → alert confirms copy<br>
-            3. Return here → paste → Import
+            2. Click the GT Scrape bookmark â alert confirms copy<br>
+            3. Return here â paste â Import
           </div>
         </div>
         <div style="display:flex;flex-direction:column;gap:7px;min-width:145px">
@@ -270,7 +270,7 @@ tr:hover td{background:#171b22;cursor:pointer}
         <div class="field" style="margin:0"><label>Min 30D vol</label><input type="number" id="f-vol" value="1000000"></div>
       </div>
       <div style="display:flex;gap:16px;margin-top:10px;padding-top:9px;border-top:1px solid rgba(255,255,255,.06)">
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;text-transform:none;font-size:12px;color:#8b91a0;margin:0"><input type="checkbox" id="f-earn" checked style="accent-color:#f0c040;width:13px;height:13px;margin:0"> No earnings ≤21d</label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;text-transform:none;font-size:12px;color:#8b91a0;margin:0"><input type="checkbox" id="f-earn" checked style="accent-color:#f0c040;width:13px;height:13px;margin:0"> No earnings â¤21d</label>
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;text-transform:none;font-size:12px;color:#8b91a0;margin:0"><input type="checkbox" id="f-bull" checked style="accent-color:#f0c040;width:13px;height:13px;margin:0"> Bullish sector only</label>
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;text-transform:none;font-size:12px;color:#8b91a0;margin:0"><input type="checkbox" id="f-wide" checked style="accent-color:#f0c040;width:13px;height:13px;margin:0"> Exclude wide spreads</label>
       </div>
@@ -305,7 +305,7 @@ tr:hover td{background:#171b22;cursor:pointer}
   </div>
 </div>
 
-<!-- ═══ POSITION SIZER ════════════════════════════ -->
+<!-- âââ POSITION SIZER ââââââââââââââââââââââââââââ -->
 <div id="sizer" class="sizer-page">
   <div class="sidebar">
     <div class="card">
@@ -320,7 +320,7 @@ tr:hover td{background:#171b22;cursor:pointer}
       <div class="card-head"><span class="card-title">Trade Inputs</span></div>
       <div class="card-body">
         <div class="field">
-          <label>Ticker — press Enter to fetch live</label>
+          <label>Ticker â press Enter to fetch live</label>
           <input type="text" id="tkr" placeholder="NVDA" oninput="this.value=this.value.toUpperCase()" onkeydown="if(event.key==='Enter')fetchTicker(this.value)">
         </div>
         <div id="tkr-st" style="font-size:11px;color:#555c6e;font-family:\'SF Mono\',monospace;margin:-5px 0 9px;min-height:14px;line-height:1.6"></div>
@@ -330,7 +330,7 @@ tr:hover td{background:#171b22;cursor:pointer}
         <div class="field"><label>Expiry</label><input type="text" id="expiry" value="May-15-2026"></div>
         <div id="opt-live" style="font-size:11px;color:#555c6e;font-family:\'SF Mono\',monospace;padding:7px 10px;background:#171b22;border:1px solid rgba(255,255,255,.07);border-radius:6px;min-height:26px;margin-bottom:9px;line-height:1.6">Type ticker + Enter to fetch live option chain</div>
         <button class="btn btn-gold" onclick="calc()">Calculate</button>
-        <button class="btn btn-blue" style="width:100%;margin-top:6px" onclick="goSaveAsTrade()">Save as Trade →</button>
+        <button class="btn btn-blue" style="width:100%;margin-top:6px" onclick="goSaveAsTrade()">Save as Trade â</button>
       </div>
     </div>
     <div class="card">
@@ -343,7 +343,7 @@ tr:hover td{background:#171b22;cursor:pointer}
       </div>
     </div>
     <div class="card">
-      <div class="card-head"><span class="card-title">Expected Move Calculator</span><span style="font-size:10px;color:#555c6e">ATM straddle × 85%</span></div>
+      <div class="card-head"><span class="card-title">Expected Move Calculator</span><span style="font-size:10px;color:#555c6e">ATM straddle Ã 85%</span></div>
       <div class="card-body">
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:9px">
           <div class="field" style="margin:0"><label>ATM Call $</label><input type="number" id="em-c" step="0.01" oninput="calcEM()"></div>
@@ -352,9 +352,9 @@ tr:hover td{background:#171b22;cursor:pointer}
         </div>
         <div id="em-res" style="display:none">
           <div class="grid3" style="margin-bottom:7px">
-            <div class="metric" style="padding:8px 10px"><div class="metric-label">Straddle</div><div id="em-st" class="metric-value b" style="font-size:15px">—</div></div>
-            <div class="metric" style="padding:8px 10px"><div class="metric-label">Move ±</div><div id="em-mv" class="metric-value gold" style="font-size:15px">—</div></div>
-            <div class="metric" id="em-sc" style="padding:8px 10px"><div class="metric-label">Breaks stop?</div><div id="em-br" class="metric-value" style="font-size:13px">—</div></div>
+            <div class="metric" style="padding:8px 10px"><div class="metric-label">Straddle</div><div id="em-st" class="metric-value b" style="font-size:15px">â</div></div>
+            <div class="metric" style="padding:8px 10px"><div class="metric-label">Move Â±</div><div id="em-mv" class="metric-value gold" style="font-size:15px">â</div></div>
+            <div class="metric" id="em-sc" style="padding:8px 10px"><div class="metric-label">Breaks stop?</div><div id="em-br" class="metric-value" style="font-size:13px">â</div></div>
           </div>
           <div style="display:flex;gap:6px">
             <div id="em-up" style="flex:1;padding:7px;text-align:center;border-radius:6px;font-family:\'SF Mono\',monospace;font-size:12px;font-weight:500"></div>
@@ -373,12 +373,12 @@ tr:hover td{background:#171b22;cursor:pointer}
       </div>
       <div class="card-body">
         <div class="grid3">
-          <div class="metric"><div class="metric-label">Max Contracts</div><div id="m-cts" class="metric-value gold">—</div><div id="m-cts-s" class="metric-sub">enter inputs</div></div>
-          <div class="metric"><div class="metric-label">Capital Deployed</div><div id="m-cap" class="metric-value b">—</div><div id="m-cap-s" class="metric-sub">total cost</div></div>
-          <div class="metric"><div class="metric-label">Base Risk Budget</div><div id="m-risk" class="metric-value">—</div><div id="m-risk-s" class="metric-sub">per trade</div></div>
-          <div class="metric"><div class="metric-label">Loss @ ½ ATR Stop</div><div id="m-hl" class="metric-value o">—</div><div class="metric-sub">orange line trigger</div></div>
-          <div class="metric"><div class="metric-label">Loss @ 2× ATR Exit</div><div id="m-fl" class="metric-value r">—</div><div class="metric-sub">red emergency line</div></div>
-          <div class="metric"><div class="metric-label">+30% Gain Target</div><div id="m-g30" class="metric-value g">—</div><div class="metric-sub">on cost basis</div></div>
+          <div class="metric"><div class="metric-label">Max Contracts</div><div id="m-cts" class="metric-value gold">â</div><div id="m-cts-s" class="metric-sub">enter inputs</div></div>
+          <div class="metric"><div class="metric-label">Capital Deployed</div><div id="m-cap" class="metric-value b">â</div><div id="m-cap-s" class="metric-sub">total cost</div></div>
+          <div class="metric"><div class="metric-label">Base Risk Budget</div><div id="m-risk" class="metric-value">â</div><div id="m-risk-s" class="metric-sub">per trade</div></div>
+          <div class="metric"><div class="metric-label">Loss @ Â½ ATR Stop</div><div id="m-hl" class="metric-value o">â</div><div class="metric-sub">orange line trigger</div></div>
+          <div class="metric"><div class="metric-label">Loss @ 2Ã ATR Exit</div><div id="m-fl" class="metric-value r">â</div><div class="metric-sub">red emergency line</div></div>
+          <div class="metric"><div class="metric-label">+30% Gain Target</div><div id="m-g30" class="metric-value g">â</div><div class="metric-sub">on cost basis</div></div>
         </div>
       </div>
     </div>
@@ -394,7 +394,7 @@ tr:hover td{background:#171b22;cursor:pointer}
   </div>
 </div>
 
-<!-- ═══ TRADE MANAGER ══════════════════════════════ -->
+<!-- âââ TRADE MANAGER ââââââââââââââââââââââââââââââ -->
 <div id="trades" class="trades-page">
   <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
     <button class="btn btn-gold" style="width:auto" onclick="openAddTrade()">+ New Trade</button>
@@ -425,14 +425,14 @@ tr:hover td{background:#171b22;cursor:pointer}
   <div id="trades-list"></div>
 </div>
 
-<!-- ═══ PORTFOLIO ══════════════════════════════════ -->
+<!-- âââ PORTFOLIO ââââââââââââââââââââââââââââââââââ -->
 <div id="portfolio" class="page">
   <!-- SUMMARY METRICS -->
   <div class="grid4" style="margin-bottom:14px">
-    <div class="metric"><div class="metric-label">Total Deployed</div><div id="pm-total" class="metric-value b">—</div></div>
-    <div class="metric"><div class="metric-label">Today P/L</div><div id="pm-today" class="metric-value">—</div><div id="pm-today-pct" class="metric-sub"></div></div>
-    <div class="metric"><div class="metric-label">Total P/L</div><div id="pm-total-pnl" class="metric-value">—</div><div id="pm-total-pct" class="metric-sub"></div></div>
-    <div class="metric"><div class="metric-label">Positions</div><div id="pm-count" class="metric-value">—</div><div id="pm-imported" class="metric-sub"></div></div>
+    <div class="metric"><div class="metric-label">Total Deployed</div><div id="pm-total" class="metric-value b">â</div></div>
+    <div class="metric"><div class="metric-label">Today P/L</div><div id="pm-today" class="metric-value">â</div><div id="pm-today-pct" class="metric-sub"></div></div>
+    <div class="metric"><div class="metric-label">Total P/L</div><div id="pm-total-pnl" class="metric-value">â</div><div id="pm-total-pct" class="metric-sub"></div></div>
+    <div class="metric"><div class="metric-label">Positions</div><div id="pm-count" class="metric-value">â</div><div id="pm-imported" class="metric-sub"></div></div>
   </div>
 
   <!-- IMPORT CARD -->
@@ -445,7 +445,7 @@ tr:hover td{background:#171b22;cursor:pointer}
       <div style="display:grid;grid-template-columns:1fr auto;gap:12px;align-items:start">
         <div>
           <div style="font-size:12px;color:#8b91a0;margin-bottom:8px;line-height:1.6">
-            <b style="color:#e8eaf0">How to export:</b> Fidelity.com → Accounts &amp; Trade → Account Positions → click the <b style="color:#f0c040">Download</b> button (top right of positions page) → select the downloaded CSV file below.
+            <b style="color:#e8eaf0">How to export:</b> Fidelity.com â Accounts &amp; Trade â Account Positions â click the <b style="color:#f0c040">Download</b> button (top right of positions page) â select the downloaded CSV file below.
           </div>
           <div style="font-size:11px;color:#555c6e">Supports Fidelity Positions CSV. Options and equities parsed automatically. Data stays local in your browser.</div>
         </div>
@@ -493,7 +493,7 @@ tr:hover td{background:#171b22;cursor:pointer}
 </div>
 
 <script>
-// API key stored in localStorage — never hardcoded in the public file
+// API key stored in localStorage â never hardcoded in the public file
 let KEY = localStorage.getItem('gt_api_key') || ''
 
 function checkApiKey() {
@@ -518,7 +518,7 @@ function saveApiKey() {
 }
 const API = 'https://api.polygon.io'
 
-// ── NAVIGATION ────────────────────────────────────
+// ââ NAVIGATION ââââââââââââââââââââââââââââââââââââ
 function show(id, btn) {
   document.querySelectorAll('.page,.sizer-page,.trades-page').forEach(p => p.classList.remove('active'))
   document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'))
@@ -528,21 +528,21 @@ function show(id, btn) {
   if(id === 'trades') renderTrades()
 }
 
-// ── CLOCK ─────────────────────────────────────────
+// ââ CLOCK âââââââââââââââââââââââââââââââââââââââââ
 function tick() {
   const et = new Date(new Date().toLocaleString('en-US',{timeZone:'America/New_York'}))
   document.getElementById('clock').textContent = et.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit'}) + ' ET'
   const h = et.getHours(), m = et.getMinutes()
   const open = (h > 9 || (h===9&&m>=30)) && h < 16
   const pill = document.getElementById('mkt-pill')
-  pill.textContent = open ? '● Market Open' : '○ Market Closed'
+  pill.textContent = open ? 'â Market Open' : 'â Market Closed'
   pill.style.color = open ? '#00d68f' : '#ff4560'
   pill.style.background = open ? 'rgba(0,214,143,.12)' : 'rgba(255,69,96,.1)'
   pill.style.border = open ? '1px solid rgba(0,214,143,.25)' : '1px solid rgba(255,69,96,.3)'
 }
 setInterval(tick, 1000); tick()
 
-// ── API ───────────────────────────────────────────
+// ââ API âââââââââââââââââââââââââââââââââââââââââââ
 function setApi(msg, state) {
   document.getElementById('api-msg').textContent = msg
   const dot = document.getElementById('api-dot')
@@ -574,7 +574,7 @@ async function apiGet(path, skipCache) {
     if(r.status === 429) {
       const retry = parseInt(r.headers.get('retry-after') || '12')
       for(let i = retry; i > 0; i--) {
-        setApi('Rate limited — retrying in ' + i + 's (Polygon: 5 req/min)', 'err')
+        setApi('Rate limited â retrying in ' + i + 's (Polygon: 5 req/min)', 'err')
         await new Promise(res => setTimeout(res, 1000))
       }
       // Retry once after waiting
@@ -595,12 +595,12 @@ async function apiGet(path, skipCache) {
     setApi('Ready', 'ok')
     return d
   } catch(e) {
-    setApi('Network error — check connection', 'err')
+    setApi('Network error â check connection', 'err')
     return null
   }
 }
 
-// ── EMA / ATR HELPERS ─────────────────────────────
+// ââ EMA / ATR HELPERS âââââââââââââââââââââââââââââ
 function calcEMA(vals, p) {
   if(!vals || vals.length < p) return null
   const k = 2/(p+1)
@@ -621,7 +621,7 @@ function calcATR(bars) {
   return +atr.toFixed(2)
 }
 
-// ── OVTLYR SIGNAL DATA ────────────────────────────
+// ââ OVTLYR SIGNAL DATA ââââââââââââââââââââââââââââ
 const OV = {
   CLS:{r:769,fg:64.7,s:'Tech',v:1845006,earn:false},
   NVDA:{r:752,fg:33.9,s:'Tech',v:169287470,earn:false},
@@ -697,13 +697,13 @@ const SECTORS = [
   {n:'Energy',p:16.7,c:+3.09,bull:false},
 ]
 
-// ── CHECKLIST ─────────────────────────────────────
+// ââ CHECKLIST âââââââââââââââââââââââââââââââââââââ
 const CHECKS = [
   {g:'Market (40%)', gc:'#4da6ff', items:[
     {id:'spy-sig', l:'SPY signal: Buy',              pass:true,  n:'OVTLYR buy signal on $SPY'},
-    {id:'spy-ema', l:'SPY 10EMA > 20EMA',            pass:true,  n:'Short-term trend above medium — auto-updated from API'},
-    {id:'spy-50',  l:'SPY price > 50EMA',            pass:true,  n:'Price above key support — auto-updated from API'},
-    {id:'breadth', l:'Market breadth 25–75%',        pass:true,  n:'Under 25 = NO TRADES · Over 75 = reduce risk'},
+    {id:'spy-ema', l:'SPY 10EMA > 20EMA',            pass:true,  n:'Short-term trend above medium â auto-updated from API'},
+    {id:'spy-50',  l:'SPY price > 50EMA',            pass:true,  n:'Price above key support â auto-updated from API'},
+    {id:'breadth', l:'Market breadth 25â75%',        pass:true,  n:'Under 25 = NO TRADES Â· Over 75 = reduce risk'},
     {id:'brd-dir', l:'Breadth 10EMA bullish cross',  pass:true,  n:'Breadth trending upward'},
   ]},
   {g:'Sector (30%)', gc:'#f0c040', items:[
@@ -712,18 +712,18 @@ const CHECKS = [
   ]},
   {g:'Stock (30%)', gc:'#00d68f', items:[
     {id:'stk-sig', l:'Stock signal: Buy',            pass:true,  n:'OVTLYR buy signal on ticker'},
-    {id:'stk-ema', l:'10EMA > 20EMA > 50EMA',       pass:null,  n:'Full EMA stack — auto-updated when you fetch a ticker in Position Sizer'},
+    {id:'stk-ema', l:'10EMA > 20EMA > 50EMA',       pass:null,  n:'Full EMA stack â auto-updated when you fetch a ticker in Position Sizer'},
     {id:'stk-fg',  l:'Stock F&G advancing',          pass:true,  n:'Individual stock greed moving up'},
     {id:'stk-ob',  l:'No restrictive order blocks',  pass:true,  n:'No major OBs overhead blocking price'},
     {id:'stk-mom', l:'Price above prior day low',    pass:true,  n:'Momentum / slingshot setup'},
   ]},
   {g:'Option Chain', gc:'#ff8c42', items:[
-    {id:'opt-exp', l:'Expiration ≥ 21 days',         pass:true,  n:'Start at 21+ DTE'},
-    {id:'opt-oi',  l:'OI ≥ 4–6× contract count',    pass:true,  n:'Or minimum 250 OI — auto-updated from API'},
-    {id:'opt-sp',  l:'Bid/ask spread < $0.50',       pass:true,  n:'OVTLYR liquidity rule — auto-updated during market hours'},
-    {id:'opt-ex',  l:'Extrinsic value ≤ 20%',        pass:true,  n:'Keep cost efficient'},
-    {id:'opt-dl',  l:'Delta ~80',                    pass:true,  n:'Target delta per cheat sheet — auto-updated from API'},
-    {id:'no-earn', l:'No earnings within 21 days',   pass:true,  n:'Earnings risk = exit signal — auto-updated from API'},
+    {id:'opt-exp', l:'Expiration â¥ 21 days',         pass:true,  n:'Start at 21+ DTE'},
+    {id:'opt-oi',  l:'OI â¥ 4â6Ã contract count',    pass:true,  n:'Or minimum 250 OI â auto-updated from API'},
+    {id:'opt-sp',  l:'Bid/ask spread < $0.50',       pass:true,  n:'OVTLYR liquidity rule â auto-updated during market hours'},
+    {id:'opt-ex',  l:'Extrinsic value â¤ 20%',        pass:true,  n:'Keep cost efficient'},
+    {id:'opt-dl',  l:'Delta ~80',                    pass:true,  n:'Target delta per cheat sheet â auto-updated from API'},
+    {id:'no-earn', l:'No earnings within 21 days',   pass:true,  n:'Earnings risk = exit signal â auto-updated from API'},
   ]},
 ]
 
@@ -737,14 +737,14 @@ function renderChecklist() {
     // For group score, skip null items (not yet evaluated)
     const gp = g.items.filter(i => i.pass === true).length
     const gt = g.items.filter(i => i.pass !== null).length
-    html += '<div class="chk-group" style="color:' + g.gc + '">' + g.g + ' &nbsp;·&nbsp; ' + gp + '/' + gt + '</div>'
+    html += '<div class="chk-group" style="color:' + g.gc + '">' + g.g + ' &nbsp;Â·&nbsp; ' + gp + '/' + gt + '</div>'
     g.items.forEach(i => {
       if(i.pass !== null) { total++; if(i.pass) passing++ }
       // null = pending (grey), true = pass (green), false = fail (red)
       const dc = i.pass === null ? '#333a4a' : i.pass ? '#00d68f' : '#ff4560'
       const tc = i.pass === null ? '#444c60' : i.pass ? '#e8eaf0' : '#555c6e'
       const sc = i.pass === null ? '' : i.pass ? 'g' : 'r'
-      const icon = i.pass === null ? '<span style="color:#444c60;font-size:11px">—</span>' : i.pass ? '<span class="chk-st g">✓</span>' : '<span class="chk-st r">✗</span>'
+      const icon = i.pass === null ? '<span style="color:#444c60;font-size:11px">â</span>' : i.pass ? '<span class="chk-st g">â</span>' : '<span class="chk-st r">â</span>'
       const dim = i.pass === null ? ';opacity:.4' : ''
       html += '<div class="chk-item" title="' + i.n + '" style="' + dim + '"><div class="chk-dot" style="background:' + dc + '"></div><span class="chk-lbl" style="color:' + tc + '">' + i.l + '</span>' + icon + '</div>'
     })
@@ -761,16 +761,16 @@ function updateBanner(breadth) {
   const ti = document.getElementById('go-title')
   if(breadth < 25) {
     b.className='go-banner stop'; ic.style.cssText='width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;font-weight:700;background:rgba(255,69,96,.15);color:#ff4560'
-    ic.textContent='✕'; ti.style.color='#ff4560'; ti.textContent='NO TRADE — Breadth under 25%'
+    ic.textContent='â'; ti.style.color='#ff4560'; ti.textContent='NO TRADE â Breadth under 25%'
     document.getElementById('go-sub').textContent='Wait for breadth to reverse and cross 10EMA.'
   } else if(breadth > 75) {
     b.className='go-banner warn'; ic.style.cssText='width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;font-weight:700;background:rgba(255,140,66,.15);color:#ff8c42'
-    ic.textContent='⚠'; ti.style.color='#ff8c42'; ti.textContent='CAUTION — Breadth > 75%. Reduce risk, secure profits.'
+    ic.textContent='â '; ti.style.color='#ff8c42'; ti.textContent='CAUTION â Breadth > 75%. Reduce risk, secure profits.'
     document.getElementById('go-sub').textContent='Roll positions, tighten stops. No new aggressive entries.'
   } else {
     b.className='go-banner go'; ic.style.cssText='width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;font-weight:700;background:rgba(0,214,143,.15);color:#00d68f'
-    ic.textContent='▲'; ti.style.color='#00d68f'; ti.textContent='GO — Market conditions favorable'
-    document.getElementById('go-sub').textContent='Golden Ticket criteria met. Safe to open new trades.'
+    ic.textContent='â²'; ti.style.color='#00d68f'; ti.textContent='GO â Market conditions favorable'
+    document.getElementById('go-sub').textContent='GOGO criteria met. Safe to open new trades.'
   }
   setCheck('breadth', breadth >= 25 && breadth <= 75)
   renderChecklist()
@@ -801,11 +801,11 @@ function updateMorningPanel() {
   const vixVal = document.getElementById('vix-v')?.textContent
   const mmSpy = document.getElementById('mm-spy')
   const mmVix = document.getElementById('mm-vix')
-  if(mmSpy) mmSpy.innerHTML = 'SPY <span style="color:#00d68f">$' + (spyVal||'—') + '</span> <span style="font-size:11px">' + (spyChg||'') + '</span>'
+  if(mmSpy) mmSpy.innerHTML = 'SPY <span style="color:#00d68f">$' + (spyVal||'â') + '</span> <span style="font-size:11px">' + (spyChg||'') + '</span>'
   if(mmVix) {
     const v = parseFloat(vixVal)
     const vc = v < 20 ? '#00d68f' : v < 28 ? '#ff8c42' : '#ff4560'
-    mmVix.innerHTML = 'VIX <span style="color:' + vc + '">' + (vixVal||'—') + '</span>' + (v < 20 ? ' · calm' : v < 28 ? ' · caution' : ' · fear')
+    mmVix.innerHTML = 'VIX <span style="color:' + vc + '">' + (vixVal||'â') + '</span>' + (v < 20 ? ' Â· calm' : v < 28 ? ' Â· caution' : ' Â· fear')
   }
 
   // Breadth
@@ -855,7 +855,7 @@ function updateMorningPanel() {
   if(mmDec) {
     mmDec.style.background = isGo ? 'rgba(0,214,143,.1)' : 'rgba(255,69,96,.1)'
     mmDec.style.color = isGo ? '#00d68f' : '#ff4560'
-    mmDec.textContent = isGo ? 'GO — conditions favorable · safe to open new trades' : 'NO-GO — wait for conditions to improve'
+    mmDec.textContent = isGo ? 'GO â conditions favorable Â· safe to open new trades' : 'NO-GO â wait for conditions to improve'
   }
 
   // Timestamp
@@ -886,11 +886,11 @@ async function loadMarketData() {
       const sc = document.getElementById('spy-c')
       sc.textContent = (chg>=0?'+':'') + chg.toFixed(2) + '%'
       sc.style.color = chg >= 0 ? '#00d68f' : '#ff4560'
-      document.getElementById('mkt-updated').textContent = 'Live · ' + new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})
+      document.getElementById('mkt-updated').textContent = 'Live Â· ' + new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})
       setCheck('spy-ema', !!(e10 && e20 && e10 > e20))
       setCheck('spy-50',  !!(e50 && price > e50))
       renderChecklist()
-      setApi('SPY $' + price.toFixed(2) + ' · EMA10:' + e10 + ' EMA20:' + e20 + (e50?' EMA50:'+e50:' (need more history for EMA50)'), 'ok')
+      setApi('SPY $' + price.toFixed(2) + ' Â· EMA10:' + e10 + ' EMA20:' + e20 + (e50?' EMA50:'+e50:' (need more history for EMA50)'), 'ok')
     }
   } catch(e) {
     setApi('Using cached market data', 'err')
@@ -906,7 +906,7 @@ async function fetchTQQQSignal() {
   if(body) body.innerHTML = '<div style="font-size:12px;color:#555c6e;text-align:center;padding:8px">Fetching QQQ data...</div>'
 
   try {
-    // Need 200+ trading days for 200MA — fetch 300 calendar days
+    // Need 200+ trading days for 200MA â fetch 300 calendar days
     const to   = new Date().toISOString().split('T')[0]
     const from = new Date(Date.now()-300*864e5).toISOString().split('T')[0]
     const d = await apiGet('/v2/aggs/ticker/QQQ/range/1/day/'+from+'/'+to+'?adjusted=true&sort=asc&limit=220')
@@ -938,11 +938,11 @@ async function fetchTQQQSignal() {
 
     if(!aboveMa) {
       tqqqPct = 0; sgov = 100
-      signal = 'BELOW 200MA — 100% SGOV'
+      signal = 'BELOW 200MA â 100% SGOV'
       signalColor = '#ff4560'
     } else if(annualVol <= VOL_TARGET) {
       tqqqPct = 100; sgov = 0
-      signal = 'ABOVE 200MA + LOW VOL — 100% TQQQ'
+      signal = 'ABOVE 200MA + LOW VOL â 100% TQQQ'
       signalColor = '#00d68f'
     } else {
       // Scale down: TQQQ% = (35/vol) * 100, capped at 100
@@ -950,7 +950,7 @@ async function fetchTQQQSignal() {
       // Round to nearest 10%
       tqqqPct = Math.round(tqqqPct / 10) * 10
       sgov = 100 - tqqqPct
-      signal = 'ABOVE 200MA + HIGH VOL — SCALED'
+      signal = 'ABOVE 200MA + HIGH VOL â SCALED'
       signalColor = '#ff8c42'
     }
 
@@ -961,7 +961,7 @@ async function fetchTQQQSignal() {
     const html =
       '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:12px">' +
         '<div class="metric"><div class="metric-label">QQQ Price</div><div class="metric-value" style="font-size:16px">$'+last.toFixed(2)+'</div></div>' +
-        '<div class="metric"><div class="metric-label">200-Day MA</div><div class="metric-value" style="font-size:16px;color:'+(aboveMa?'#00d68f':'#ff4560')+'">$'+ma200str+'</div><div class="metric-sub">'+(aboveMa?'▲ +':'▼ ')+pctFromMa+'%</div></div>' +
+        '<div class="metric"><div class="metric-label">200-Day MA</div><div class="metric-value" style="font-size:16px;color:'+(aboveMa?'#00d68f':'#ff4560')+'">$'+ma200str+'</div><div class="metric-sub">'+(aboveMa?'â² +':'â¼ ')+pctFromMa+'%</div></div>' +
         '<div class="metric"><div class="metric-label">Realized Vol (20d)</div><div class="metric-value" style="font-size:16px;color:'+(annualVol<=35?'#00d68f':annualVol<=50?'#ff8c42':'#ff4560')+'">'+annualVol+'%</div><div class="metric-sub">target: 35%</div></div>' +
         '<div class="metric"><div class="metric-label">Vol Target</div><div class="metric-value" style="font-size:16px">35%</div></div>' +
       '</div>' +
@@ -990,12 +990,12 @@ async function fetchTQQQSignal() {
           '</div>' +
         '</div>' +
       '</div>' +
-      '<div style="font-size:11px;color:#555c6e">Based on '+n+' trading days of QQQ data · 200MA uses '+ma200window+' days · Vol uses '+vol20window+' days · Run every Friday before market close</div>'
+      '<div style="font-size:11px;color:#555c6e">Based on '+n+' trading days of QQQ data Â· 200MA uses '+ma200window+' days Â· Vol uses '+vol20window+' days Â· Run every Friday before market close</div>'
 
     if(body) body.innerHTML = html
     const upd = document.getElementById('tqqq-updated')
     if(upd) upd.textContent = 'Updated ' + new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})
-    setApi('TQQQ Signal: '+tqqqPct+'% TQQQ / '+sgov+'% SGOV · Vol '+annualVol+'% · QQQ '+(aboveMa?'above':'below')+' 200MA', 'ok')
+    setApi('TQQQ Signal: '+tqqqPct+'% TQQQ / '+sgov+'% SGOV Â· Vol '+annualVol+'% Â· QQQ '+(aboveMa?'above':'below')+' 200MA', 'ok')
 
   } catch(e) {
     if(body) body.innerHTML = '<div style="font-size:12px;color:#ff4560;text-align:center;padding:8px">Error: '+e.message+'</div>'
@@ -1007,8 +1007,8 @@ async function fetchTQQQSignal() {
 
 async function fetchVIX() {
   // Use VIXY (ProShares VIX Short-Term Futures ETF) via Polygon Stocks plan
-  // VIXY tracks VIX closely: VIX ~18 → VIXY ~27-29, VIX ~25 → VIXY ~40
-  // Approximate VIX from VIXY: VIX ≈ VIXY * 0.63 (rough linear approximation)
+  // VIXY tracks VIX closely: VIX ~18 â VIXY ~27-29, VIX ~25 â VIXY ~40
+  // Approximate VIX from VIXY: VIX â VIXY * 0.63 (rough linear approximation)
   try {
     const to   = new Date().toISOString().split('T')[0]
     const from = new Date(Date.now()-4*864e5).toISOString().split('T')[0]
@@ -1031,10 +1031,10 @@ async function fetchVIX() {
       ec.style.color = chg <= 0 ? '#00d68f' : '#ff4560'
     }
     setCheck('vix-low', vixEst < 25)
-    setApi('VIX ~' + vixEst.toFixed(2) + ' est. via VIXY $' + vixy.toFixed(2) + ' · ' + (chg<=0?'falling ↓':'rising ↑'), 'ok')
+    setApi('VIX ~' + vixEst.toFixed(2) + ' est. via VIXY $' + vixy.toFixed(2) + ' Â· ' + (chg<=0?'falling â':'rising â'), 'ok')
   } catch(e) {
     const el = document.getElementById('vix-v')
-    if(el) el.textContent = '—'
+    if(el) el.textContent = 'â'
     console.log('VIX/VIXY fetch error:', e)
   }
 }
@@ -1069,7 +1069,7 @@ async function fetchSectorData() {
       const si = SECTORS.findIndex(s => s.n === sector)
       if(si >= 0) { SECTORS[si].c = +chg.toFixed(2); SECTORS[si].bull = bull; updated++ }
     } catch(e) { console.log('Sector error', etf, e) }
-    // 13s gap to stay under 5 req/min — use cache for subsequent calls
+    // 13s gap to stay under 5 req/min â use cache for subsequent calls
     // Only throttle if result wasn't cached (real network call)
     const etfPath = '/v2/aggs/ticker/'+etf+'/range/1/day/'+from+'/'+to+'?adjusted=true&sort=asc&limit=22'
     const wasCached = API_CACHE[etfPath] && (Date.now()-API_CACHE[etfPath].ts < 5*60*1000)
@@ -1091,20 +1091,20 @@ async function fetchSectorData() {
   }
 
   if(btn) { btn.textContent = 'Refresh live'; btn.disabled = false }
-  setApi('Sectors: ' + bullCount + '/10 bullish · ' + updated + ' updated', 'ok')
+  setApi('Sectors: ' + bullCount + '/10 bullish Â· ' + updated + ' updated', 'ok')
 }
 
 function showBreadthUpdate() {
-  alert('Breadth Update:\n\nGo to console.ovtlyr.com → Market Breadth\nNote the % for each sector (10 EMA view)\nV1.3 will have a paste-in import panel.')
+  alert('Breadth Update:\n\nGo to console.ovtlyr.com â Market Breadth\nNote the % for each sector (10 EMA view)\nV1.3 will have a paste-in import panel.')
 }
 
-// ── EARNINGS CALENDAR ─────────────────────────────
+// ââ EARNINGS CALENDAR âââââââââââââââââââââââââââââ
 const LIVE_EARNINGS = {}   // populated by fetchEarningsCalendar()
 
 async function fetchEarningsCalendar() {
   // Polygon /vX/reference/tickers/{t}/events does not support earnings event type
   // Using hardcoded OV earnings flags (updated monthly with OVTLYR data)
-  // LIVE_EARNINGS stays empty — hasEarnings() falls back to OV flags
+  // LIVE_EARNINGS stays empty â hasEarnings() falls back to OV flags
   console.log('Earnings: using hardcoded OV flags (Polygon earnings API not available on Starter)')
 }
 
@@ -1114,7 +1114,7 @@ function hasEarnings(ticker) {
   return !!(OV[ticker] && OV[ticker].earn)
 }
 
-// ── OVTLYR DATA REFRESH ──────────────────────────
+// ââ OVTLYR DATA REFRESH ââââââââââââââââââââââââââ
 const BOOKMARKLET_CODE = `javascript:(function(){
   // Step 1: Click all Load More buttons to get full list (GT Platform re-sorts on import)
   function clickLoadMore(attempt){
@@ -1144,10 +1144,10 @@ const BOOKMARKLET_CODE = `javascript:(function(){
     if(!Object.keys(data).length){alert('GT Scrape: No data found. Try waiting for page to fully load.');return;}
     var json=JSON.stringify(data);
     navigator.clipboard.writeText(json).then(function(){
-      alert('GT Scrape: Copied '+Object.keys(data).length+' tickers! Return to GT Platform → Screener tab → paste → Import. Platform will sort by signal %.');
+      alert('GT Scrape: Copied '+Object.keys(data).length+' tickers! Return to GT Platform â Screener tab â paste â Import. Platform will sort by signal %.');
     }).catch(function(){
       var ta=document.createElement('textarea');ta.value=json;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);
-      alert('GT Scrape: Copied '+Object.keys(data).length+' tickers! Return to GT Platform → Screener → paste → Import.');
+      alert('GT Scrape: Copied '+Object.keys(data).length+' tickers! Return to GT Platform â Screener â paste â Import.');
     });
   }
   // Start: sort first, then after short delay start loading more
@@ -1158,7 +1158,7 @@ const BOOKMARKLET_CODE = `javascript:(function(){
 function copyBookmarklet() {
   navigator.clipboard.writeText(BOOKMARKLET_CODE).then(() => {
     setApi('Bookmarklet copied! Add it to your browser bookmarks bar.', 'ok')
-    document.getElementById('ov-import-status').textContent = 'Bookmarklet copied to clipboard — paste it as a bookmark URL'
+    document.getElementById('ov-import-status').textContent = 'Bookmarklet copied to clipboard â paste it as a bookmark URL'
     document.getElementById('ov-import-status').style.color = '#00d68f'
   })
 }
@@ -1180,7 +1180,7 @@ function importOVData() {
     const keys = Object.keys(data)
     if(!keys.length) throw new Error('No tickers found in data')
     
-    // Update OV with imported data — merge, don't replace
+    // Update OV with imported data â merge, don't replace
     let updated = 0, added = 0
     keys.forEach(ticker => {
       const d = data[ticker]
@@ -1217,10 +1217,10 @@ function importOVData() {
     status.style.color = '#00d68f'
     
     runFilter()
-    setApi('OVTLYR data refreshed: ' + updated + ' updated, ' + added + ' new · ' + keys.length + ' total', 'ok')
+    setApi('OVTLYR data refreshed: ' + updated + ' updated, ' + added + ' new Â· ' + keys.length + ' total', 'ok')
     
   } catch(err) {
-    status.textContent = 'Parse error: ' + err.message + ' — check JSON format'
+    status.textContent = 'Parse error: ' + err.message + ' â check JSON format'
     status.style.color = '#ff4560'
     console.error('OV import error:', err)
   }
@@ -1241,7 +1241,7 @@ function loadOVData() {
   } catch(e) {}
 }
 
-// ── SCREENER ──────────────────────────────────────
+// ââ SCREENER ââââââââââââââââââââââââââââââââââââââ
 function runFilter() {
   const minSig  = +document.getElementById('f-sig').value || 0
   const fgMin   = +document.getElementById('f-fg-min').value || 0
@@ -1276,7 +1276,7 @@ function runFilter() {
 
   tbody.innerHTML = scored.map((s, i) => {
     const fgc = s.d.fg <= 35 ? '#00d68f' : s.d.fg <= 60 ? '#ff8c42' : '#ff4560'
-    const spLbl = s.spreadOk ? '<span class="g">✓</span>' : '<span class="r">✗</span>'
+    const spLbl = s.spreadOk ? '<span class="g">â</span>' : '<span class="r">â</span>'
     // DTE = days until May-15 expiry (from sizer) or next monthly expiry
     const expiryEl = document.getElementById('scr-expiry') || document.getElementById('expiry')
     const expiryStr = expiryEl ? expiryEl.value : 'May-15-2026'
@@ -1284,21 +1284,21 @@ function runFilter() {
     const today = new Date()
     const dte = Math.ceil((expiryDate - today) / (1000*60*60*24))
     const dteColor = dte >= 21 ? '#00d68f' : dte >= 14 ? '#ff8c42' : '#ff4560'
-    const dteLbl = '<span style="color:' + dteColor + '">' + (dte > 0 ? dte + 'd' : '⚠exp') + '</span>'
-    const eLbl  = s.earnOk   ? '<span class="g">✓</span>' : '<span class="o">⚠</span>'
+    const dteLbl = '<span style="color:' + dteColor + '">' + (dte > 0 ? dte + 'd' : 'â exp') + '</span>'
+    const eLbl  = s.earnOk   ? '<span class="g">â</span>' : '<span class="o">â </span>'
     const bw = Math.min(100, s.d.r / 8)
     const scoreBar = Math.round(s.score)
     return '<tr onclick="goSize(\'' + s.t + '\')">' +
       '<td class="dim" style="width:28px">' + (i+1) + '</td>' +
       '<td style="font-family:\'SF Mono\',monospace;font-weight:600">' + s.t + '<div style="font-size:10px;color:#555c6e">' + s.d.s + '</div></td>' +
-      '<td id="px-' + s.t + '" style="font-family:\'SF Mono\',monospace;color:#555c6e;font-size:11px">—</td>' +
+      '<td id="px-' + s.t + '" style="font-family:\'SF Mono\',monospace;color:#555c6e;font-size:11px">â</td>' +
       '<td><div style="display:flex;align-items:center;gap:5px"><div style="width:48px;height:3px;background:#1e2330;border-radius:2px;overflow:hidden"><div style="width:' + bw + '%;height:100%;background:#f0c040;border-radius:2px"></div></div><span class="gold" style="font-family:\'SF Mono\',monospace;font-size:12px">' + s.d.r + '%</span></div></td>' +
       '<td style="font-family:\'SF Mono\',monospace;color:' + fgc + '">' + s.d.fg.toFixed(0) + '</td>' +
       '<td class="dim" style="font-size:11px">' + s.d.s + '</td>' +
       '<td>' + spLbl + '</td>' +
       '<td>' + eLbl + '</td>' +
       '<td style="font-family:\'SF Mono\',monospace;font-size:11px;color:#555c6e">' + scoreBar + '</td>' +
-      '<td><button class="btn btn-ghost" style="font-size:10px;padding:2px 7px" onclick="event.stopPropagation();goSize(\'' + s.t + '\')">Size →</button></td>' +
+      '<td><button class="btn btn-ghost" style="font-size:10px;padding:2px 7px" onclick="event.stopPropagation();goSize(\'' + s.t + '\')">Size â</button></td>' +
     '</tr>'
   }).join('')
 
@@ -1360,7 +1360,7 @@ function goSize(t) {
   fetchTicker(t)
 }
 
-// ── POSITION SIZER ────────────────────────────────
+// ââ POSITION SIZER ââââââââââââââââââââââââââââââââ
 let rollHistory = []
 
 function saveRiskSettings() {
@@ -1397,14 +1397,14 @@ function calc() {
   const g30  = cap * 0.30
 
   document.getElementById('m-cts').textContent  = cts
-  document.getElementById('m-cts-s').textContent= 'δ'+Math.round(delta*100)+' · 2×ATR=$'+(2*atr).toFixed(2)
-  document.getElementById('m-cap').textContent  = cap > 0 ? '$'+Math.round(cap).toLocaleString() : '—'
-  document.getElementById('m-cap-s').textContent= optcost > 0 ? '$'+optcost+' × '+cts+' × 100' : 'enter option cost'
+  document.getElementById('m-cts-s').textContent= 'Î´'+Math.round(delta*100)+' Â· 2ÃATR=$'+(2*atr).toFixed(2)
+  document.getElementById('m-cap').textContent  = cap > 0 ? '$'+Math.round(cap).toLocaleString() : 'â'
+  document.getElementById('m-cap-s').textContent= optcost > 0 ? '$'+optcost+' Ã '+cts+' Ã 100' : 'enter option cost'
   document.getElementById('m-risk').textContent = '$'+Math.round(baseRisk).toLocaleString()
   document.getElementById('m-risk-s').textContent= rp+'% of $'+acct.toLocaleString()
   document.getElementById('m-hl').textContent   = '$'+Math.round(lossH).toLocaleString()
   document.getElementById('m-fl').textContent   = '$'+Math.round(lossF).toLocaleString()
-  document.getElementById('m-g30').textContent  = g30 > 0 ? '+$'+Math.round(g30).toLocaleString() : '—'
+  document.getElementById('m-g30').textContent  = g30 > 0 ? '+$'+Math.round(g30).toLocaleString() : 'â'
 
   renderLevels(entry, atr)
 }
@@ -1421,13 +1421,13 @@ function renderLevels(entry, atr) {
 
   document.getElementById('lvl-body').innerHTML =
     lvlRow('bg-g','#00d68f','Entry price', entry, 0) +
-    lvlRow('bg-b','#4da6ff','½ ATR roll point', r1, pct(r1)) +
-    lvlRow('bg-b','#4da6ff','1× ATR roll point', r2, pct(r2)) +
-    lvlRow('bg-b','#4da6ff','2× ATR roll point', r3, pct(r3)) +
+    lvlRow('bg-b','#4da6ff','Â½ ATR roll point', r1, pct(r1)) +
+    lvlRow('bg-b','#4da6ff','1Ã ATR roll point', r2, pct(r2)) +
+    lvlRow('bg-b','#4da6ff','2Ã ATR roll point', r3, pct(r3)) +
     '<div style="height:1px;background:rgba(255,255,255,.07);margin:5px 0"></div>' +
-    lvlRow('bg-o','#ff8c42','Stop loss − ½ ATR  ·  orange line', sl, pct(sl)) +
-    lvlRow('bg-r','#ff4560','Emergency exit − 2× ATR  ·  red line', em, pct(em)) +
-    '<div style="margin-top:8px;padding:7px 11px;background:#171b22;border-radius:6px;font-size:11px;color:#555c6e">ATR(14) = <span style="color:#e8eaf0;font-family:\'SF Mono\',monospace">$' + atr.toFixed(2) + '</span> &nbsp;·&nbsp; ½ ATR = <span style="color:#ff8c42;font-family:\'SF Mono\',monospace">$' + h.toFixed(2) + '</span></div>'
+    lvlRow('bg-o','#ff8c42','Stop loss â Â½ ATR  Â·  orange line', sl, pct(sl)) +
+    lvlRow('bg-r','#ff4560','Emergency exit â 2Ã ATR  Â·  red line', em, pct(em)) +
+    '<div style="margin-top:8px;padding:7px 11px;background:#171b22;border-radius:6px;font-size:11px;color:#555c6e">ATR(14) = <span style="color:#e8eaf0;font-family:\'SF Mono\',monospace">$' + atr.toFixed(2) + '</span> &nbsp;Â·&nbsp; Â½ ATR = <span style="color:#ff8c42;font-family:\'SF Mono\',monospace">$' + h.toFixed(2) + '</span></div>'
 }
 
 function copyLevels() {
@@ -1436,13 +1436,13 @@ function copyLevels() {
   const a = +document.getElementById('atr').value
   if(!e || !a) { alert('Enter entry price and ATR first'); return }
   const txt = [
-    '// ' + t + ' — Golden Ticket Levels',
+    '// ' + t + ' â GOGO Levels',
     '// Entry: $' + e.toFixed(2) + ' | ATR: $' + a.toFixed(2),
-    'var stopLoss  = ' + (e - a*0.5).toFixed(2) + '  // Orange — ½ ATR stop',
-    'var rollHalf  = ' + (e + a*0.5).toFixed(2) + '  // Blue — ½ ATR roll',
-    'var rollOne   = ' + (e + a*1.0).toFixed(2) + '   // Blue — 1× ATR roll',
-    'var rollTwo   = ' + (e + a*2.0).toFixed(2) + '  // Blue — 2× ATR roll',
-    'var emergency = ' + (e - a*2.0).toFixed(2) + ' // Red — emergency exit',
+    'var stopLoss  = ' + (e - a*0.5).toFixed(2) + '  // Orange â Â½ ATR stop',
+    'var rollHalf  = ' + (e + a*0.5).toFixed(2) + '  // Blue â Â½ ATR roll',
+    'var rollOne   = ' + (e + a*1.0).toFixed(2) + '   // Blue â 1Ã ATR roll',
+    'var rollTwo   = ' + (e + a*2.0).toFixed(2) + '  // Blue â 2Ã ATR roll',
+    'var emergency = ' + (e - a*2.0).toFixed(2) + ' // Red â emergency exit',
   ].join('\n')
   navigator.clipboard.writeText(txt).then(() => {
     const btn = event.target
@@ -1465,11 +1465,11 @@ function doRoll() {
   document.getElementById('roll-hist').innerHTML =
     '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e;margin-bottom:5px">Roll history</div>' +
     rollHistory.map(r =>
-      '<div class="roll-row"><span class="dim">#'+r.n+'</span><span style="font-family:\'SF Mono\',monospace;font-weight:500">$'+r.from.toFixed(2)+' → $'+r.to.toFixed(2)+'</span><span class="dim" style="flex:1">'+r.date+'</span><span class="g">+'+r.gain+'%</span></div>'
+      '<div class="roll-row"><span class="dim">#'+r.n+'</span><span style="font-family:\'SF Mono\',monospace;font-weight:500">$'+r.from.toFixed(2)+' â $'+r.to.toFixed(2)+'</span><span class="dim" style="flex:1">'+r.date+'</span><span class="g">+'+r.gain+'%</span></div>'
     ).join('')
 }
 
-// ── LIVE TICKER FETCH ─────────────────────────────
+// ââ LIVE TICKER FETCH âââââââââââââââââââââââââââââ
 async function fetchTicker(ticker) {
   if(!ticker || ticker.length < 1) return
   const st = document.getElementById('tkr-st')
@@ -1481,7 +1481,7 @@ async function fetchTicker(ticker) {
   const d = await apiGet('/v2/aggs/ticker/'+ticker+'/range/1/day/'+from+'/'+to+'?adjusted=true&sort=asc&limit=75')
 
   if(!d || !d.results || d.results.length < 15) {
-    st.textContent = 'No data for ' + ticker + ' — check ticker symbol'
+    st.textContent = 'No data for ' + ticker + ' â check ticker symbol'
     st.style.color = '#ff4560'
     return
   }
@@ -1505,16 +1505,16 @@ async function fetchTicker(ticker) {
 
   const e50str = e50 ? e50.toFixed(2) : '(need 50+ bars)'
   const emaCol = emaOk ? '#00d68f' : '#ff4560'
-  const emaLbl = emaOk ? '✓ Bullish stack' : '✗ Not aligned'
+  const emaLbl = emaOk ? 'â Bullish stack' : 'â Not aligned'
   st.innerHTML =
-    '<span style="color:#00d68f">✓ ' + ticker + '</span>' +
-    ' &nbsp;·&nbsp; ATR: <span style="color:#e8eaf0">$' + atr + '</span>' +
-    ' &nbsp;·&nbsp; Price: <span style="color:#e8eaf0">$' + price.toFixed(2) + '</span><br>' +
-    'EMA10: ' + (e10||'—') + ' &nbsp;·&nbsp; EMA20: ' + (e20||'—') + ' &nbsp;·&nbsp; EMA50: ' + e50str +
-    ' &nbsp;·&nbsp; <span style="color:' + emaCol + '">' + emaLbl + '</span>'
+    '<span style="color:#00d68f">â ' + ticker + '</span>' +
+    ' &nbsp;Â·&nbsp; ATR: <span style="color:#e8eaf0">$' + atr + '</span>' +
+    ' &nbsp;Â·&nbsp; Price: <span style="color:#e8eaf0">$' + price.toFixed(2) + '</span><br>' +
+    'EMA10: ' + (e10||'â') + ' &nbsp;Â·&nbsp; EMA20: ' + (e20||'â') + ' &nbsp;Â·&nbsp; EMA50: ' + e50str +
+    ' &nbsp;Â·&nbsp; <span style="color:' + emaCol + '">' + emaLbl + '</span>'
   st.style.color = ''
 
-  setApi(ticker + ' loaded · ATR $' + atr + ' · Price $' + price.toFixed(2), 'ok')
+  setApi(ticker + ' loaded Â· ATR $' + atr + ' Â· Price $' + price.toFixed(2), 'ok')
   calc()
 
   // Check earnings via ticker details
@@ -1535,7 +1535,7 @@ async function fetchEarnings(ticker) {
         setCheck('no-earn', safe)
         renderChecklist()
         const col = safe ? '#00d68f' : '#ff8c42'
-        const lbl = safe ? '✓ Earnings: ' + ed + ' (' + days + 'd — safe)' : '⚠ Earnings: ' + ed + ' (' + days + 'd — within window!)'
+        const lbl = safe ? 'â Earnings: ' + ed + ' (' + days + 'd â safe)' : 'â  Earnings: ' + ed + ' (' + days + 'd â within window!)'
         st.innerHTML = st.innerHTML + '<br><span style="color:' + col + '">' + lbl + '</span>'
       } else {
         setCheck('no-earn', true)
@@ -1555,7 +1555,7 @@ async function fetchOptions(ticker) {
 
   // Get expiry from form
   const expiry = document.getElementById('expiry')?.value || '2026-05-15'
-  // Convert "May-15-2026" → "2026-05-15"
+  // Convert "May-15-2026" â "2026-05-15"
   const expiryISO = (() => {
     try {
       const d = new Date(expiry)
@@ -1565,7 +1565,7 @@ async function fetchOptions(ticker) {
   })()
 
   try {
-    // Filter near ATM: ±20% of current price, plenty of contracts with greeks
+    // Filter near ATM: Â±20% of current price, plenty of contracts with greeks
     const lo = currentPrice > 0 ? Math.floor(currentPrice * 0.80) : 1
     const hi = currentPrice > 0 ? Math.ceil(currentPrice * 1.10)  : 9999
     const url = '/v3/snapshot/options/'+ticker+
@@ -1591,11 +1591,11 @@ async function fetchOptions(ticker) {
         return Math.abs((a.greeks.delta||0) - 0.80) < Math.abs((b.greeks.delta||0) - 0.80) ? a : b
       })
     } else {
-      // No greeks available — use highest OI contract near ATM as fallback
+      // No greeks available â use highest OI contract near ATM as fallback
       const withOI = d.results.filter(c => c.open_interest > 0)
       if(withOI.length) {
         best = withOI.reduce((a,b) => (a.open_interest||0) > (b.open_interest||0) ? a : b)
-        ol.textContent = 'Greeks not available for this expiry — showing highest OI contract. Options plan may be needed for greeks.'
+        ol.textContent = 'Greeks not available for this expiry â showing highest OI contract. Options plan may be needed for greeks.'
       }
     }
 
@@ -1617,16 +1617,16 @@ async function fetchOptions(ticker) {
 
     const sc = spreadOk ? '#00d68f' : '#ff4560'
     const spreadStr = mktClosed
-      ? '<span style="color:#ff8c42">Market closed — verify spread during hours</span>'
-      : '<span style="color:'+sc+'">Spread: ~$'+spread.toFixed(2)+' '+(spreadOk?'✓':'✗')+'</span>'
+      ? '<span style="color:#ff8c42">Market closed â verify spread during hours</span>'
+      : '<span style="color:'+sc+'">Spread: ~$'+spread.toFixed(2)+' '+(spreadOk?'â':'â')+'</span>'
 
     ol.innerHTML =
       'Strike: $'+strike+
-      ' · OI: '+oi.toLocaleString()+
-      ' · Delta: '+(delta ? delta.toFixed(2) : 'n/a')+
-      ' · IV: '+(iv ? (iv*100).toFixed(1)+'%' : 'n/a')+
-      ' · Last: $'+(best.day?.close||'—')+
-      ' · '+spreadStr
+      ' Â· OI: '+oi.toLocaleString()+
+      ' Â· Delta: '+(delta ? delta.toFixed(2) : 'n/a')+
+      ' Â· IV: '+(iv ? (iv*100).toFixed(1)+'%' : 'n/a')+
+      ' Â· Last: $'+(best.day?.close||'â')+
+      ' Â· '+spreadStr
 
     // Update checklist
     setCheck('opt-oi', oi >= 250)
@@ -1644,7 +1644,7 @@ async function fetchOptions(ticker) {
   }
 }
 
-// ── EXPECTED MOVE ─────────────────────────────────
+// ââ EXPECTED MOVE âââââââââââââââââââââââââââââââââ
 function calcEM() {
   const c = +document.getElementById('em-c').value
   const p = +document.getElementById('em-p').value
@@ -1658,10 +1658,10 @@ function calcEM() {
 
   document.getElementById('em-res').style.display = 'block'
   document.getElementById('em-st').textContent = '$' + st.toFixed(2)
-  document.getElementById('em-mv').textContent = '±$' + mv.toFixed(2)
+  document.getElementById('em-mv').textContent = 'Â±$' + mv.toFixed(2)
 
   if(brks !== null) {
-    document.getElementById('em-br').textContent = brks ? 'YES — EXIT' : 'NO — Safe'
+    document.getElementById('em-br').textContent = brks ? 'YES â EXIT' : 'NO â Safe'
     document.getElementById('em-br').className   = 'metric-value ' + (brks?'r':'g')
     document.getElementById('em-sc').style.background = brks ? 'rgba(255,69,96,.1)' : 'rgba(0,214,143,.1)'
     document.getElementById('em-sc').style.border = '1px solid ' + (brks ? 'rgba(255,69,96,.3)' : 'rgba(0,214,143,.25)')
@@ -1671,9 +1671,9 @@ function calcEM() {
   }
 
   const upEl = document.getElementById('em-up'), dnEl = document.getElementById('em-dn')
-  upEl.textContent = '↑  $' + up.toFixed(2)
+  upEl.textContent = 'â  $' + up.toFixed(2)
   upEl.style.cssText = 'flex:1;padding:7px;text-align:center;border-radius:6px;font-family:\'SF Mono\',monospace;font-size:12px;font-weight:500;background:rgba(0,214,143,.1);color:#00d68f;border:1px solid rgba(0,214,143,.25)'
-  dnEl.textContent = '↓  $' + dn.toFixed(2)
+  dnEl.textContent = 'â  $' + dn.toFixed(2)
   dnEl.style.cssText = 'flex:1;padding:7px;text-align:center;border-radius:6px;font-family:\'SF Mono\',monospace;font-size:12px;font-weight:500;background:rgba(255,69,96,.1);color:#ff4560;border:1px solid rgba(255,69,96,.3)'
 }
 
@@ -1682,7 +1682,7 @@ function goSaveAsTrade() {
   openAddTrade()
 }
 
-// ── TRADE MANAGER ─────────────────────────────────
+// ââ TRADE MANAGER âââââââââââââââââââââââââââââââââ
 let TRADES = []
 try { TRADES = JSON.parse(localStorage.getItem('gt_trades') || '[]') } catch(e) { TRADES = [] }
 
@@ -1699,7 +1699,7 @@ function openAddTrade() {
     't': document.getElementById('tkr').value,
     'e': document.getElementById('entry').value,
     'a': document.getElementById('atr').value,
-    'c': document.getElementById('m-cts').textContent === '—' ? '' : document.getElementById('m-cts').textContent,
+    'c': document.getElementById('m-cts').textContent === 'â' ? '' : document.getElementById('m-cts').textContent,
     'oc': document.getElementById('optcost').value,
     'd': document.getElementById('expiry').value,
   }
@@ -1785,12 +1785,12 @@ function mkLevel(cls, dot, label, price, dist) {
 function renderTrades() {
   const open   = TRADES.filter(t => t.status === 'open')
   const closed = TRADES.filter(t => t.status === 'closed')
-  document.getElementById('trade-count').textContent = open.length + ' open · ' + closed.length + ' closed'
+  document.getElementById('trade-count').textContent = open.length + ' open Â· ' + closed.length + ' closed'
 
   if(!TRADES.length) {
     document.getElementById('trades-list').innerHTML =
       '<div style="text-align:center;padding:40px;color:#555c6e">' +
-      '<div style="font-size:26px;margin-bottom:10px">📋</div>' +
+      '<div style="font-size:26px;margin-bottom:10px">ð</div>' +
       '<div style="font-size:13px;font-weight:500;color:#8b91a0">No trades yet</div>' +
       '<div style="font-size:11px;margin-top:4px">Click "+ New Trade" or use Position Sizer and click "Save as Trade"</div></div>'
     return
@@ -1827,30 +1827,30 @@ function renderTrades() {
           '<button class="btn btn-ghost" style="font-size:10px;padding:2px 8px" onclick="toggleChart(' + t.id + ')">Chart</button>' +
           (isOpen ? '<button class="btn btn-ghost" style="font-size:10px;padding:2px 8px" onclick="rollTrade(' + t.id + ')">Roll</button>' : '') +
           (isOpen ? '<button class="btn btn-ghost" style="font-size:10px;padding:2px 8px" onclick="closeTrade(' + t.id + ')">Close</button>' : '') +
-          '<button class="btn btn-ghost" style="font-size:10px;padding:2px 8px;color:#ff4560" onclick="deleteTrade(' + t.id + ')">✕</button>' +
+          '<button class="btn btn-ghost" style="font-size:10px;padding:2px 8px;color:#ff4560" onclick="deleteTrade(' + t.id + ')">â</button>' +
         '</div>' +
       '</div>' +
       '<div class="trade-card-body">' +
         '<div>' +
           '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e;margin-bottom:7px">Levels</div>' +
           mkLevel('bg-g','#00d68f','Entry',  t.entry, 0) +
-          mkLevel('bg-b','#4da6ff','½ ATR roll', r1, pct(r1)) +
-          mkLevel('bg-b','#4da6ff','1× ATR roll',r2, pct(r2)) +
-          mkLevel('bg-b','#4da6ff','2× ATR roll',r3, pct(r3)) +
-          mkLevel('bg-o','#ff8c42','Stop loss −½ ATR', sl, pct(sl)) +
-          mkLevel('bg-r','#ff4560','Emergency −2× ATR', em, pct(em)) +
+          mkLevel('bg-b','#4da6ff','Â½ ATR roll', r1, pct(r1)) +
+          mkLevel('bg-b','#4da6ff','1Ã ATR roll',r2, pct(r2)) +
+          mkLevel('bg-b','#4da6ff','2Ã ATR roll',r3, pct(r3)) +
+          mkLevel('bg-o','#ff8c42','Stop loss âÂ½ ATR', sl, pct(sl)) +
+          mkLevel('bg-r','#ff4560','Emergency â2Ã ATR', em, pct(em)) +
         '</div>' +
         '<div>' +
           '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e;margin-bottom:7px">Risk & P/L</div>' +
           '<div class="grid2" style="gap:6px">' +
             mkMini('Entry price', '$'+t.entry.toFixed(2), '') +
-            mkMini('Cost basis', basis>0?'$'+Math.round(basis).toLocaleString():'—', '') +
-            mkMini('Loss @ ½ATR', '$'+Math.round(lH).toLocaleString(), 'o') +
-            mkMini('Loss @ 2×ATR', '$'+Math.round(lF).toLocaleString(), 'r') +
-            mkMini('+30% target', basis>0?'+$'+Math.round(basis*.3).toLocaleString():'—', 'g') +
+            mkMini('Cost basis', basis>0?'$'+Math.round(basis).toLocaleString():'â', '') +
+            mkMini('Loss @ Â½ATR', '$'+Math.round(lH).toLocaleString(), 'o') +
+            mkMini('Loss @ 2ÃATR', '$'+Math.round(lF).toLocaleString(), 'r') +
+            mkMini('+30% target', basis>0?'+$'+Math.round(basis*.3).toLocaleString():'â', 'g') +
             mkMini(t.pnl!==undefined ? 'Realized P/L' : 'ATR', t.pnl!==undefined ? (t.pnl>=0?'+$':'-$')+Math.abs(Math.round(t.pnl)).toLocaleString() : '$'+t.atr, t.pnl!==undefined?(t.pnl>=0?'g':'r'):'') +
           '</div>' +
-          (t.rolls.length ? '<div style="margin-top:9px;padding-top:9px;border-top:1px solid rgba(255,255,255,.06)"><div style="font-size:10px;color:#555c6e;margin-bottom:4px">ROLLS</div>' + t.rolls.map(r=>'<div style="font-size:11px;color:#8b91a0;font-family:\'SF Mono\',monospace">'+r.date+' · $'+r.from.toFixed(2)+' → $'+r.to.toFixed(2)+'</div>').join('') + '</div>' : '') +
+          (t.rolls.length ? '<div style="margin-top:9px;padding-top:9px;border-top:1px solid rgba(255,255,255,.06)"><div style="font-size:10px;color:#555c6e;margin-bottom:4px">ROLLS</div>' + t.rolls.map(r=>'<div style="font-size:11px;color:#8b91a0;font-family:\'SF Mono\',monospace">'+r.date+' Â· $'+r.from.toFixed(2)+' â $'+r.to.toFixed(2)+'</div>').join('') + '</div>' : '') +
           (t.notes ? '<div style="margin-top:7px;font-size:11px;color:#555c6e;border-top:1px solid rgba(255,255,255,.06);padding-top:7px">' + t.notes + '</div>' : '') +
         '</div>' +
       '</div>' +
@@ -1871,8 +1871,8 @@ function renderTrades() {
   document.getElementById('trades-list').innerHTML = html
 }
 
-// ── PORTFOLIO (static — your current positions) ───
-// ── LIVE P&L + CHART ─────────────────────────────
+// ââ PORTFOLIO (static â your current positions) âââ
+// ââ LIVE P&L + CHART âââââââââââââââââââââââââââââ
 function toggleChart(id) {
   const el = document.getElementById('chart-' + id)
   if(!el) return
@@ -1961,10 +1961,10 @@ async function refreshAllPnL() {
 
   document.getElementById('pnl-refresh-btn').textContent = 'Refresh P&L'
   document.getElementById('pnl-refresh-btn').disabled = false
-  setApi('P&L updated: ' + updated + '/' + trades.length + ' trades · last ' + new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}), 'ok')
+  setApi('P&L updated: ' + updated + '/' + trades.length + ' trades Â· last ' + new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}), 'ok')
 }
 
-// ── PORTFOLIO ─────────────────────────────────────────
+// ââ PORTFOLIO âââââââââââââââââââââââââââââââââââââââââ
 // Load from localStorage or fall back to hardcoded seed data
 const SEED_POSITIONS = [
   {t:'VRT 230C', e:'Jan-27',c:1, val:12083, pnl:3391,  pct:44.15, today:124,  todayPct:1.04, type:'option'},
@@ -2026,7 +2026,7 @@ function savePortfolioData(positions, meta) {
 }
 
 function tagPosition(raw, isGT) {
-  // isGT: true = Golden Ticket, false = Long-term, toggle through undefined->gt->lt->undefined
+  // isGT: true = GOGO, false = Long-term, toggle through undefined->gt->lt->undefined
   const p = POSITIONS.find(x => x.raw === raw)
   if(!p) return
   if(isGT === true && p.gt !== true)       p.gt = true
@@ -2047,15 +2047,15 @@ function clearPortfolio() {
   POSITIONS = SEED_POSITIONS
   renderPortfolio()
   document.getElementById('port-last-import').textContent = ''
-  document.getElementById('port-import-status').textContent = 'Cleared — showing sample data'
+  document.getElementById('port-import-status').textContent = 'Cleared â showing sample data'
   document.getElementById('port-import-status').style.color = '#555c6e'
 }
 
-// ── FIDELITY CSV PARSER ────────────────────────────
+// ââ FIDELITY CSV PARSER ââââââââââââââââââââââââââââ
 function parseFidelityCSV(text) {
   const lines = text.split('\n').map(l => l.trim()).filter(l => l)
   
-  // Find the header row — it starts with "Account Number" or "Symbol"
+  // Find the header row â it starts with "Account Number" or "Symbol"
   let headerIdx = -1
   for(let i = 0; i < lines.length; i++) {
     if(lines[i].includes('Symbol') && (lines[i].includes('Quantity') || lines[i].includes('Current Value'))) {
@@ -2064,7 +2064,7 @@ function parseFidelityCSV(text) {
     }
   }
   
-  if(headerIdx < 0) throw new Error('Could not find header row — make sure this is a Fidelity Positions CSV')
+  if(headerIdx < 0) throw new Error('Could not find header row â make sure this is a Fidelity Positions CSV')
   
   // Parse CSV line respecting quoted fields
   function parseRow(line) {
@@ -2130,7 +2130,7 @@ function parseFidelityCSV(text) {
     // Detect options: symbol starts with - or contains option pattern
     const isOption = sym.startsWith('-') || /[CP]\d{8}[CP]\d{8}/.test(sym) || /\d{6}[CP]\d{8}/.test(sym)
     
-    // Parse option description: "NVDA MAY 15 26 $180 CALL" → "NVDA 180C"
+    // Parse option description: "NVDA MAY 15 26 $180 CALL" â "NVDA 180C"
     let display = sym.replace(/^-/,'')
     let expiry = ''
     let contracts = qty
@@ -2181,7 +2181,7 @@ function parseFidelityCSV(text) {
     })
   }
   
-  if(!positions.length) throw new Error('No positions found — check the CSV format')
+  if(!positions.length) throw new Error('No positions found â check the CSV format')
   
   return { positions, totalVal, totalPnl, totalToday, count: positions.length }
 }
@@ -2265,7 +2265,7 @@ function renderPortfolio() {
     if(cls) el.className = 'metric-value ' + cls
   }
 
-  setEl('pm-total',     totalVal > 0 ? '$' + Math.round(totalVal).toLocaleString() : '—', 'b')
+  setEl('pm-total',     totalVal > 0 ? '$' + Math.round(totalVal).toLocaleString() : 'â', 'b')
   setEl('pm-today',     totalToday >= 0 ? '+$' + Math.round(totalToday).toLocaleString() : '-$' + Math.abs(Math.round(totalToday)).toLocaleString(), totalToday >= 0 ? 'g' : 'r')
   document.getElementById('pm-today-pct') && (document.getElementById('pm-today-pct').textContent = (todayPct >= 0 ? '+' : '') + todayPct.toFixed(2) + '%')
   setEl('pm-total-pnl', (totalPnl >= 0 ? '+$' : '-$') + Math.abs(Math.round(totalPnl)).toLocaleString(), totalPnl >= 0 ? 'g' : 'r')
@@ -2294,22 +2294,23 @@ function renderPortfolio() {
     // Status dot
     const dot = p.pct >= 30 ? '#f0c040' : p.pct >= 0 ? '#00d68f' : p.pct >= -8 ? '#ff8c42' : '#ff4560'
     const typeTag = p.type === 'option' ? '<span style="font-size:9px;background:rgba(77,166,255,.15);color:#4da6ff;padding:1px 4px;border-radius:3px;margin-left:4px">OPT</span>' : '<span style="font-size:9px;background:rgba(0,214,143,.1);color:#00d68f;padding:1px 4px;border-radius:3px;margin-left:4px">EQ</span>'
+    if(!p || !p.raw) return ''
     return '<div class="pos-row" onclick="goSize(\'' + p.raw.replace(/^-/,'').split(/[0-9]/)[0] + '\')">' +
       '<div style="width:6px;height:6px;border-radius:50%;background:' + dot + ';flex-shrink:0;margin-right:4px"></div>' +
       (p.gt === false ? '<div title="Long-term hold (click to mark as GT)" onclick="event.stopPropagation();tagPosition(\'' + p.raw + '\',true)" style="width:14px;height:14px;border-radius:3px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);cursor:pointer;flex-shrink:0;margin-right:4px;display:flex;align-items:center;justify-content:center"><span style="font-size:7px;color:#555c6e">LT</span></div>' :
-       p.gt === true  ? '<div title="Golden Ticket position (click to mark as Long-term)" onclick="event.stopPropagation();tagPosition(\'' + p.raw + '\',false)" style="width:14px;height:14px;border-radius:3px;background:rgba(240,192,64,.15);border:1px solid rgba(240,192,64,.3);cursor:pointer;flex-shrink:0;margin-right:4px;display:flex;align-items:center;justify-content:center"><span style="font-size:7px;color:#f0c040">GT</span></div>' :
+       p.gt === true  ? '<div title="GOGO position (click to mark as Long-term)" onclick="event.stopPropagation();tagPosition(\'' + p.raw + '\',false)" style="width:14px;height:14px;border-radius:3px;background:rgba(240,192,64,.15);border:1px solid rgba(240,192,64,.3);cursor:pointer;flex-shrink:0;margin-right:4px;display:flex;align-items:center;justify-content:center"><span style="font-size:7px;color:#f0c040">GT</span></div>' :
        '<div title="Click to tag as GT or Long-term" onclick="event.stopPropagation();tagPosition(\'' + p.raw + '\',true)" style="width:14px;height:14px;border-radius:3px;background:rgba(255,255,255,.03);border:1px dashed rgba(255,255,255,.08);cursor:pointer;flex-shrink:0;margin-right:4px"></div>') +
-      '<div style="font-family:\'SF Mono\',monospace;font-weight:600;width:110px;flex-shrink:0">' + p.t + typeTag + (p.e ? '<div style="font-size:10px;color:#555c6e;font-weight:400">' + p.e + (p.c > 1 ? ' · ' + p.c + 'ct' : '') + '</div>' : '') + '</div>' +
+      '<div style="font-family:\'SF Mono\',monospace;font-weight:600;width:110px;flex-shrink:0">' + p.t + typeTag + (p.e ? '<div style="font-size:10px;color:#555c6e;font-weight:400">' + p.e + (p.c > 1 ? ' Â· ' + p.c + 'ct' : '') + '</div>' : '') + '</div>' +
       (val ? '<div style="font-family:\'SF Mono\',monospace;font-size:11px;color:#555c6e;width:70px;flex-shrink:0">' + val + '</div>' : '<div style="width:70px;flex-shrink:0"></div>') +
       '<div style="font-family:\'SF Mono\',monospace;font-size:12px;font-weight:500;flex:1;color:' + pc + '">' + ps + ' <span style="font-size:10px;opacity:.8">' + pcs + '</span></div>' +
       '<div style="font-size:11px;color:' + tc + ';width:80px;text-align:right">' + ts + ' today</div>' +
-      '<div><button class="btn btn-ghost" style="font-size:10px;padding:2px 6px;margin-left:8px" onclick="event.stopPropagation();goSize(\\\'\' + p.raw.replace(/^-/,\'\').split(/[0-9]/)[0] + \'\\\')">Size →</button></div>' +
+      '<div><button class="btn btn-ghost" style="font-size:10px;padding:2px 6px;margin-left:8px" onclick="event.stopPropagation();goSize(\\\'\' + p.raw.replace(/^-/,\'\').split(/[0-9]/)[0] + \'\\\')">Size â</button></div>' +
     '</div>'
   }).join('')
 }
 
 
-// ── INIT ──────────────────────────────────────────
+// ââ INIT ââââââââââââââââââââââââââââââââââââââââââ
 function initPlatform() {
   if(!KEY) {
     const overlay = document.getElementById('setup-overlay')
@@ -2332,7 +2333,7 @@ function initPlatform() {
     setTimeout(function() {
       const body = document.getElementById('chk-body')
       if(body && !body.innerHTML.trim()) {
-        console.log('GT: checklist empty — re-rendering')
+        console.log('GT: checklist empty â re-rendering')
         renderChecklist()
         updateBanner()
       }
