@@ -106,13 +106,13 @@ tr:hover td{background:#171b22;cursor:pointer}
     </div>
   </div>
   <div style="display:flex;align-items:center;gap:12px">
-    <div class="pill" id="mkt-pill" style="background:rgba(0,214,143,.12);color:#00d68f;border:1px solid rgba(0,214,143,.25)">&#226;&#151;&#143; Market Open</div>
+    <div class="pill" id="mkt-pill" style="background:rgba(0,214,143,.12);color:#00d68f;border:1px solid rgba(0,214,143,.25)">● Market Open</div>
     <div style="font-family:\'SF Mono\',monospace;font-size:11px;color:#555c6e" id="clock">--:-- ET</div>
   </div>
 </div>
 
 <div id="api-bar">
-  <span style="margin-left:auto;font-size:10px;color:#333a4a;cursor:pointer" onclick="localStorage.removeItem('gt_api_key');location.reload()" title="Reset API key">&#226;&#154;&#153; key</span><div id="api-dot"></div>
+  <span style="margin-left:auto;font-size:10px;color:#333a4a;cursor:pointer" onclick="localStorage.removeItem('gt_api_key');location.reload()" title="Reset API key">⚙ key</span><div id="api-dot"></div>
   <span id="api-msg">Ready — enter a ticker to fetch live data</span>
 </div>
 
@@ -124,11 +124,11 @@ tr:hover td{background:#171b22;cursor:pointer}
   <button onclick="show('portfolio',this)">Portfolio</button>
 </div>
 
-<!-- &#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144; MARKET &#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144; -->
+<!-- ═══ MARKET ═══════════════════════════════════ -->
 <div id="market" class="page active">
 
   <div id="go-banner" class="go-banner go">
-    <div id="go-icon" class="go-icon" style="background:rgba(0,214,143,.15);color:#00d68f">&#226;&#150;&#178;</div>
+    <div id="go-icon" class="go-icon" style="background:rgba(0,214,143,.15);color:#00d68f">▲</div>
     <div style="flex:1">
       <div id="go-title" style="font-size:14px;font-weight:600;color:#00d68f">GO — Market conditions favorable</div>
       <div id="go-sub" style="font-size:12px;color:#8b91a0;margin-top:2px">All GOGO criteria met. Safe to open new trades.</div>
@@ -181,16 +181,16 @@ tr:hover td{background:#171b22;cursor:pointer}
           <div class="grid3">
             <div class="metric"><div class="metric-label">SPY ETF</div><div id="spy-v" class="metric-value g">—</div><div id="spy-c" class="metric-sub">loading...</div></div>
             <div class="metric"><div class="metric-label">VIX</div><div id="vix-v" class="metric-value g">—</div><div id="vix-c" class="metric-sub">loading...</div></div>
-            <div class="metric"><div class="metric-label">Fear & Greed</div><div class="metric-value o">~35</div><div class="metric-sub">Fear zone &#226;&#134;&#145;</div></div>
+            <div class="metric"><div class="metric-label">Fear & Greed</div><div class="metric-value o">~35</div><div class="metric-sub">Fear zone ↑</div></div>
             <div class="metric"><div class="metric-label">Nasdaq</div><div class="metric-value g">23,592</div><div class="metric-sub">+1.78%</div></div>
-            <div class="metric"><div class="metric-label">Breadth</div><div id="brd-v" class="metric-value g">47.7%</div><div class="metric-sub">Full stocks &#226;&#134;&#145;</div></div>
+            <div class="metric"><div class="metric-label">Breadth</div><div id="brd-v" class="metric-value g">47.7%</div><div class="metric-sub">Full stocks ↑</div></div>
             <div class="metric"><div class="metric-label">Bull Sectors</div><div id="bull-sectors-val" class="metric-value g">—</div><div id="bull-sectors-sub" class="metric-sub">click Refresh live</div></div>
           </div>
         </div>
       </div>
       <div class="card">
         <div class="card-head">
-          <span class="card-title">Sector Breadth (OVTLYR &#194;&middot; 10 EMA)</span>
+          <span class="card-title">Sector Breadth (OVTLYR �&middot; 10 EMA)</span>
           <button class="btn btn-ghost" style="font-size:10px;padding:3px 9px" id="btn-sectors" onclick="fetchSectorData()">Refresh live</button>
         </div>
         <div class="card-body" id="sector-body" style="padding:8px 14px"></div>
@@ -213,7 +213,7 @@ tr:hover td{background:#171b22;cursor:pointer}
     </div>
   </div>
 
-<!-- &#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144; SCREENER &#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144; -->
+<!-- ═══ SCREENER ══════════════════════════════════ -->
 <div id="screener" class="page">
   <!-- OVTLYR Data Refresh Panel -->
   <div class="card" style="margin-bottom:12px">
@@ -225,8 +225,8 @@ tr:hover td{background:#171b22;cursor:pointer}
       <div style="display:grid;grid-template-columns:1fr auto;gap:12px;align-items:start">
         <div>
           <div style="font-size:12px;color:#8b91a0;margin-bottom:8px;line-height:1.6">
-            <b style="color:#e8eaf0">Step 1:</b> Click "Copy bookmarklet" &#226;&#134;&#146; add to Chrome bookmarks bar as a bookmark (paste code as URL).<br>
-            <b style="color:#e8eaf0">Step 2:</b> Go to <a href="https://console.ovtlyr.com" target="_blank" style="color:#4da6ff">console.ovtlyr.com</a> Screener &#226;&#134;&#146; click the bookmarklet &#226;&#134;&#146; JSON copied to clipboard.<br>
+            <b style="color:#e8eaf0">Step 1:</b> Click "Copy bookmarklet" → add to Chrome bookmarks bar as a bookmark (paste code as URL).<br>
+            <b style="color:#e8eaf0">Step 2:</b> Go to <a href="https://console.ovtlyr.com" target="_blank" style="color:#4da6ff">console.ovtlyr.com</a> Screener → click the bookmarklet → JSON copied to clipboard.<br>
             <b style="color:#e8eaf0">Step 3:</b> Paste below and click Import to refresh all signal % and F&amp;G scores.
           </div>
           <textarea id="ov-paste" rows="3" placeholder='Paste OVTLYR JSON here... {"NVDA":{"r":752,"fg":33.9},...}' style="width:100%;background:#0a0c0f;border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:8px;font-size:11px;color:#e8eaf0;font-family:monospace;resize:vertical;outline:none;box-sizing:border-box"></textarea>
@@ -234,13 +234,13 @@ tr:hover td{background:#171b22;cursor:pointer}
           <div id="bookmarklet-help" style="display:none;margin-top:10px;padding:10px;background:#0a0c0f;border-radius:6px;font-size:11px;color:#8b91a0;line-height:1.8">
             <b style="color:#f0c040">One-time bookmarklet setup:</b><br>
             1. Click "Copy bookmarklet" button<br>
-            2. Chrome bookmarks bar &#226;&#134;&#146; right-click &#226;&#134;&#146; "Add page..."<br>
-            3. Name: <b style="color:#e8eaf0">GT Scrape</b> &#194;&middot; URL: paste the copied code<br>
+            2. Chrome bookmarks bar → right-click → "Add page..."<br>
+            3. Name: <b style="color:#e8eaf0">GT Scrape</b> �&middot; URL: paste the copied code<br>
             4. Save — the bookmark now lives in your bar<br><br>
             <b style="color:#f0c040">Daily refresh (takes ~10 seconds):</b><br>
             1. Open <a href="https://console.ovtlyr.com" target="_blank" style="color:#4da6ff">console.ovtlyr.com</a> Screener and wait for data to load<br>
-            2. Click the GT Scrape bookmark &#226;&#134;&#146; alert confirms copy<br>
-            3. Return here &#226;&#134;&#146; paste &#226;&#134;&#146; Import
+            2. Click the GT Scrape bookmark → alert confirms copy<br>
+            3. Return here → paste → Import
           </div>
         </div>
         <div style="display:flex;flex-direction:column;gap:7px;min-width:145px">
@@ -270,7 +270,7 @@ tr:hover td{background:#171b22;cursor:pointer}
         <div class="field" style="margin:0"><label>Min 30D vol</label><input type="number" id="f-vol" value="1000000"></div>
       </div>
       <div style="display:flex;gap:16px;margin-top:10px;padding-top:9px;border-top:1px solid rgba(255,255,255,.06)">
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;text-transform:none;font-size:12px;color:#8b91a0;margin:0"><input type="checkbox" id="f-earn" checked style="accent-color:#f0c040;width:13px;height:13px;margin:0"> No earnings &#226;&#137;&#164;21d</label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;text-transform:none;font-size:12px;color:#8b91a0;margin:0"><input type="checkbox" id="f-earn" checked style="accent-color:#f0c040;width:13px;height:13px;margin:0"> No earnings ≤21d</label>
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;text-transform:none;font-size:12px;color:#8b91a0;margin:0"><input type="checkbox" id="f-bull" checked style="accent-color:#f0c040;width:13px;height:13px;margin:0"> Bullish sector only</label>
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;text-transform:none;font-size:12px;color:#8b91a0;margin:0"><input type="checkbox" id="f-wide" checked style="accent-color:#f0c040;width:13px;height:13px;margin:0"> Exclude wide spreads</label>
       </div>
@@ -305,7 +305,7 @@ tr:hover td{background:#171b22;cursor:pointer}
   </div>
 </div>
 
-<!-- &#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144; POSITION SIZER &#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144; -->
+<!-- ═══ POSITION SIZER ════════════════════════════ -->
 <div id="sizer" class="sizer-page">
   <div class="sidebar">
     <div class="card">
@@ -330,7 +330,7 @@ tr:hover td{background:#171b22;cursor:pointer}
         <div class="field"><label>Expiry</label><input type="text" id="expiry" value="May-15-2026"></div>
         <div id="opt-live" style="font-size:11px;color:#555c6e;font-family:\'SF Mono\',monospace;padding:7px 10px;background:#171b22;border:1px solid rgba(255,255,255,.07);border-radius:6px;min-height:26px;margin-bottom:9px;line-height:1.6">Type ticker + Enter to fetch live option chain</div>
         <button class="btn btn-gold" onclick="calc()">Calculate</button>
-        <button class="btn btn-blue" style="width:100%;margin-top:6px" onclick="goSaveAsTrade()">Save as Trade &#226;&#134;&#146;</button>
+        <button class="btn btn-blue" style="width:100%;margin-top:6px" onclick="goSaveAsTrade()">Save as Trade →</button>
       </div>
     </div>
     <div class="card">
@@ -343,7 +343,7 @@ tr:hover td{background:#171b22;cursor:pointer}
       </div>
     </div>
     <div class="card">
-      <div class="card-head"><span class="card-title">Expected Move Calculator</span><span style="font-size:10px;color:#555c6e">ATM straddle &#195;&#151; 85%</span></div>
+      <div class="card-head"><span class="card-title">Expected Move Calculator</span><span style="font-size:10px;color:#555c6e">ATM straddle × 85%</span></div>
       <div class="card-body">
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:9px">
           <div class="field" style="margin:0"><label>ATM Call $</label><input type="number" id="em-c" step="0.01" oninput="calcEM()"></div>
@@ -353,7 +353,7 @@ tr:hover td{background:#171b22;cursor:pointer}
         <div id="em-res" style="display:none">
           <div class="grid3" style="margin-bottom:7px">
             <div class="metric" style="padding:8px 10px"><div class="metric-label">Straddle</div><div id="em-st" class="metric-value b" style="font-size:15px">—</div></div>
-            <div class="metric" style="padding:8px 10px"><div class="metric-label">Move &#194;+/-</div><div id="em-mv" class="metric-value gold" style="font-size:15px">—</div></div>
+            <div class="metric" style="padding:8px 10px"><div class="metric-label">Move �+/-</div><div id="em-mv" class="metric-value gold" style="font-size:15px">—</div></div>
             <div class="metric" id="em-sc" style="padding:8px 10px"><div class="metric-label">Breaks stop?</div><div id="em-br" class="metric-value" style="font-size:13px">—</div></div>
           </div>
           <div style="display:flex;gap:6px">
@@ -376,8 +376,8 @@ tr:hover td{background:#171b22;cursor:pointer}
           <div class="metric"><div class="metric-label">Max Contracts</div><div id="m-cts" class="metric-value gold">—</div><div id="m-cts-s" class="metric-sub">enter inputs</div></div>
           <div class="metric"><div class="metric-label">Capital Deployed</div><div id="m-cap" class="metric-value b">—</div><div id="m-cap-s" class="metric-sub">total cost</div></div>
           <div class="metric"><div class="metric-label">Base Risk Budget</div><div id="m-risk" class="metric-value">—</div><div id="m-risk-s" class="metric-sub">per trade</div></div>
-          <div class="metric"><div class="metric-label">Loss @ &#194;.5 ATR Stop</div><div id="m-hl" class="metric-value o">—</div><div class="metric-sub">orange line trigger</div></div>
-          <div class="metric"><div class="metric-label">Loss @ 2&#195;&#151; ATR Exit</div><div id="m-fl" class="metric-value r">—</div><div class="metric-sub">red emergency line</div></div>
+          <div class="metric"><div class="metric-label">Loss @ �.5 ATR Stop</div><div id="m-hl" class="metric-value o">—</div><div class="metric-sub">orange line trigger</div></div>
+          <div class="metric"><div class="metric-label">Loss @ 2× ATR Exit</div><div id="m-fl" class="metric-value r">—</div><div class="metric-sub">red emergency line</div></div>
           <div class="metric"><div class="metric-label">+30% Gain Target</div><div id="m-g30" class="metric-value g">—</div><div class="metric-sub">on cost basis</div></div>
         </div>
       </div>
@@ -394,7 +394,7 @@ tr:hover td{background:#171b22;cursor:pointer}
   </div>
 </div>
 
-<!-- &#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144; TRADE MANAGER &#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144; -->
+<!-- ═══ TRADE MANAGER ══════════════════════════════ -->
 <div id="trades" class="trades-page">
   <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
     <button class="btn btn-gold" style="width:auto" onclick="openAddTrade()">+ New Trade</button>
@@ -425,7 +425,7 @@ tr:hover td{background:#171b22;cursor:pointer}
   <div id="trades-list"></div>
 </div>
 
-<!-- &#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144; PORTFOLIO &#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144;&#226;&#149;&#144; -->
+<!-- ═══ PORTFOLIO ══════════════════════════════════ -->
 <div id="portfolio" class="page">
   <!-- SUMMARY METRICS -->
   <div class="grid4" style="margin-bottom:14px">
@@ -445,7 +445,7 @@ tr:hover td{background:#171b22;cursor:pointer}
       <div style="display:grid;grid-template-columns:1fr auto;gap:12px;align-items:start">
         <div>
           <div style="font-size:12px;color:#8b91a0;margin-bottom:8px;line-height:1.6">
-            <b style="color:#e8eaf0">How to export:</b> Fidelity.com &#226;&#134;&#146; Accounts &amp; Trade &#226;&#134;&#146; Account Positions &#226;&#134;&#146; click the <b style="color:#f0c040">Download</b> button (top right of positions page) &#226;&#134;&#146; select the downloaded CSV file below.
+            <b style="color:#e8eaf0">How to export:</b> Fidelity.com → Accounts &amp; Trade → Account Positions → click the <b style="color:#f0c040">Download</b> button (top right of positions page) → select the downloaded CSV file below.
           </div>
           <div style="font-size:11px;color:#555c6e">Supports Fidelity Positions CSV. Options and equities parsed automatically. Data stays local in your browser.</div>
         </div>
@@ -518,7 +518,7 @@ function saveApiKey() {
 }
 const API = 'https://api.polygon.io'
 
-// &#226;&#148;&#128;&#226;&#148;&#128; NAVIGATION &#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;
+// ── NAVIGATION ────────────────────────────────────
 function show(id, btn) {
   document.querySelectorAll('.page,.sizer-page,.trades-page').forEach(p => p.classList.remove('active'))
   document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'))
@@ -528,21 +528,21 @@ function show(id, btn) {
   if(id === 'trades') renderTrades()
 }
 
-// &#226;&#148;&#128;&#226;&#148;&#128; CLOCK &#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;
+// ── CLOCK ─────────────────────────────────────────
 function tick() {
   const et = new Date(new Date().toLocaleString('en-US',{timeZone:'America/New_York'}))
   document.getElementById('clock').textContent = et.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit'}) + ' ET'
   const h = et.getHours(), m = et.getMinutes()
   const open = (h > 9 || (h===9&&m>=30)) && h < 16
   const pill = document.getElementById('mkt-pill')
-  pill.textContent = open ? '&#226;&#151;&#143; Market Open' : '&#226;&#151;&#139; Market Closed'
+  pill.textContent = open ? '● Market Open' : '○ Market Closed'
   pill.style.color = open ? '#00d68f' : '#ff4560'
   pill.style.background = open ? 'rgba(0,214,143,.12)' : 'rgba(255,69,96,.1)'
   pill.style.border = open ? '1px solid rgba(0,214,143,.25)' : '1px solid rgba(255,69,96,.3)'
 }
 setInterval(tick, 1000); tick()
 
-// &#226;&#148;&#128;&#226;&#148;&#128; API &#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;
+// ── API ───────────────────────────────────────────
 function setApi(msg, state) {
   document.getElementById('api-msg').textContent = msg
   const dot = document.getElementById('api-dot')
@@ -600,7 +600,7 @@ async function apiGet(path, skipCache) {
   }
 }
 
-// &#226;&#148;&#128;&#226;&#148;&#128; EMA / ATR HELPERS &#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;
+// ── EMA / ATR HELPERS ─────────────────────────────
 function calcEMA(vals, p) {
   if(!vals || vals.length < p) return null
   const k = 2/(p+1)
@@ -621,7 +621,7 @@ function calcATR(bars) {
   return +atr.toFixed(2)
 }
 
-// &#226;&#148;&#128;&#226;&#148;&#128; OVTLYR SIGNAL DATA &#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;
+// ── OVTLYR SIGNAL DATA ────────────────────────────
 const OV = {
   CLS:{r:769,fg:64.7,s:'Tech',v:1845006,earn:false},
   NVDA:{r:752,fg:33.9,s:'Tech',v:169287470,earn:false},
@@ -697,13 +697,13 @@ const SECTORS = [
   {n:'Energy',p:16.7,c:+3.09,bull:false},
 ]
 
-// &#226;&#148;&#128;&#226;&#148;&#128; CHECKLIST &#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;
+// ── CHECKLIST ─────────────────────────────────────
 const CHECKS = [
   {g:'Market (40%)', gc:'#4da6ff', items:[
     {id:'spy-sig', l:'SPY signal: Buy',              pass:true,  n:'OVTLYR buy signal on $SPY'},
     {id:'spy-ema', l:'SPY 10EMA > 20EMA',            pass:true,  n:'Short-term trend above medium — auto-updated from API'},
     {id:'spy-50',  l:'SPY price > 50EMA',            pass:true,  n:'Price above key support — auto-updated from API'},
-    {id:'breadth', l:'Market breadth 25–75%',        pass:true,  n:'Under 25 = NO TRADES &#194;&middot; Over 75 = reduce risk'},
+    {id:'breadth', l:'Market breadth 25–75%',        pass:true,  n:'Under 25 = NO TRADES �&middot; Over 75 = reduce risk'},
     {id:'brd-dir', l:'Breadth 10EMA bullish cross',  pass:true,  n:'Breadth trending upward'},
   ]},
   {g:'Sector (30%)', gc:'#f0c040', items:[
@@ -718,10 +718,10 @@ const CHECKS = [
     {id:'stk-mom', l:'Price above prior day low',    pass:true,  n:'Momentum / slingshot setup'},
   ]},
   {g:'Option Chain', gc:'#ff8c42', items:[
-    {id:'opt-exp', l:'Expiration &#226;&#137;&#165; 21 days',         pass:true,  n:'Start at 21+ DTE'},
-    {id:'opt-oi',  l:'OI &#226;&#137;&#165; 4–6&#195;&#151; contract count',    pass:true,  n:'Or minimum 250 OI — auto-updated from API'},
+    {id:'opt-exp', l:'Expiration ≥ 21 days',         pass:true,  n:'Start at 21+ DTE'},
+    {id:'opt-oi',  l:'OI ≥ 4–6× contract count',    pass:true,  n:'Or minimum 250 OI — auto-updated from API'},
     {id:'opt-sp',  l:'Bid/ask spread < $0.50',       pass:true,  n:'OVTLYR liquidity rule — auto-updated during market hours'},
-    {id:'opt-ex',  l:'Extrinsic value &#226;&#137;&#164; 20%',        pass:true,  n:'Keep cost efficient'},
+    {id:'opt-ex',  l:'Extrinsic value ≤ 20%',        pass:true,  n:'Keep cost efficient'},
     {id:'opt-dl',  l:'Delta ~80',                    pass:true,  n:'Target delta per cheat sheet — auto-updated from API'},
     {id:'no-earn', l:'No earnings within 21 days',   pass:true,  n:'Earnings risk = exit signal — auto-updated from API'},
   ]},
@@ -737,14 +737,14 @@ function renderChecklist() {
     // For group score, skip null items (not yet evaluated)
     const gp = g.items.filter(i => i.pass === true).length
     const gt = g.items.filter(i => i.pass !== null).length
-    html += '<div class="chk-group" style="color:' + g.gc + '">' + g.g + ' &nbsp;&#194;&middot;&nbsp; ' + gp + '/' + gt + '</div>'
+    html += '<div class="chk-group" style="color:' + g.gc + '">' + g.g + ' &nbsp;�&middot;&nbsp; ' + gp + '/' + gt + '</div>'
     g.items.forEach(i => {
       if(i.pass !== null) { total++; if(i.pass) passing++ }
       // null = pending (grey), true = pass (green), false = fail (red)
       const dc = i.pass === null ? '#333a4a' : i.pass ? '#00d68f' : '#ff4560'
       const tc = i.pass === null ? '#444c60' : i.pass ? '#e8eaf0' : '#555c6e'
       const sc = i.pass === null ? '' : i.pass ? 'g' : 'r'
-      const icon = i.pass === null ? '<span style="color:#444c60;font-size:11px">—</span>' : i.pass ? '<span class="chk-st g">&#226;&#156;&#147;</span>' : '<span class="chk-st r">&#226;&#156;&#151;</span>'
+      const icon = i.pass === null ? '<span style="color:#444c60;font-size:11px">—</span>' : i.pass ? '<span class="chk-st g">✓</span>' : '<span class="chk-st r">✗</span>'
       const dim = i.pass === null ? ';opacity:.4' : ''
       html += '<div class="chk-item" title="' + i.n + '" style="' + dim + '"><div class="chk-dot" style="background:' + dc + '"></div><span class="chk-lbl" style="color:' + tc + '">' + i.l + '</span>' + icon + '</div>'
     })
@@ -761,15 +761,15 @@ function updateBanner(breadth) {
   const ti = document.getElementById('go-title')
   if(breadth < 25) {
     b.className='go-banner stop'; ic.style.cssText='width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;font-weight:700;background:rgba(255,69,96,.15);color:#ff4560'
-    ic.textContent='&#226;&#156;&#149;'; ti.style.color='#ff4560'; ti.textContent='NO TRADE — Breadth under 25%'
+    ic.textContent='✕'; ti.style.color='#ff4560'; ti.textContent='NO TRADE — Breadth under 25%'
     document.getElementById('go-sub').textContent='Wait for breadth to reverse and cross 10EMA.'
   } else if(breadth > 75) {
     b.className='go-banner warn'; ic.style.cssText='width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;font-weight:700;background:rgba(255,140,66,.15);color:#ff8c42'
-    ic.textContent='&#226;&#154;&#160;'; ti.style.color='#ff8c42'; ti.textContent='CAUTION — Breadth > 75%. Reduce risk, secure profits.'
+    ic.textContent='⚠'; ti.style.color='#ff8c42'; ti.textContent='CAUTION — Breadth > 75%. Reduce risk, secure profits.'
     document.getElementById('go-sub').textContent='Roll positions, tighten stops. No new aggressive entries.'
   } else {
     b.className='go-banner go'; ic.style.cssText='width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;font-weight:700;background:rgba(0,214,143,.15);color:#00d68f'
-    ic.textContent='&#226;&#150;&#178;'; ti.style.color='#00d68f'; ti.textContent='GO -- Market conditions favorable'
+    ic.textContent='▲'; ti.style.color='#00d68f'; ti.textContent='GO -- Market conditions favorable'
     document.getElementById('go-sub').textContent='GOGO criteria met. Safe to open new trades.'
   }
   setCheck('breadth', breadth >= 25 && breadth <= 75)
@@ -805,7 +805,7 @@ function updateMorningPanel() {
   if(mmVix) {
     const v = parseFloat(vixVal)
     const vc = v < 20 ? '#00d68f' : v < 28 ? '#ff8c42' : '#ff4560'
-    mmVix.innerHTML = 'VIX <span style="color:' + vc + '">' + (vixVal||'—') + '</span>' + (v < 20 ? ' &#194;&middot; calm' : v < 28 ? ' &#194;&middot; caution' : ' &#194;&middot; fear')
+    mmVix.innerHTML = 'VIX <span style="color:' + vc + '">' + (vixVal||'—') + '</span>' + (v < 20 ? ' �&middot; calm' : v < 28 ? ' �&middot; caution' : ' �&middot; fear')
   }
 
   // Breadth
@@ -855,7 +855,7 @@ function updateMorningPanel() {
   if(mmDec) {
     mmDec.style.background = isGo ? 'rgba(0,214,143,.1)' : 'rgba(255,69,96,.1)'
     mmDec.style.color = isGo ? '#00d68f' : '#ff4560'
-    mmDec.textContent = isGo ? 'GO — conditions favorable &#194;&middot; safe to open new trades' : 'NO-GO — wait for conditions to improve'
+    mmDec.textContent = isGo ? 'GO — conditions favorable �&middot; safe to open new trades' : 'NO-GO — wait for conditions to improve'
   }
 
   // Timestamp
@@ -886,11 +886,11 @@ async function loadMarketData() {
       const sc = document.getElementById('spy-c')
       sc.textContent = (chg>=0?'+':'') + chg.toFixed(2) + '%'
       sc.style.color = chg >= 0 ? '#00d68f' : '#ff4560'
-      document.getElementById('mkt-updated').textContent = 'Live &#194;&middot; ' + new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})
+      document.getElementById('mkt-updated').textContent = 'Live �&middot; ' + new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})
       setCheck('spy-ema', !!(e10 && e20 && e10 > e20))
       setCheck('spy-50',  !!(e50 && price > e50))
       renderChecklist()
-      setApi('SPY $' + price.toFixed(2) + ' &#194;&middot; EMA10:' + e10 + ' EMA20:' + e20 + (e50?' EMA50:'+e50:' (need more history for EMA50)'), 'ok')
+      setApi('SPY $' + price.toFixed(2) + ' �&middot; EMA10:' + e10 + ' EMA20:' + e20 + (e50?' EMA50:'+e50:' (need more history for EMA50)'), 'ok')
     }
   } catch(e) {
     setApi('Using cached market data', 'err')
@@ -962,7 +962,7 @@ async function fetchTQQQSignal() {
     const html =
       '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:12px">' +
         '<div class="metric"><div class="metric-label">QQQ Price</div><div class="metric-value" style="font-size:16px">$'+last.toFixed(2)+'</div></div>' +
-        '<div class="metric"><div class="metric-label">200-Day MA</div><div class="metric-value" style="font-size:16px;color:'+(aboveMa?'#00d68f':'#ff4560')+'">$'+ma200str+'</div><div class="metric-sub">'+(aboveMa?'&#226;&#150;&#178; +':'&#226;&#150;&#188; ')+pctFromMa+'%</div></div>' +
+        '<div class="metric"><div class="metric-label">200-Day MA</div><div class="metric-value" style="font-size:16px;color:'+(aboveMa?'#00d68f':'#ff4560')+'">$'+ma200str+'</div><div class="metric-sub">'+(aboveMa?'▲ +':'▼ ')+pctFromMa+'%</div></div>' +
         '<div class="metric"><div class="metric-label">Realized Vol (20d)</div><div class="metric-value" style="font-size:16px;color:'+(annualVol<=35?'#00d68f':annualVol<=50?'#ff8c42':'#ff4560')+'">'+annualVol+'%</div><div class="metric-sub">target: 35%</div></div>' +
         '<div class="metric"><div class="metric-label">Vol Target</div><div class="metric-value" style="font-size:16px">35%</div></div>' +
       '</div>' +
@@ -991,12 +991,12 @@ async function fetchTQQQSignal() {
           '</div>' +
         '</div>' +
       '</div>' +
-      '<div style="font-size:11px;color:#555c6e">Based on '+n+' trading days of QQQ data &#194;&middot; 200MA uses '+ma200window+' days &#194;&middot; Vol uses '+vol20window+' days &#194;&middot; Run every Friday before market close</div>'
+      '<div style="font-size:11px;color:#555c6e">Based on '+n+' trading days of QQQ data �&middot; 200MA uses '+ma200window+' days �&middot; Vol uses '+vol20window+' days �&middot; Run every Friday before market close</div>'
 
     if(body) body.innerHTML = html
     const upd = document.getElementById('tqqq-updated')
     if(upd) upd.textContent = 'Updated ' + new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})
-    setApi('TQQQ Signal: '+tqqqPct+'% TQQQ / '+sgov+'% SGOV &#194;&middot; Vol '+annualVol+'% &#194;&middot; QQQ '+(aboveMa?'above':'below')+' 200MA', 'ok')
+    setApi('TQQQ Signal: '+tqqqPct+'% TQQQ / '+sgov+'% SGOV �&middot; Vol '+annualVol+'% �&middot; QQQ '+(aboveMa?'above':'below')+' 200MA', 'ok')
 
   } catch(e) {
     if(body) body.innerHTML = '<div style="font-size:12px;color:#ff4560;text-align:center;padding:8px">Error: '+e.message+'</div>'
@@ -1008,8 +1008,8 @@ async function fetchTQQQSignal() {
 
 async function fetchVIX() {
   // Use VIXY (ProShares VIX Short-Term Futures ETF) via Polygon Stocks plan
-  // VIXY tracks VIX closely: VIX ~18 &#226;&#134;&#146; VIXY ~27-29, VIX ~25 &#226;&#134;&#146; VIXY ~40
-  // Approximate VIX from VIXY: VIX &#226;&#137;&#136; VIXY * 0.63 (rough linear approximation)
+  // VIXY tracks VIX closely: VIX ~18 → VIXY ~27-29, VIX ~25 → VIXY ~40
+  // Approximate VIX from VIXY: VIX ≈ VIXY * 0.63 (rough linear approximation)
   try {
     const to   = new Date().toISOString().split('T')[0]
     const from = new Date(Date.now()-4*864e5).toISOString().split('T')[0]
@@ -1032,7 +1032,7 @@ async function fetchVIX() {
       ec.style.color = chg <= 0 ? '#00d68f' : '#ff4560'
     }
     setCheck('vix-low', vixEst < 25)
-    setApi('VIX ~' + vixEst.toFixed(2) + ' est. via VIXY $' + vixy.toFixed(2) + ' &#194;&middot; ' + (chg<=0?'falling &#226;&#134;&#147;':'rising &#226;&#134;&#145;'), 'ok')
+    setApi('VIX ~' + vixEst.toFixed(2) + ' est. via VIXY $' + vixy.toFixed(2) + ' �&middot; ' + (chg<=0?'falling ↓':'rising ↑'), 'ok')
   } catch(e) {
     const el = document.getElementById('vix-v')
     if(el) el.textContent = '—'
@@ -1092,14 +1092,14 @@ async function fetchSectorData() {
   }
 
   if(btn) { btn.textContent = 'Refresh live'; btn.disabled = false }
-  setApi('Sectors: ' + bullCount + '/10 bullish &#194;&middot; ' + updated + ' updated', 'ok')
+  setApi('Sectors: ' + bullCount + '/10 bullish �&middot; ' + updated + ' updated', 'ok')
 }
 
 function showBreadthUpdate() {
-  alert('Breadth Update:\n\nGo to console.ovtlyr.com &#226;&#134;&#146; Market Breadth\nNote the % for each sector (10 EMA view)\nV1.3 will have a paste-in import panel.')
+  alert('Breadth Update:\n\nGo to console.ovtlyr.com → Market Breadth\nNote the % for each sector (10 EMA view)\nV1.3 will have a paste-in import panel.')
 }
 
-// &#226;&#148;&#128;&#226;&#148;&#128; EARNINGS CALENDAR &#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;
+// ── EARNINGS CALENDAR ─────────────────────────────
 const LIVE_EARNINGS = {}   // populated by fetchEarningsCalendar()
 
 async function fetchEarningsCalendar() {
@@ -1115,7 +1115,7 @@ function hasEarnings(ticker) {
   return !!(OV[ticker] && OV[ticker].earn)
 }
 
-// &#226;&#148;&#128;&#226;&#148;&#128; OVTLYR DATA REFRESH &#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;
+// ── OVTLYR DATA REFRESH ──────────────────────────
 const BOOKMARKLET_CODE = `javascript:(function(){
   // Step 1: Click all Load More buttons to get full list (GT Platform re-sorts on import)
   function clickLoadMore(attempt){
@@ -1145,10 +1145,10 @@ const BOOKMARKLET_CODE = `javascript:(function(){
     if(!Object.keys(data).length){alert('GT Scrape: No data found. Try waiting for page to fully load.');return;}
     var json=JSON.stringify(data);
     navigator.clipboard.writeText(json).then(function(){
-      alert('GT Scrape: Copied '+Object.keys(data).length+' tickers! Return to GT Platform &#226;&#134;&#146; Screener tab &#226;&#134;&#146; paste &#226;&#134;&#146; Import. Platform will sort by signal %.');
+      alert('GT Scrape: Copied '+Object.keys(data).length+' tickers! Return to GT Platform → Screener tab → paste → Import. Platform will sort by signal %.');
     }).catch(function(){
       var ta=document.createElement('textarea');ta.value=json;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);
-      alert('GT Scrape: Copied '+Object.keys(data).length+' tickers! Return to GT Platform &#226;&#134;&#146; Screener &#226;&#134;&#146; paste &#226;&#134;&#146; Import.');
+      alert('GT Scrape: Copied '+Object.keys(data).length+' tickers! Return to GT Platform → Screener → paste → Import.');
     });
   }
   // Start: sort first, then after short delay start loading more
@@ -1218,7 +1218,7 @@ function importOVData() {
     status.style.color = '#00d68f'
     
     runFilter()
-    setApi('OVTLYR data refreshed: ' + updated + ' updated, ' + added + ' new &#194;&middot; ' + keys.length + ' total', 'ok')
+    setApi('OVTLYR data refreshed: ' + updated + ' updated, ' + added + ' new �&middot; ' + keys.length + ' total', 'ok')
     
   } catch(err) {
     status.textContent = 'Parse error: ' + err.message + ' — check JSON format'
@@ -1242,7 +1242,7 @@ function loadOVData() {
   } catch(e) {}
 }
 
-// &#226;&#148;&#128;&#226;&#148;&#128; SCREENER &#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;
+// ── SCREENER ──────────────────────────────────────
 function runFilter() {
   const minSig  = +document.getElementById('f-sig').value || 0
   const fgMin   = +document.getElementById('f-fg-min').value || 0
@@ -1277,7 +1277,7 @@ function runFilter() {
 
   tbody.innerHTML = scored.map((s, i) => {
     const fgc = s.d.fg <= 35 ? '#00d68f' : s.d.fg <= 60 ? '#ff8c42' : '#ff4560'
-    const spLbl = s.spreadOk ? '<span class="g">&#226;&#156;&#147;</span>' : '<span class="r">&#226;&#156;&#151;</span>'
+    const spLbl = s.spreadOk ? '<span class="g">✓</span>' : '<span class="r">✗</span>'
     // DTE = days until May-15 expiry (from sizer) or next monthly expiry
     const expiryEl = document.getElementById('scr-expiry') || document.getElementById('expiry')
     const expiryStr = expiryEl ? expiryEl.value : 'May-15-2026'
@@ -1285,8 +1285,8 @@ function runFilter() {
     const today = new Date()
     const dte = Math.ceil((expiryDate - today) / (1000*60*60*24))
     const dteColor = dte >= 21 ? '#00d68f' : dte >= 14 ? '#ff8c42' : '#ff4560'
-    const dteLbl = '<span style="color:' + dteColor + '">' + (dte > 0 ? dte + 'd' : '&#226;&#154;&#160;exp') + '</span>'
-    const eLbl  = s.earnOk   ? '<span class="g">&#226;&#156;&#147;</span>' : '<span class="o">&#226;&#154;&#160;</span>'
+    const dteLbl = '<span style="color:' + dteColor + '">' + (dte > 0 ? dte + 'd' : '⚠exp') + '</span>'
+    const eLbl  = s.earnOk   ? '<span class="g">✓</span>' : '<span class="o">⚠</span>'
     const bw = Math.min(100, s.d.r / 8)
     const scoreBar = Math.round(s.score)
     return '<tr onclick="goSize(\'' + s.t + '\')">' +
@@ -1299,7 +1299,7 @@ function runFilter() {
       '<td>' + spLbl + '</td>' +
       '<td>' + eLbl + '</td>' +
       '<td style="font-family:\'SF Mono\',monospace;font-size:11px;color:#555c6e">' + scoreBar + '</td>' +
-      '<td><button class="btn btn-ghost" style="font-size:10px;padding:2px 7px" onclick="event.stopPropagation();goSize(\'' + s.t + '\')">Size &#226;&#134;&#146;</button></td>' +
+      '<td><button class="btn btn-ghost" style="font-size:10px;padding:2px 7px" onclick="event.stopPropagation();goSize(\'' + s.t + '\')">Size →</button></td>' +
     '</tr>'
   }).join('')
 
@@ -1361,7 +1361,7 @@ function goSize(t) {
   fetchTicker(t)
 }
 
-// &#226;&#148;&#128;&#226;&#148;&#128; POSITION SIZER &#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;
+// ── POSITION SIZER ────────────────────────────────
 let rollHistory = []
 
 function saveRiskSettings() {
@@ -1398,9 +1398,9 @@ function calc() {
   const g30  = cap * 0.30
 
   document.getElementById('m-cts').textContent  = cts
-  document.getElementById('m-cts-s').textContent= '&#206;&#180;'+Math.round(delta*100)+' &#194;&middot; 2&#195;&#151;ATR=$'+(2*atr).toFixed(2)
+  document.getElementById('m-cts-s').textContent= 'δ'+Math.round(delta*100)+' �&middot; 2×ATR=$'+(2*atr).toFixed(2)
   document.getElementById('m-cap').textContent  = cap > 0 ? '$'+Math.round(cap).toLocaleString() : '—'
-  document.getElementById('m-cap-s').textContent= optcost > 0 ? '$'+optcost+' &#195;&#151; '+cts+' &#195;&#151; 100' : 'enter option cost'
+  document.getElementById('m-cap-s').textContent= optcost > 0 ? '$'+optcost+' × '+cts+' × 100' : 'enter option cost'
   document.getElementById('m-risk').textContent = '$'+Math.round(baseRisk).toLocaleString()
   document.getElementById('m-risk-s').textContent= rp+'% of $'+acct.toLocaleString()
   document.getElementById('m-hl').textContent   = '$'+Math.round(lossH).toLocaleString()
@@ -1422,13 +1422,13 @@ function renderLevels(entry, atr) {
 
   document.getElementById('lvl-body').innerHTML =
     lvlRow('bg-g','#00d68f','Entry price', entry, 0) +
-    lvlRow('bg-b','#4da6ff','&#194;.5 ATR roll point', r1, pct(r1)) +
-    lvlRow('bg-b','#4da6ff','1&#195;&#151; ATR roll point', r2, pct(r2)) +
-    lvlRow('bg-b','#4da6ff','2&#195;&#151; ATR roll point', r3, pct(r3)) +
+    lvlRow('bg-b','#4da6ff','�.5 ATR roll point', r1, pct(r1)) +
+    lvlRow('bg-b','#4da6ff','1× ATR roll point', r2, pct(r2)) +
+    lvlRow('bg-b','#4da6ff','2× ATR roll point', r3, pct(r3)) +
     '<div style="height:1px;background:rgba(255,255,255,.07);margin:5px 0"></div>' +
-    lvlRow('bg-o','#ff8c42','Stop loss &#226;&#136;&#146; &#194;.5 ATR  &#194;&middot;  orange line', sl, pct(sl)) +
-    lvlRow('bg-r','#ff4560','Emergency exit &#226;&#136;&#146; 2&#195;&#151; ATR  &#194;&middot;  red line', em, pct(em)) +
-    '<div style="margin-top:8px;padding:7px 11px;background:#171b22;border-radius:6px;font-size:11px;color:#555c6e">ATR(14) = <span style="color:#e8eaf0;font-family:\'SF Mono\',monospace">$' + atr.toFixed(2) + '</span> &nbsp;&#194;&middot;&nbsp; &#194;.5 ATR = <span style="color:#ff8c42;font-family:\'SF Mono\',monospace">$' + h.toFixed(2) + '</span></div>'
+    lvlRow('bg-o','#ff8c42','Stop loss − �.5 ATR  �&middot;  orange line', sl, pct(sl)) +
+    lvlRow('bg-r','#ff4560','Emergency exit − 2× ATR  �&middot;  red line', em, pct(em)) +
+    '<div style="margin-top:8px;padding:7px 11px;background:#171b22;border-radius:6px;font-size:11px;color:#555c6e">ATR(14) = <span style="color:#e8eaf0;font-family:\'SF Mono\',monospace">$' + atr.toFixed(2) + '</span> &nbsp;�&middot;&nbsp; �.5 ATR = <span style="color:#ff8c42;font-family:\'SF Mono\',monospace">$' + h.toFixed(2) + '</span></div>'
 }
 
 function copyLevels() {
@@ -1439,10 +1439,10 @@ function copyLevels() {
   const txt = [
     '// ' + t + ' — GOGO Levels',
     '// Entry: $' + e.toFixed(2) + ' | ATR: $' + a.toFixed(2),
-    'var stopLoss  = ' + (e - a*0.5).toFixed(2) + '  // Orange — &#194;.5 ATR stop',
-    'var rollHalf  = ' + (e + a*0.5).toFixed(2) + '  // Blue — &#194;.5 ATR roll',
-    'var rollOne   = ' + (e + a*1.0).toFixed(2) + '   // Blue — 1&#195;&#151; ATR roll',
-    'var rollTwo   = ' + (e + a*2.0).toFixed(2) + '  // Blue — 2&#195;&#151; ATR roll',
+    'var stopLoss  = ' + (e - a*0.5).toFixed(2) + '  // Orange — �.5 ATR stop',
+    'var rollHalf  = ' + (e + a*0.5).toFixed(2) + '  // Blue — �.5 ATR roll',
+    'var rollOne   = ' + (e + a*1.0).toFixed(2) + '   // Blue — 1× ATR roll',
+    'var rollTwo   = ' + (e + a*2.0).toFixed(2) + '  // Blue — 2× ATR roll',
     'var emergency = ' + (e - a*2.0).toFixed(2) + ' // Red — emergency exit',
   ].join('\n')
   navigator.clipboard.writeText(txt).then(() => {
@@ -1466,11 +1466,11 @@ function doRoll() {
   document.getElementById('roll-hist').innerHTML =
     '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e;margin-bottom:5px">Roll history</div>' +
     rollHistory.map(r =>
-      '<div class="roll-row"><span class="dim">#'+r.n+'</span><span style="font-family:\'SF Mono\',monospace;font-weight:500">$'+r.from.toFixed(2)+' &#226;&#134;&#146; $'+r.to.toFixed(2)+'</span><span class="dim" style="flex:1">'+r.date+'</span><span class="g">+'+r.gain+'%</span></div>'
+      '<div class="roll-row"><span class="dim">#'+r.n+'</span><span style="font-family:\'SF Mono\',monospace;font-weight:500">$'+r.from.toFixed(2)+' → $'+r.to.toFixed(2)+'</span><span class="dim" style="flex:1">'+r.date+'</span><span class="g">+'+r.gain+'%</span></div>'
     ).join('')
 }
 
-// &#226;&#148;&#128;&#226;&#148;&#128; LIVE TICKER FETCH &#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;
+// ── LIVE TICKER FETCH ─────────────────────────────
 async function fetchTicker(ticker) {
   if(!ticker || ticker.length < 1) return
   const st = document.getElementById('tkr-st')
@@ -1506,16 +1506,16 @@ async function fetchTicker(ticker) {
 
   const e50str = e50 ? e50.toFixed(2) : '(need 50+ bars)'
   const emaCol = emaOk ? '#00d68f' : '#ff4560'
-  const emaLbl = emaOk ? '&#226;&#156;&#147; Bullish stack' : '&#226;&#156;&#151; Not aligned'
+  const emaLbl = emaOk ? '✓ Bullish stack' : '✗ Not aligned'
   st.innerHTML =
-    '<span style="color:#00d68f">&#226;&#156;&#147; ' + ticker + '</span>' +
-    ' &nbsp;&#194;&middot;&nbsp; ATR: <span style="color:#e8eaf0">$' + atr + '</span>' +
-    ' &nbsp;&#194;&middot;&nbsp; Price: <span style="color:#e8eaf0">$' + price.toFixed(2) + '</span><br>' +
-    'EMA10: ' + (e10||'—') + ' &nbsp;&#194;&middot;&nbsp; EMA20: ' + (e20||'—') + ' &nbsp;&#194;&middot;&nbsp; EMA50: ' + e50str +
-    ' &nbsp;&#194;&middot;&nbsp; <span style="color:' + emaCol + '">' + emaLbl + '</span>'
+    '<span style="color:#00d68f">✓ ' + ticker + '</span>' +
+    ' &nbsp;�&middot;&nbsp; ATR: <span style="color:#e8eaf0">$' + atr + '</span>' +
+    ' &nbsp;�&middot;&nbsp; Price: <span style="color:#e8eaf0">$' + price.toFixed(2) + '</span><br>' +
+    'EMA10: ' + (e10||'—') + ' &nbsp;�&middot;&nbsp; EMA20: ' + (e20||'—') + ' &nbsp;�&middot;&nbsp; EMA50: ' + e50str +
+    ' &nbsp;�&middot;&nbsp; <span style="color:' + emaCol + '">' + emaLbl + '</span>'
   st.style.color = ''
 
-  setApi(ticker + ' loaded &#194;&middot; ATR $' + atr + ' &#194;&middot; Price $' + price.toFixed(2), 'ok')
+  setApi(ticker + ' loaded �&middot; ATR $' + atr + ' �&middot; Price $' + price.toFixed(2), 'ok')
   calc()
 
   // Check earnings via ticker details
@@ -1536,7 +1536,7 @@ async function fetchEarnings(ticker) {
         setCheck('no-earn', safe)
         renderChecklist()
         const col = safe ? '#00d68f' : '#ff8c42'
-        const lbl = safe ? '&#226;&#156;&#147; Earnings: ' + ed + ' (' + days + 'd — safe)' : '&#226;&#154;&#160; Earnings: ' + ed + ' (' + days + 'd — within window!)'
+        const lbl = safe ? '✓ Earnings: ' + ed + ' (' + days + 'd — safe)' : '⚠ Earnings: ' + ed + ' (' + days + 'd — within window!)'
         st.innerHTML = st.innerHTML + '<br><span style="color:' + col + '">' + lbl + '</span>'
       } else {
         setCheck('no-earn', true)
@@ -1556,7 +1556,7 @@ async function fetchOptions(ticker) {
 
   // Get expiry from form
   const expiry = document.getElementById('expiry')?.value || '2026-05-15'
-  // Convert "May-15-2026" &#226;&#134;&#146; "2026-05-15"
+  // Convert "May-15-2026" → "2026-05-15"
   const expiryISO = (() => {
     try {
       const d = new Date(expiry)
@@ -1566,7 +1566,7 @@ async function fetchOptions(ticker) {
   })()
 
   try {
-    // Filter near ATM: &#194;+/-20% of current price, plenty of contracts with greeks
+    // Filter near ATM: �+/-20% of current price, plenty of contracts with greeks
     const lo = currentPrice > 0 ? Math.floor(currentPrice * 0.80) : 1
     const hi = currentPrice > 0 ? Math.ceil(currentPrice * 1.10)  : 9999
     const url = '/v3/snapshot/options/'+ticker+
@@ -1619,15 +1619,15 @@ async function fetchOptions(ticker) {
     const sc = spreadOk ? '#00d68f' : '#ff4560'
     const spreadStr = mktClosed
       ? '<span style="color:#ff8c42">Market closed — verify spread during hours</span>'
-      : '<span style="color:'+sc+'">Spread: ~$'+spread.toFixed(2)+' '+(spreadOk?'&#226;&#156;&#147;':'&#226;&#156;&#151;')+'</span>'
+      : '<span style="color:'+sc+'">Spread: ~$'+spread.toFixed(2)+' '+(spreadOk?'✓':'✗')+'</span>'
 
     ol.innerHTML =
       'Strike: $'+strike+
-      ' &#194;&middot; OI: '+oi.toLocaleString()+
-      ' &#194;&middot; Delta: '+(delta ? delta.toFixed(2) : 'n/a')+
-      ' &#194;&middot; IV: '+(iv ? (iv*100).toFixed(1)+'%' : 'n/a')+
-      ' &#194;&middot; Last: $'+(best.day?.close||'—')+
-      ' &#194;&middot; '+spreadStr
+      ' �&middot; OI: '+oi.toLocaleString()+
+      ' �&middot; Delta: '+(delta ? delta.toFixed(2) : 'n/a')+
+      ' �&middot; IV: '+(iv ? (iv*100).toFixed(1)+'%' : 'n/a')+
+      ' �&middot; Last: $'+(best.day?.close||'—')+
+      ' �&middot; '+spreadStr
 
     // Update checklist
     setCheck('opt-oi', oi >= 250)
@@ -1645,7 +1645,7 @@ async function fetchOptions(ticker) {
   }
 }
 
-// &#226;&#148;&#128;&#226;&#148;&#128; EXPECTED MOVE &#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;
+// ── EXPECTED MOVE ─────────────────────────────────
 function calcEM() {
   const c = +document.getElementById('em-c').value
   const p = +document.getElementById('em-p').value
@@ -1659,7 +1659,7 @@ function calcEM() {
 
   document.getElementById('em-res').style.display = 'block'
   document.getElementById('em-st').textContent = '$' + st.toFixed(2)
-  document.getElementById('em-mv').textContent = '&#194;+/-$' + mv.toFixed(2)
+  document.getElementById('em-mv').textContent = '�+/-$' + mv.toFixed(2)
 
   if(brks !== null) {
     document.getElementById('em-br').textContent = brks ? 'YES — EXIT' : 'NO — Safe'
@@ -1672,9 +1672,9 @@ function calcEM() {
   }
 
   const upEl = document.getElementById('em-up'), dnEl = document.getElementById('em-dn')
-  upEl.textContent = '&#226;&#134;&#145;  $' + up.toFixed(2)
+  upEl.textContent = '↑  $' + up.toFixed(2)
   upEl.style.cssText = 'flex:1;padding:7px;text-align:center;border-radius:6px;font-family:\'SF Mono\',monospace;font-size:12px;font-weight:500;background:rgba(0,214,143,.1);color:#00d68f;border:1px solid rgba(0,214,143,.25)'
-  dnEl.textContent = '&#226;&#134;&#147;  $' + dn.toFixed(2)
+  dnEl.textContent = '↓  $' + dn.toFixed(2)
   dnEl.style.cssText = 'flex:1;padding:7px;text-align:center;border-radius:6px;font-family:\'SF Mono\',monospace;font-size:12px;font-weight:500;background:rgba(255,69,96,.1);color:#ff4560;border:1px solid rgba(255,69,96,.3)'
 }
 
@@ -1683,7 +1683,7 @@ function goSaveAsTrade() {
   openAddTrade()
 }
 
-// &#226;&#148;&#128;&#226;&#148;&#128; TRADE MANAGER &#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;
+// ── TRADE MANAGER ─────────────────────────────────
 let TRADES = []
 try { TRADES = JSON.parse(localStorage.getItem('gt_trades') || '[]') } catch(e) { TRADES = [] }
 
@@ -1786,12 +1786,12 @@ function mkLevel(cls, dot, label, price, dist) {
 function renderTrades() {
   const open   = TRADES.filter(t => t.status === 'open')
   const closed = TRADES.filter(t => t.status === 'closed')
-  document.getElementById('trade-count').textContent = open.length + ' open &#194;&middot; ' + closed.length + ' closed'
+  document.getElementById('trade-count').textContent = open.length + ' open �&middot; ' + closed.length + ' closed'
 
   if(!TRADES.length) {
     document.getElementById('trades-list').innerHTML =
       '<div style="text-align:center;padding:40px;color:#555c6e">' +
-      '<div style="font-size:26px;margin-bottom:10px">&#240;&#159;&#147;&#139;</div>' +
+      '<div style="font-size:26px;margin-bottom:10px">📋</div>' +
       '<div style="font-size:13px;font-weight:500;color:#8b91a0">No trades yet</div>' +
       '<div style="font-size:11px;margin-top:4px">Click "+ New Trade" or use Position Sizer and click "Save as Trade"</div></div>'
     return
@@ -1828,30 +1828,30 @@ function renderTrades() {
           '<button class="btn btn-ghost" style="font-size:10px;padding:2px 8px" onclick="toggleChart(' + t.id + ')">Chart</button>' +
           (isOpen ? '<button class="btn btn-ghost" style="font-size:10px;padding:2px 8px" onclick="rollTrade(' + t.id + ')">Roll</button>' : '') +
           (isOpen ? '<button class="btn btn-ghost" style="font-size:10px;padding:2px 8px" onclick="closeTrade(' + t.id + ')">Close</button>' : '') +
-          '<button class="btn btn-ghost" style="font-size:10px;padding:2px 8px;color:#ff4560" onclick="deleteTrade(' + t.id + ')">&#226;&#156;&#149;</button>' +
+          '<button class="btn btn-ghost" style="font-size:10px;padding:2px 8px;color:#ff4560" onclick="deleteTrade(' + t.id + ')">✕</button>' +
         '</div>' +
       '</div>' +
       '<div class="trade-card-body">' +
         '<div>' +
           '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e;margin-bottom:7px">Levels</div>' +
           mkLevel('bg-g','#00d68f','Entry',  t.entry, 0) +
-          mkLevel('bg-b','#4da6ff','&#194;.5 ATR roll', r1, pct(r1)) +
-          mkLevel('bg-b','#4da6ff','1&#195;&#151; ATR roll',r2, pct(r2)) +
-          mkLevel('bg-b','#4da6ff','2&#195;&#151; ATR roll',r3, pct(r3)) +
-          mkLevel('bg-o','#ff8c42','Stop loss &#226;&#136;&#146;&#194;.5 ATR', sl, pct(sl)) +
-          mkLevel('bg-r','#ff4560','Emergency &#226;&#136;&#146;2&#195;&#151; ATR', em, pct(em)) +
+          mkLevel('bg-b','#4da6ff','�.5 ATR roll', r1, pct(r1)) +
+          mkLevel('bg-b','#4da6ff','1× ATR roll',r2, pct(r2)) +
+          mkLevel('bg-b','#4da6ff','2× ATR roll',r3, pct(r3)) +
+          mkLevel('bg-o','#ff8c42','Stop loss −�.5 ATR', sl, pct(sl)) +
+          mkLevel('bg-r','#ff4560','Emergency −2× ATR', em, pct(em)) +
         '</div>' +
         '<div>' +
           '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e;margin-bottom:7px">Risk & P/L</div>' +
           '<div class="grid2" style="gap:6px">' +
             mkMini('Entry price', '$'+t.entry.toFixed(2), '') +
             mkMini('Cost basis', basis>0?'$'+Math.round(basis).toLocaleString():'—', '') +
-            mkMini('Loss @ &#194;.5ATR', '$'+Math.round(lH).toLocaleString(), 'o') +
-            mkMini('Loss @ 2&#195;&#151;ATR', '$'+Math.round(lF).toLocaleString(), 'r') +
+            mkMini('Loss @ �.5ATR', '$'+Math.round(lH).toLocaleString(), 'o') +
+            mkMini('Loss @ 2×ATR', '$'+Math.round(lF).toLocaleString(), 'r') +
             mkMini('+30% target', basis>0?'+$'+Math.round(basis*.3).toLocaleString():'—', 'g') +
             mkMini(t.pnl!==undefined ? 'Realized P/L' : 'ATR', t.pnl!==undefined ? (t.pnl>=0?'+$':'-$')+Math.abs(Math.round(t.pnl)).toLocaleString() : '$'+t.atr, t.pnl!==undefined?(t.pnl>=0?'g':'r'):'') +
           '</div>' +
-          (t.rolls.length ? '<div style="margin-top:9px;padding-top:9px;border-top:1px solid rgba(255,255,255,.06)"><div style="font-size:10px;color:#555c6e;margin-bottom:4px">ROLLS</div>' + t.rolls.map(r=>'<div style="font-size:11px;color:#8b91a0;font-family:\'SF Mono\',monospace">'+r.date+' &#194;&middot; $'+r.from.toFixed(2)+' &#226;&#134;&#146; $'+r.to.toFixed(2)+'</div>').join('') + '</div>' : '') +
+          (t.rolls.length ? '<div style="margin-top:9px;padding-top:9px;border-top:1px solid rgba(255,255,255,.06)"><div style="font-size:10px;color:#555c6e;margin-bottom:4px">ROLLS</div>' + t.rolls.map(r=>'<div style="font-size:11px;color:#8b91a0;font-family:\'SF Mono\',monospace">'+r.date+' �&middot; $'+r.from.toFixed(2)+' → $'+r.to.toFixed(2)+'</div>').join('') + '</div>' : '') +
           (t.notes ? '<div style="margin-top:7px;font-size:11px;color:#555c6e;border-top:1px solid rgba(255,255,255,.06);padding-top:7px">' + t.notes + '</div>' : '') +
         '</div>' +
       '</div>' +
@@ -1872,8 +1872,8 @@ function renderTrades() {
   document.getElementById('trades-list').innerHTML = html
 }
 
-// &#226;&#148;&#128;&#226;&#148;&#128; PORTFOLIO (static — your current positions) &#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;
-// &#226;&#148;&#128;&#226;&#148;&#128; LIVE P&L + CHART &#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;
+// ── PORTFOLIO (static — your current positions) ───
+// ── LIVE P&L + CHART ─────────────────────────────
 function toggleChart(id) {
   const el = document.getElementById('chart-' + id)
   if(!el) return
@@ -1962,10 +1962,10 @@ async function refreshAllPnL() {
 
   document.getElementById('pnl-refresh-btn').textContent = 'Refresh P&L'
   document.getElementById('pnl-refresh-btn').disabled = false
-  setApi('P&L updated: ' + updated + '/' + trades.length + ' trades &#194;&middot; last ' + new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}), 'ok')
+  setApi('P&L updated: ' + updated + '/' + trades.length + ' trades �&middot; last ' + new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}), 'ok')
 }
 
-// &#226;&#148;&#128;&#226;&#148;&#128; PORTFOLIO &#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;
+// ── PORTFOLIO ─────────────────────────────────────────
 // Load from localStorage or fall back to hardcoded seed data
 const SEED_POSITIONS = [
   {t:'VRT 230C', e:'Jan-27',c:1, val:12083, pnl:3391,  pct:44.15, today:124,  todayPct:1.04, type:'option'},
@@ -2052,7 +2052,7 @@ function clearPortfolio() {
   document.getElementById('port-import-status').style.color = '#555c6e'
 }
 
-// &#226;&#148;&#128;&#226;&#148;&#128; FIDELITY CSV PARSER &#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;
+// ── FIDELITY CSV PARSER ────────────────────────────
 function parseFidelityCSV(text) {
   const lines = text.split('\n').map(l => l.trim()).filter(l => l)
   
@@ -2131,7 +2131,7 @@ function parseFidelityCSV(text) {
     // Detect options: symbol starts with - or contains option pattern
     const isOption = sym.startsWith('-') || /[CP]\d{8}[CP]\d{8}/.test(sym) || /\d{6}[CP]\d{8}/.test(sym)
     
-    // Parse option description: "NVDA MAY 15 26 $180 CALL" &#226;&#134;&#146; "NVDA 180C"
+    // Parse option description: "NVDA MAY 15 26 $180 CALL" → "NVDA 180C"
     let display = sym.replace(/^-/,'')
     let expiry = ''
     let contracts = qty
@@ -2301,17 +2301,17 @@ function renderPortfolio() {
       (p.gt === false ? '<div title="Long-term hold (click to mark as GT)" onclick="event.stopPropagation();tagPosition(\'' + p.raw + '\',true)" style="width:14px;height:14px;border-radius:3px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);cursor:pointer;flex-shrink:0;margin-right:4px;display:flex;align-items:center;justify-content:center"><span style="font-size:7px;color:#555c6e">LT</span></div>' :
        p.gt === true  ? '<div title="GOGO position (click to mark as Long-term)" onclick="event.stopPropagation();tagPosition(\'' + p.raw + '\',false)" style="width:14px;height:14px;border-radius:3px;background:rgba(240,192,64,.15);border:1px solid rgba(240,192,64,.3);cursor:pointer;flex-shrink:0;margin-right:4px;display:flex;align-items:center;justify-content:center"><span style="font-size:7px;color:#f0c040">GT</span></div>' :
        '<div title="Click to tag as GT or Long-term" onclick="event.stopPropagation();tagPosition(\'' + p.raw + '\',true)" style="width:14px;height:14px;border-radius:3px;background:rgba(255,255,255,.03);border:1px dashed rgba(255,255,255,.08);cursor:pointer;flex-shrink:0;margin-right:4px"></div>') +
-      '<div style="font-family:\'SF Mono\',monospace;font-weight:600;width:110px;flex-shrink:0">' + p.t + typeTag + (p.e ? '<div style="font-size:10px;color:#555c6e;font-weight:400">' + p.e + (p.c > 1 ? ' &#194;&middot; ' + p.c + 'ct' : '') + '</div>' : '') + '</div>' +
+      '<div style="font-family:\'SF Mono\',monospace;font-weight:600;width:110px;flex-shrink:0">' + p.t + typeTag + (p.e ? '<div style="font-size:10px;color:#555c6e;font-weight:400">' + p.e + (p.c > 1 ? ' �&middot; ' + p.c + 'ct' : '') + '</div>' : '') + '</div>' +
       (val ? '<div style="font-family:\'SF Mono\',monospace;font-size:11px;color:#555c6e;width:70px;flex-shrink:0">' + val + '</div>' : '<div style="width:70px;flex-shrink:0"></div>') +
       '<div style="font-family:\'SF Mono\',monospace;font-size:12px;font-weight:500;flex:1;color:' + pc + '">' + ps + ' <span style="font-size:10px;opacity:.8">' + pcs + '</span></div>' +
       '<div style="font-size:11px;color:' + tc + ';width:80px;text-align:right">' + ts + ' today</div>' +
-      '<div><button class="btn btn-ghost" style="font-size:10px;padding:2px 6px;margin-left:8px" onclick="event.stopPropagation();goSize(\\\'\' + p.raw.replace(/^-/,\'\').split(/[0-9]/)[0] + \'\\\')">Size &#226;&#134;&#146;</button></div>' +
+      '<div><button class="btn btn-ghost" style="font-size:10px;padding:2px 6px;margin-left:8px" onclick="event.stopPropagation();goSize(\\\'\' + p.raw.replace(/^-/,\'\').split(/[0-9]/)[0] + \'\\\')">Size →</button></div>' +
     '</div>'
   }).join('')
 }
 
 
-// &#226;&#148;&#128;&#226;&#148;&#128; INIT &#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;&#226;&#148;&#128;
+// ── INIT ──────────────────────────────────────────
 function initPlatform() {
   if(!KEY) {
     const overlay = document.getElementById('setup-overlay')
