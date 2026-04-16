@@ -95,6 +95,46 @@ tr:hover td{background:#171b22;cursor:pointer}
 ::-webkit-scrollbar-thumb{background:#1e2330;border-radius:2px}
 @keyframes pulse{0%{opacity:.5}100%{opacity:1}}
 </style>
+
+<!-- Firebase SDK -->
+<script type="module">
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js'
+  import { getAuth, signInAnonymously, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js'
+  import { getDatabase, ref, set, get, onValue } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js'
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyC2gl09aCvefp3iWnOFjO8c5UBg-I3aR-A",
+    authDomain: "gogo-trading-81293.firebaseapp.com",
+    databaseURL: "https://gogo-trading-81293-default-rtdb.firebaseio.com",
+    projectId: "gogo-trading-81293",
+    storageBucket: "gogo-trading-81293.firebasestorage.app",
+    messagingSenderId: "973675032269",
+    appId: "1:973675032269:web:8fbd917ba8a670098f4384"
+  }
+
+  const app = initializeApp(firebaseConfig)
+  const auth = getAuth(app)
+  const db = getDatabase(app)
+
+  // Sign in anonymously — no login needed
+  signInAnonymously(auth).catch(e => console.warn('Firebase auth error:', e))
+
+  // Store uid globally once authenticated
+  onAuthStateChanged(auth, user => {
+    if(user) {
+      window.FBUID = user.uid
+      window.FBDB = db
+      window.FBRef = ref
+      window.FBSet = set
+      window.FBGet = get
+      window.FBOnValue = onValue
+      console.log('Firebase ready. UID:', user.uid.substring(0,8) + '...')
+      // Load cloud data once authenticated
+      if(typeof loadFromFirebase === 'function') loadFromFirebase()
+      document.getElementById('api-msg').textContent = 'Firebase connected · syncing...'
+    }
+  })
+</script>
 </head>
 <body>
 
@@ -1185,6 +1225,7 @@ function saveRebAccounts() {
     if(n) acc.name = n.value || acc.name
   })
   localStorage.setItem('gt_reb_accounts', JSON.stringify(REB_ACCOUNTS))
+  fbAutoSave(3000)  // sync after 3s of inactivity
 }
 
 function rebCalc() {
@@ -1501,6 +1542,7 @@ function importOVData() {
     status.style.color = '#00d68f'
     
     runFilter()
+    fbAutoSave(1500)  // sync to Firebase
     setApi('OVTLYR data refreshed: ' + updated + ' updated, ' + added + ' new . ' + keys.length + ' total', 'ok')
     
   } catch(err) {
@@ -1968,6 +2010,95 @@ async function runGTScores() {
 }
 
 
+// ── FIREBASE SYNC ─────────────────────────────────────────────────────────────
+// Saves one key under the user's private node
+async function fbSave(key, data) {
+  if(!window.FBUID || !window.FBDB) return false
+  try {
+    await window.FBSet(window.FBRef(window.FBDB, 'users/' + window.FBUID + '/' + key), data)
+    return true
+  } catch(e) { console.warn('fbSave error:', e.message); return false }
+}
+
+// Loads one key
+async function fbLoad(key) {
+  if(!window.FBUID || !window.FBDB) return null
+  try {
+    const snap = await window.FBGet(window.FBRef(window.FBDB, 'users/' + window.FBUID + '/' + key))
+    return snap.exists() ? snap.val() : null
+  } catch(e) { console.warn('fbLoad error:', e.message); return null }
+}
+
+// Save ALL platform data to Firebase
+async function saveAllToFirebase() {
+  if(!window.FBUID) return
+  const payload = {
+    ov_data:     { ov: OV, importedAt: new Date().toISOString() },
+    trades:      TRADES,
+    reb_accounts:REB_ACCOUNTS,
+    risk:        { acct: localStorage.getItem('gt_acct'), riskpct: localStorage.getItem('gt_riskpct') },
+    turbo:       JSON.parse(localStorage.getItem('gt_turbo_state') || '{}'),
+    savedAt:     Date.now()
+  }
+  const ok = await fbSave('platform', payload)
+  if(ok) setApi('Synced to Firebase ✓', 'ok')
+}
+
+// Load ALL platform data from Firebase
+async function loadFromFirebase() {
+  if(!window.FBUID) return
+  try {
+    const data = await fbLoad('platform')
+    if(!data) { console.log('Firebase: no cloud data yet'); return }
+
+    // OV data
+    if(data.ov_data && data.ov_data.ov) {
+      const localSaved = JSON.parse(localStorage.getItem('gt_ov_data') || '{}')
+      const cloudTs = data.savedAt || 0
+      const localTs = localSaved.savedAt || 0
+      if(cloudTs > localTs) {
+        Object.entries(data.ov_data.ov).forEach(([k,v]) => { OV[k] = v })
+        localStorage.setItem('gt_ov_data', JSON.stringify(data.ov_data))
+        const el = document.getElementById('ov-last-update')
+        if(el && data.ov_data.importedAt) el.textContent = 'Last import: ' + new Date(data.ov_data.importedAt).toLocaleString()
+        runFilter()
+      }
+    }
+
+    // Trades
+    if(data.trades && Array.isArray(data.trades)) {
+      TRADES = data.trades
+      localStorage.setItem('gt_trades', JSON.stringify(TRADES))
+      if(typeof renderTrades === 'function') renderTrades()
+    }
+
+    // Rebalancer accounts
+    if(data.reb_accounts && Array.isArray(data.reb_accounts)) {
+      REB_ACCOUNTS = data.reb_accounts
+      localStorage.setItem('gt_reb_accounts', JSON.stringify(REB_ACCOUNTS))
+      setTimeout(() => rebCalc(), 500)
+    }
+
+    // Risk settings
+    if(data.risk) {
+      if(data.risk.acct) { localStorage.setItem('gt_acct', data.risk.acct); const el = document.getElementById('acct'); if(el) el.value = data.risk.acct }
+      if(data.risk.riskpct) { localStorage.setItem('gt_riskpct', data.risk.riskpct); const el = document.getElementById('riskpct'); if(el) el.value = data.risk.riskpct }
+    }
+
+    setApi('Loaded from Firebase ✓ (' + new Date(data.savedAt).toLocaleTimeString() + ')', 'ok')
+    console.log('Firebase: loaded data saved at', new Date(data.savedAt).toLocaleString())
+  } catch(e) { console.warn('loadFromFirebase error:', e.message) }
+}
+
+// Auto-save to Firebase after key actions (debounced)
+let fbSaveTimer = null
+function fbAutoSave(delayMs) {
+  if(!window.FBUID) return
+  clearTimeout(fbSaveTimer)
+  fbSaveTimer = setTimeout(saveAllToFirebase, delayMs || 2000)
+}
+
+
 function scrSort(col) {
   if(SCR_SORT.col === col) {
     SCR_SORT.dir *= -1  // flip direction
@@ -2397,6 +2528,7 @@ function saveTrade() {
   saveTrades()
   document.getElementById('add-form').style.display = 'none'
   renderTrades()
+  fbAutoSave(1000)  // sync to Firebase
 }
 
 function closeTrade(id) {
@@ -2410,6 +2542,7 @@ function closeTrade(id) {
   t.pnl        = (t.closePrice - t.cost) * t.cts * 100
   saveTrades()
   renderTrades()
+  fbAutoSave(1000)
 }
 
 function rollTrade(id) {
