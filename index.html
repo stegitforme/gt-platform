@@ -291,13 +291,13 @@ tr:hover td{background:#171b22;cursor:pointer}
           <th style="width:32px">#</th>
           <th>Ticker</th>
           <th>Live Price</th>
-          <th>Signal %</th>
-          <th>F&G</th>
+          <th onclick="scrSort('sig')" style="cursor:pointer">Signal % <span id="sort-sig"></span></th>
+          <th onclick="scrSort('fg')" style="cursor:pointer">F&G <span id="sort-fg"></span></th>
           <th>Sector</th>
           <th>Spread</th>
           <th>Earnings</th>
-          <th>DTE</th>
-          <th>Score</th>
+          <th onclick="scrSort('dte')" style="cursor:pointer">DTE <span id="sort-dte"></span></th>
+          <th onclick="scrSort('score')" style="cursor:pointer">Score <span id="sort-score">&#9660;</span></th>
           <th></th>
         </tr></thead>
         <tbody id="scr-body"></tbody>
@@ -683,6 +683,8 @@ const OV = {
   RBA:{r:110,fg:22.0,s:'Industrials',v:1178345,earn:false},
 }
 
+const LIVE_PRICES = {}
+let SCR_SORT = { col: 'score', dir: -1 }
 const WIDE_SPREADS = new Set() // Spread filtering uses live Polygon data
 const BULL_SECTORS = new Set(['Financials','Materials','Real Estate','Industrials','Technology','Tech','Communication','Discretionary','Staples','Consumer Staples','Energy'])
 
@@ -939,6 +941,12 @@ async function fetchTQQQSignal() {
     const dailyVol = Math.sqrt(variance)
     const annualVol = +(dailyVol * Math.sqrt(252) * 100).toFixed(1)
 
+
+    // -- TURBO MODE --
+    var wSt=5,wkCl=[];for(var wi=wSt;wi<n;wi+=wSt)wkCl.push(closes[wi]);var wkBl=0;for(var wi2=wkCl.length-1;wi2>=0;wi2--){var slE=wi2*wSt,slS=Math.max(0,slE-200),maT=closes.slice(slS,slE).reduce(function(a,b){return a+b},0)/(slE-slS||1);if(wkCl[wi2]<maT)wkBl++;else break}var tSt='normal',tWk=0,tBr=0;try{var ts=JSON.parse(localStorage.getItem('gt_turbo_state')||'{}')
+;tSt=ts.state||'normal';tWk=ts.week||0;tBr=ts.startBar||0}catch(e){}if(aboveMa){if(tSt==='armed'){tSt='active';tWk=1;tBr=n}else if(tSt==='active'){tWk=Math.min(12,Math.round((n-tBr)/wSt)+1);if(tWk>=12){tSt='normal';tWk=0;tBr=0}}else if(tSt==='arming'){tSt='normal';tWk=0}}else{if(tSt==='active'){tSt='normal';tWk=0;tBr=0}else{tSt=wkBl>=8?'armed':'arming'}}localStorage.setItem('gt_turbo_state',JSON.stringify({state:tSt,week:tWk,startBar:tBr}));var tLbl='',tBdg='',tCol='#555c6e';if(tSt==='arming'){tLbl='| Arming '+wkBl+'/8wks';tBdg='Arming '+wkBl+'/8wks';tCol='#ff8c42'}else if(tSt==='armed'){tLbl='| TURBO ARMED';tBdg='TURBO ARMED';tCol='#f0c040'}else if(tSt==='active'){tLbl='| TURBO Wk'+tWk+'/12';tBdg='TURBO Wk'+tWk+'/12';tCol='#00d68f'}
+    // -- END TURBO MODE --
+
     // Vol(35%) + 200MA signal
     const VOL_TARGET = 35
     let tqqqPct = 0, sgov = 100, signal = '', signalColor = '#ff4560'
@@ -997,6 +1005,7 @@ async function fetchTQQQSignal() {
           '</div>' +
         '</div>' +
       '</div>' +
+      '<div style="margin-bottom:8px">'+(tBdg?'<span style="background:'+tCol+';color:#0a0c0f;font-size:11px;font-weight:700;padding:3px 10px;border-radius:4px;margin-right:8px">'+tBdg+'</span>':'')+'<span style="font-size:11px;color:#555c6e">Turbo arms after 8+ weeks below 200MA</span></div>'+
       '<div style="font-size:11px;color:#555c6e">Based on '+n+' trading days of QQQ data �. 200MA uses '+ma200window+' days �. Vol uses '+vol20window+' days �. Run every Friday before market close</div>'
 
     if(body) body.innerHTML = html
@@ -1282,7 +1291,7 @@ function runFilter() {
     if(noWide && !spreadOk) return null
     const score = Math.min(40, d.r/20) + (d.fg>=15&&d.fg<=65?20:5) + (earnOk?20:0) + (spreadOk?10:0) + (d.v>3e6?10:5)
     return {t, d, spreadOk, earnOk, score}
-  }).filter(Boolean).sort((a,b) => b.score - a.score)
+  }).filter(Boolean).sort((a,b) => { var col=SCR_SORT.col,dir=SCR_SORT.dir; if(col==='sig') return dir*(b.d.r-a.d.r); if(col==='fg') return dir*(b.d.fg-a.d.fg); if(col==='dte') return dir*((a.dte||999)-(b.dte||999)); return dir*(b.score-a.score) })
 
   document.getElementById('scr-count').textContent = scored.length + ' tickers'
   const tbody = document.getElementById('scr-body')
