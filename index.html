@@ -295,6 +295,7 @@ tr:hover td{background:#171b22;cursor:pointer}
       <div style="display:flex;align-items:center;gap:10px">
         <span id="scr-count" style="font-size:11px;color:#555c6e;font-family:\'SF Mono\',monospace">0 tickers</span>
         <span id="scr-loading" style="font-size:10px;color:#ff8c42;display:none">fetching prices...</span>
+        <button class="btn btn-ghost" style="font-size:11px;padding:3px 9px" onclick="var tickers=Object.keys(OV);fetchScreenerPrices(tickers).then(()=>runFilter())">Fetch prices + OI</button>
       </div>
     </div>
     <div style="overflow-x:auto">
@@ -1741,11 +1742,14 @@ async function fetchScreenerPrices(tickers) {
       }
     } catch(e) {}
 
-    // Fetch OI from options snapshot (cached separately, no extra rate limit hit)
+    // Fetch OI from options snapshot - check cache first
     try {
       const today = new Date().toISOString().split('T')[0]
       const expTo = new Date(Date.now()+60*864e5).toISOString().split('T')[0]
       const oiPath = '/v3/snapshot/options/'+t+'?expiration_date.gte='+today+'&expiration_date.lte='+expTo+'&limit=250'
+      const oiCached = API_CACHE[oiPath] && (Date.now()-API_CACHE[oiPath].ts < 5*60*1000)
+      // Only wait between calls if the price fetch was uncached
+      if(!cached) await new Promise(r => setTimeout(r, 13000))
       const oiData = await apiGet(oiPath)
       if(oiData && oiData.results) {
         const totalOI = oiData.results.reduce((sum,r)=>sum+(r.open_interest||0),0)
@@ -1754,11 +1758,13 @@ async function fetchScreenerPrices(tickers) {
         OV[t] && (OV[t].oi = totalOI)
         const oiCell = document.getElementById('oi-'+t)
         if(oiCell) oiCell.textContent = totalOI > 1e6 ? (totalOI/1e6).toFixed(1)+'M' : totalOI > 1000 ? Math.round(totalOI/1000)+'K' : totalOI
+        // If OI was not cached, wait before moving to next ticker
+        if(!oiCached) await new Promise(r => setTimeout(r, 13000))
       }
-    } catch(e) {}
-
-    // Only delay if it was a real network call (not cached)
-    if(!cached) await new Promise(r => setTimeout(r, 13000))
+    } catch(e) {
+      // OI failed - still do price delay
+      if(!cached) await new Promise(r => setTimeout(r, 13000))
+    }
   }
 
   loader.style.display = 'none'
