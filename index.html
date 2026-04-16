@@ -1501,17 +1501,26 @@ const BOOKMARKLET_CODE = `javascript:(function(){
       setTimeout(function(){ if(n.parentNode) n.parentNode.removeChild(n); }, 5000);
     }
     var count = Object.keys(data).length;
-    try {
-      navigator.clipboard.writeText(json).then(function(){
-        showNotice('✓ GT Scrape: Copied ' + count + ' tickers! Go to GOGO → Screener → paste → Import.');
-      }).catch(function(){
-        var ta=document.createElement('textarea');ta.value=json;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);
-        showNotice('✓ GT Scrape: Copied ' + count + ' tickers! Go to GOGO → Screener → paste → Import.');
-      });
-    } catch(e) {
-      var ta=document.createElement('textarea');ta.value=json;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);
-      showNotice('✓ GT Scrape: Copied ' + count + ' tickers! Go to GOGO → Screener → paste → Import.');
-    }
+    // Show a copyable textarea overlay - clipboard blocked by OVTLYR CSP
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.85);z-index:999999;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:monospace';
+    var title = document.createElement('div');
+    title.style.cssText = 'color:#f0c040;font-size:16px;font-weight:700;margin-bottom:12px';
+    title.textContent = '✓ GT Scrape: ' + count + ' tickers — Press Ctrl+A then Ctrl+C to copy, then close';
+    var ta = document.createElement('textarea');
+    ta.value = json;
+    ta.style.cssText = 'width:80%;height:180px;background:#0a0c0f;color:#00d68f;border:2px solid #f0c040;border-radius:6px;padding:10px;font-size:11px;font-family:monospace;resize:none;outline:none';
+    var closeBtn = document.createElement('button');
+    closeBtn.textContent = '✕ Close (after copying)';
+    closeBtn.style.cssText = 'margin-top:12px;padding:8px 20px;background:#f0c040;color:#0a0c0f;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;font-family:monospace';
+    closeBtn.onclick = function(){ document.body.removeChild(overlay); };
+    overlay.appendChild(title);
+    overlay.appendChild(ta);
+    overlay.appendChild(closeBtn);
+    document.body.appendChild(overlay);
+    ta.focus(); ta.select();
+    // Also try clipboard as bonus
+    try { navigator.clipboard.writeText(json).then(function(){ title.textContent = '✓ GT Scrape: ' + count + ' tickers — Copied to clipboard! You can close.'; title.style.color='#00d68f'; }); } catch(e) {}
   }
   // Show start indicator
   var startNote = document.createElement('div');
