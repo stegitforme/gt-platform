@@ -486,7 +486,7 @@ tr:hover td{background:#171b22;cursor:pointer}
           <div class="metric"><div class="metric-label">Base Risk Budget</div><div id="m-risk" class="metric-value">--</div><div id="m-risk-s" class="metric-sub">per trade</div></div>
           <div class="metric"><div class="metric-label">Loss @ .5 ATR Stop</div><div id="m-hl" class="metric-value o">--</div><div class="metric-sub">orange line trigger</div></div>
           <div class="metric"><div class="metric-label">Loss @ 2x ATR Exit</div><div id="m-fl" class="metric-value r">--</div><div class="metric-sub">red emergency line</div></div>
-          <div class="metric"><div class="metric-label">+30% Gain Target</div><div id="m-g30" class="metric-value g">--</div><div class="metric-sub">on cost basis</div></div>
+          <div class="metric"><div class="metric-label">+50% Gain Target</div><div id="m-g30" class="metric-value g">--</div><div class="metric-sub">on cost basis</div></div>
         </div>
       </div>
     </div>
@@ -3062,7 +3062,7 @@ function calc() {
   const cap  = cts * (optcost||0) * 100
   const lossH= 0.5 * atr * delta * 100 * cts
   const lossF= 2   * atr * delta * 100 * cts
-  const g30  = cap * 0.30
+  const g50  = cap * 0.50
 
   document.getElementById('m-cts').textContent  = cts
   document.getElementById('m-cts-s').textContent= '&#948;'+Math.round(delta*100)+' . 2xATR=$'+(2*atr).toFixed(2)
@@ -3072,7 +3072,7 @@ function calc() {
   document.getElementById('m-risk-s').textContent= rp+'% of $'+acct.toLocaleString()
   document.getElementById('m-hl').textContent   = '$'+Math.round(lossH).toLocaleString()
   document.getElementById('m-fl').textContent   = '$'+Math.round(lossF).toLocaleString()
-  document.getElementById('m-g30').textContent  = g30 > 0 ? '+$'+Math.round(g30).toLocaleString() : '--'
+  document.getElementById('m-g30').textContent  = g50 > 0 ? '+$'+Math.round(g50).toLocaleString() : '--'
 
   renderLevels(entry, atr)
   renderPortfolioRisk()
@@ -3646,7 +3646,7 @@ function renderTrades() {
             mkMini(isStk ? 'Total cost' : 'Cost basis', basis>0?'$'+Math.round(basis).toLocaleString():'--', '') +
             (isStk ? '' : mkMini('Loss @ .5ATR', '$'+Math.round(lH).toLocaleString(), 'o')) +
             (isStk ? '' : mkMini('Loss @ 2xATR', '$'+Math.round(lF).toLocaleString(), 'r')) +
-            mkMini(isStk ? 'Current value' : '+30% target', isStk ? (t.curVal?'$'+t.curVal.toLocaleString():'--') : (basis>0?'+$'+Math.round(basis*.3).toLocaleString():'--'), isStk?'':'g') +
+            mkMini(isStk ? 'Current value' : '+50% target', isStk ? (t.curVal?'$'+t.curVal.toLocaleString():'--') : (basis>0?'+$'+Math.round(basis*.5).toLocaleString():'--'), isStk?'':'g') +
             mkMini(t.totalGL !== undefined ? 'Total P/L' : (isStk ? 'ATR' : 'ATR'), t.totalGL !== undefined ? (t.totalGL>=0?'+$':'-$')+Math.abs(Math.round(t.totalGL)).toLocaleString() : '$'+t.atr, t.totalGL !== undefined?(t.totalGL>=0?'g':'r'):'') +
           '</div>' +
           (t.rolls.length ? '<div style="margin-top:9px;padding-top:9px;border-top:1px solid rgba(255,255,255,.06)"><div style="font-size:10px;color:#555c6e;margin-bottom:4px">ROLLS</div>' + t.rolls.map(r=>'<div style="font-size:11px;color:#8b91a0;font-family:\'SF Mono\',monospace">'+r.date+' . $'+r.from.toFixed(2)+' -> $'+r.to.toFixed(2)+'</div>').join('') + '</div>' : '') +
