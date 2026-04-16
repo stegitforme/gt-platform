@@ -3507,6 +3507,7 @@ async function btRun() {
     btStatus('Running simulation...')
     const result = btSimulate(tqqq, qqq, spy, sgov, startDate)
     btStatus('Done · ' + new Date().toLocaleTimeString())
+    window._btLastResult = result
     btRender(result)
     document.getElementById('bt-empty').style.display = 'none'
   } catch(e) {
@@ -3531,9 +3532,10 @@ function btSimulate(tqqqBars, qqqBars, spyBars, sgovBars, startDate) {
   function calcVol(dates,idx) {
     if(idx<21) return 0
     const rets=[]
-    for(let i=idx-20;i<=idx;i++) {
+    // Walk back through available bars to get 20 actual trading day returns
+    for(let i=idx;i>Math.max(0,idx-40)&&rets.length<20;i--) {
       const p0=qqqM[ds(dates[i-1])], p1=qqqM[ds(dates[i])]
-      if(p0&&p1) rets.push(Math.log(p1/p0))
+      if(p0&&p1&&p0>0) rets.push(Math.log(p1/p0))
     }
     if(rets.length<10) return 0
     const mean=rets.reduce((a,b)=>a+b,0)/rets.length
@@ -3541,8 +3543,9 @@ function btSimulate(tqqqBars, qqqBars, spyBars, sgovBars, startDate) {
     return Math.sqrt(v*252)
   }
   function calcMA(dates,idx) {
-    const win=Math.min(200,idx); let s=0,c=0
-    for(let i=idx-win+1;i<=idx;i++){const p=qqqM[ds(dates[i])];if(p){s+=p;c++}}
+    // Walk back to find 200 actual trading days with data
+    let s=0,c=0
+    for(let i=idx;i>=0&&c<200;i--){const p=qqqM[ds(dates[i])];if(p){s+=p;c++}}
     return c>0?s/c:0
   }
   function isWeekEnd(dates,idx) {
@@ -3554,6 +3557,8 @@ function btSimulate(tqqqBars, qqqBars, spyBars, sgovBars, startDate) {
   const RISK_FREE=0.045
   let sv=10000,tv=10000,qv=10000,spv=10000
   const sEq=[10000],tEq=[10000],qEq=[10000],spEq=[10000],cDates=[allDates[si]]
+  // Daily tracking for accurate drawdown (weekly snapshots miss intra-week drops)
+  const sEqD=[10000],tEqD=[10000]
   const signals=[]
   let alloc='SGOV'
 
@@ -3561,23 +3566,30 @@ function btSimulate(tqqqBars, qqqBars, spyBars, sgovBars, startDate) {
     const d=allDates[i], dstr=ds(d), prev=ds(allDates[i>0?i-1:i])
     const tP=tqqqM[dstr], qP=qqqM[dstr], spP=spyM[dstr]
     if(!tP||!qP||!spP) continue
-    const tR=tP/(tqqqM[prev]||tP)-1, qR=qP/(qqqM[prev]||qP)-1, spR=spP/(spyM[prev]||spP)-1
+    // Find previous valid close (handles weekends/holidays in map)
+    let prevT=tqqqM[prev], prevQ=qqqM[prev], prevSp=spyM[prev]
+    if(!prevT||!prevQ||!prevSp) { prevT=tP; prevQ=qP; prevSp=spP }
+    const tR=tP/prevT-1, qR=qP/prevQ-1, spR=spP/prevSp-1
     let sgR=RISK_FREE/252
     if(sgovM[dstr]&&sgovM[prev]) sgR=sgovM[dstr]/(sgovM[prev]||sgovM[dstr])-1
 
+    // Apply return FIRST (Friday close captures today's move)
+    const sR = alloc==='TQQQ'?tR:alloc==='HALF'?(0.5*tR+0.5*sgR):sgR
+    sv*=(1+sR); tv*=(1+tR); qv*=(1+qR); spv*=(1+spR)
+    sEqD.push(sv); tEqD.push(tv)  // daily for accurate drawdown
+
     if(isWeekEnd(allDates,i)) {
+      // Check signal at Friday close, take effect NEXT Monday (realistic execution)
       const vol=calcVol(allDates,i), ma=calcMA(allDates,i), above=qP>ma
       let newAlloc = !above?'SGOV':vol>=0.35?'HALF':'TQQQ'
+      // Always track for debug; only push changes to signals log
       if(newAlloc!==alloc) {
         signals.push({date:d,vol,ma,qqqPrice:qP,aboveMa:above,action:newAlloc})
-        alloc=newAlloc
       }
+      alloc=newAlloc
       cDates.push(d)
       sEq.push(sv); tEq.push(tv); qEq.push(qv); spEq.push(spv)
     }
-
-    const sR = alloc==='TQQQ'?tR:alloc==='HALF'?(0.5*tR+0.5*sgR):sgR
-    sv*=(1+sR); tv*=(1+tR); qv*=(1+qR); spv*=(1+spR)
   }
 
   function metrics(eq,dates) {
@@ -3603,8 +3615,13 @@ function btSimulate(tqqqBars, qqqBars, spyBars, sgovBars, startDate) {
   }
 
   const allocC=signals.reduce((m,s)=>{m[s.action]=(m[s.action]||0)+1;return m},{})
+  const sm = metrics(sEq,cDates), tm = metrics(tEq,cDates)
+  const qm = metrics(qEq,cDates), spm = metrics(spEq,cDates)
+  // Override drawdown with daily for accuracy
+  function ddOnly(eq) { let pk=0,dd=0; for(let i=0;i<eq.length;i++){if(eq[i]>pk)pk=eq[i];const d=(eq[i]-pk)/pk;if(d<dd)dd=d} return dd }
+  sm.maxDD = ddOnly(sEqD); tm.maxDD = ddOnly(tEqD)
   return {
-    stratM:metrics(sEq,cDates), tqqqM:metrics(tEq,cDates),
+    stratM:sm, tqqqM:tm, qqqM:qm, spyM:spm,
     qqqM:metrics(qEq,cDates), spyM:metrics(spEq,cDates),
     cDates, sEq, tEq, qEq, spEq, signals, allocC, total:signals.length
   }
