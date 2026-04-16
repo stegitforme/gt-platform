@@ -147,6 +147,25 @@ tr:hover td{background:#171b22;cursor:pointer}
       if(name) name.textContent = user.displayName || user.email || 'Signed in'
       setApi('Firebase · ' + (user.displayName || user.email), 'ok')
       if(typeof loadFromFirebase === 'function') loadFromFirebase()
+      // Watch for OVTLYR extension sync — auto-imports when extension writes to Firebase
+      try {
+        const pendingRef = window.FBRef(window.FBDB, 'pending_ov')
+        window.FBOnValue(pendingRef, function(snap) {
+          if(!snap || !snap.exists()) return
+          const d = snap.val()
+          if(!d || !d.ov || !d.importedAt) return
+          const stored = JSON.parse(localStorage.getItem('gt_ov_data') || '{}')
+          if(d.savedAt && stored.savedAt && d.savedAt <= stored.savedAt) return
+          console.log('GOGO: Extension sync detected — ' + Object.keys(d.ov).length + ' tickers')
+          Object.entries(d.ov).forEach(([k,v]) => { if(typeof OV !== 'undefined') OV[k] = v })
+          localStorage.setItem('gt_ov_data', JSON.stringify(d))
+          const el = document.getElementById('ov-last-update')
+          if(el) el.textContent = 'Last import: ' + new Date(d.importedAt).toLocaleString() + ' (extension sync)'
+          if(typeof runFilter === 'function') runFilter()
+          if(typeof setApi === 'function') setApi('OVTLYR synced via extension — ' + Object.keys(d.ov).length + ' tickers ✓', 'ok')
+          if(typeof fbAutoSave === 'function') fbAutoSave(1000)
+        })
+      } catch(e) { console.warn('pending_ov listener error:', e.message) }
     } else {
       window.FBUID = null
       const btn = document.getElementById('fb-signin-btn')
@@ -298,15 +317,15 @@ tr:hover td{background:#171b22;cursor:pointer}
       <div style="display:grid;grid-template-columns:1fr auto;gap:12px;align-items:start">
         <div>
           <div style="font-size:12px;color:#8b91a0;margin-bottom:8px;line-height:1.6">
-            <b style="color:#e8eaf0">Step 1:</b> Click "Copy bookmarklet" -> add to Chrome bookmarks bar as a bookmark (paste code as URL).<br>
-            <b style="color:#e8eaf0">Step 2:</b> Go to <a href="https://console.ovtlyr.com" target="_blank" style="color:#4da6ff">console.ovtlyr.com</a> Screener -> click the bookmarklet -> JSON copied to clipboard.<br>
-            <b style="color:#e8eaf0">Step 3:</b> Paste below and click Import to refresh all signal % and F&amp;G scores.
+            <b style="color:#e8eaf0">Option A — OVTLYR API:</b> If you have an OVTLYR API key, enter it below and click <b style="color:#f0c040">Auto-Fetch</b>.<br>
+            <b style="color:#e8eaf0">Option B — Manual paste:</b> Go to <a href="https://console.ovtlyr.com/stocks-etfs" target="_blank" style="color:#4da6ff">console.ovtlyr.com</a> → F12 → Console → paste script → copy result → paste below → Import.<br>
+            <b style="color:#e8eaf0">Option C — Ask Claude:</b> Ask Claude in Chrome to "refresh OVTLYR data in GOGO" — it scrapes and imports directly.
           </div>
           <textarea id="ov-paste" rows="3" placeholder='Paste OVTLYR JSON here... {"NVDA":{"r":752,"fg":33.9},...}' style="width:100%;background:#0a0c0f;border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:8px;font-size:11px;color:#e8eaf0;font-family:monospace;resize:vertical;outline:none;box-sizing:border-box"></textarea>
           <div id="ov-import-status" style="font-size:11px;margin-top:5px;min-height:14px"></div>
           <div id="bookmarklet-help" style="display:none;margin-top:10px;padding:10px;background:#0a0c0f;border-radius:6px;font-size:11px;color:#8b91a0;line-height:1.8">
             <b style="color:#f0c040">One-time bookmarklet setup:</b><br>
-            1. Click "Copy bookmarklet" button<br>
+            1. Click "Copy Script" button<br>
             2. Chrome bookmarks bar -> right-click -> "Add page..."<br>
             3. Name: <b style="color:#e8eaf0">GT Scrape</b> . URL: paste the copied code<br>
             4. Save -- the bookmark now lives in your bar<br><br>
@@ -318,13 +337,14 @@ tr:hover td{background:#171b22;cursor:pointer}
         </div>
         <div style="display:flex;flex-direction:column;gap:7px;min-width:145px">
           <button class="btn btn-gold" style="font-size:11px" onclick="importOVData()">Import data</button>
+          <button class="btn btn-ghost" style="font-size:11px" onclick="fetchOVTLYRApi()" title="Auto-fetch if you have an OVTLYR API key">Auto-Fetch ⚡</button>
           <div style="display:flex;align-items:center;gap:5px;margin-top:2px">
             <input type="password" id="gh-token-input" placeholder="GitHub token" title="Enter GitHub token for cross-device cloud sync"
               style="flex:1;background:#0a0c0f;border:1px solid rgba(255,255,255,.08);border-radius:4px;padding:4px 7px;font-size:10px;color:#8b91a0;outline:none;min-width:0"
               oninput="localStorage.setItem('gt_github_token',this.value);document.getElementById('cloud-sync-status').textContent=this.value?'cloud on':'not set'">
             <span id="cloud-sync-status" style="font-size:9px;color:#555c6e;white-space:nowrap;flex-shrink:0">not set</span>
           </div>
-          <button class="btn btn-ghost" style="font-size:11px" onclick="copyBookmarklet()">Copy bookmarklet</button>
+          <button class="btn btn-ghost" style="font-size:11px" onclick="copyBookmarklet()">Copy Script</button>
           <button class="btn btn-ghost" style="font-size:11px" onclick="showBookmarkletHelp()">Setup guide</button>
         </div>
       </div>
@@ -1431,6 +1451,29 @@ function showBreadthUpdate() {
 // -- EARNINGS CALENDAR =============================
 const LIVE_EARNINGS = {}   // populated by fetchEarningsCalendar()
 
+async function fetchOVTLYRApi() {
+  const key = localStorage.getItem('gt_ovtlyr_api_key') || prompt('Enter your OVTLYR API key:')
+  if(!key) return
+  localStorage.setItem('gt_ovtlyr_api_key', key)
+  setApi('Fetching from OVTLYR API...', 'ok')
+  try {
+    // Try OVTLYR API endpoints - update if they provide official API docs
+    const res = await fetch('https://console.ovtlyr.com/stocks-etfs?handler=GetStocks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': key },
+      body: JSON.stringify({})
+    })
+    if(!res.ok) throw new Error('HTTP ' + res.status + ' — API key may be invalid or API not available')
+    const json = await res.json()
+    setApi('OVTLYR API: check response format', 'ok')
+    console.log('OVTLYR API response:', json)
+  } catch(e) {
+    setApi('OVTLYR API not available: ' + e.message, 'error')
+    alert('OVTLYR does not currently offer a public API. Options:\n\n1. Contact support@ovtlyr.com and ask for API access\n2. Ask Claude in Chrome to refresh your OVTLYR data\n3. Use F12 → Console method')
+  }
+}
+
+
 async function fetchEarningsCalendar() {
   // Fetch upcoming earnings for all OV tickers using Polygon /vX/reference/earnings
   // This endpoint is available on paid plans
@@ -1537,8 +1580,8 @@ function copyBookmarklet() {
   // Fallback: textarea execCommand (works even when page not focused)
   var status = document.getElementById('ov-import-status')
   var success = function() {
-    setApi('Bookmarklet copied! Add it to your browser bookmarks bar.', 'ok')
-    if(status) { status.textContent = 'Bookmarklet copied! Paste as bookmark URL in Chrome'; status.style.color = '#00d68f' }
+    setApi('Script copied! Add it to your browser bookmarks bar.', 'ok')
+    if(status) { status.textContent = 'Script copied! Paste as bookmark URL in Chrome'; status.style.color = '#00d68f' }
   }
   var fail = function() {
     // Last resort: show the code for manual copy
