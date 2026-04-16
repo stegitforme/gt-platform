@@ -93,6 +93,7 @@ tr:hover td{background:#171b22;cursor:pointer}
 ::-webkit-scrollbar{width:4px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:#1e2330;border-radius:2px}
+@keyframes pulse{from{opacity:.6}to{opacity:1}}
 </style>
 </head>
 <body>
@@ -1003,7 +1004,17 @@ async function fetchTQQQSignal() {
         '</div>' +
       '</div>' +
       '<div style="margin-bottom:8px">'+(tBdg?'<span style="background:'+tCol+';color:#0a0c0f;font-size:11px;font-weight:700;padding:3px 10px;border-radius:4px;margin-right:8px">'+tBdg+'</span>':'')+'<span style="font-size:11px;color:#555c6e">Turbo arms after 8+ weeks below 200MA</span></div>'+
-      '<div style="font-size:11px;color:#555c6e">Based on '+n+' trading days of QQQ data �. 200MA uses '+ma200window+' days �. Vol uses '+vol20window+' days �. Run every Friday before market close</div>'
+      '<div style="font-size:11px;color:#555c6e">Based on '+n+' trading days of QQQ data �. 200MA uses '+ma200window+' days �. Vol uses '+vol20window+' days . Run every Friday before market close</div>' +
+      '<div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,.07)">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
+      '  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#555c6e">Turbo Mode</div>' +
+      '  <div style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:3px;background:'+(tSt==='normal'?'rgba(255,255,255,.05)':tSt==='arming'?'rgba(255,140,66,.15)':tSt==='armed'?'rgba(240,192,64,.2)':'rgba(0,214,143,.15)')+';color:'+(tSt==='normal'?'#555c6e':tSt==='arming'?'#ff8c42':tSt==='armed'?'#f0c040':'#00d68f')+'">'+(tSt==='normal'?'Normal':tSt==='arming'?'Arming':tSt==='armed'?'Armed':'Active')+'</div>' +
+      '</div>' +
+      '<div style="margin-bottom:6px">' +
+      (tSt==='arming'||tSt==='normal' ? '<div style="font-size:10px;color:#555c6e;margin-bottom:4px">'+( tSt==='arming'?wkBl+' / 8 weeks below 200MA to arm':'0 / 8 weeks — above 200MA')+'</div>'+'<div style="height:8px;background:rgba(255,255,255,.06);border-radius:4px;overflow:hidden">' +'<div style="height:100%;border-radius:4px;transition:width .4s;background:'+(tSt==='arming'?'#ff8c42':'rgba(255,255,255,.1)')+';width:'+(tSt==='arming'?Math.round(wkBl/8*100):0)+'%"></div></div>': tSt==='armed' ? '<div style="font-size:10px;color:#f0c040;margin-bottom:4px">8+ weeks below 200MA — waiting for QQQ to reclaim 200MA</div>'+'<div style="height:8px;background:rgba(240,192,64,.15);border-radius:4px;overflow:hidden">' +'<div style="height:100%;border-radius:4px;background:linear-gradient(90deg,#f0c040,#ff8c42);width:100%;animation:pulse 1.5s ease-in-out infinite alternate"></div></div>': '<div style="font-size:10px;color:#00d68f;margin-bottom:4px">Week '+tWk+' of 12 — '+(12-tWk)+' weeks remaining at elevated allocation</div>'+'<div style="height:8px;background:rgba(0,214,143,.12);border-radius:4px;overflow:hidden">' +'<div style="height:100%;border-radius:4px;background:#00d68f;width:'+Math.round(tWk/12*100)+'%;transition:width .4s"></div></div>') +
+      '</div>' +
+      '<div style="font-size:10px;color:#333a4a;margin-top:6px">'+(tSt==='normal'?'Turbo arms after 8 consecutive weeks below 200MA, then fires on reclaim for 12 weeks':tSt==='arming'?'Keep watching — needs '+(8-wkBl)+' more weeks below to arm':tSt==='armed'?'Primed — next week QQQ reclaims 200MA starts the 12-week turbo window':'Turbo active — run strategy normally, elevated conviction window')+'</div>' +
+      '</div>'
 
     if(body) body.innerHTML = html
     const upd = document.getElementById('tqqq-updated')
@@ -1288,7 +1299,7 @@ function runFilter() {
     if(noWide && !spreadOk) return null
     const score = Math.min(40, d.r/20) + (d.fg>=15&&d.fg<=65?20:5) + (earnOk?20:0) + (spreadOk?10:0) + (d.v>3e6?10:5)
     return {t, d, spreadOk, earnOk, score}
-  }).filter(Boolean).sort((a,b)=>{ if(typeof SCR_SORT==='undefined')return b.score-a.score; var col=SCR_SORT.col,dir=SCR_SORT.dir; if(col==='sig')return dir*(b.d.r-a.d.r); if(col==='fg')return dir*(b.d.fg-a.d.fg); if(col==='dte')return dir*((a.dte||999)-(b.dte||999)); return dir*(b.score-a.score) })
+  }).filter(Boolean).sort((a,b)=>{ var col=SCR_SORT.col,dir=SCR_SORT.dir; if(col==='sig')return dir*(b.d.r-a.d.r); if(col==='fg')return dir*(b.d.fg-a.d.fg); if(col==='dte')return dir*((a.dte||999)-(b.dte||999)); return dir*(b.score-a.score) })
 
   document.getElementById('scr-count').textContent = scored.length + ' tickers'
   const tbody = document.getElementById('scr-body')
