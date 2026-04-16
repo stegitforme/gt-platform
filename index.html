@@ -270,8 +270,8 @@ tr:hover td{background:#171b22;cursor:pointer}
     <div class="card-body">
       <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:9px">
         <div class="field" style="margin:0"><label>Min signal %</label><input type="number" id="f-sig" value="0"></div>
-        <div class="field" style="margin:0"><label>F&G min</label><input type="number" id="f-fg-min" value="0"></div>
-        <div class="field" style="margin:0"><label>F&G max</label><input type="number" id="f-fg-max" value="100"></div>
+        <div class="field" style="margin:0"><label>F&G min</label><input type="number" id="f-fg-min" value="15"></div>
+        <div class="field" style="margin:0"><label>F&G max</label><input type="number" id="f-fg-max" value="65"></div>
         <div class="field" style="margin:0">
   <label style="display:flex;align-items:center;gap:4px">
     Max spread
@@ -731,7 +731,7 @@ const OV = {
 
 const LIVE_PRICES = {}
 const GT_SCORES = {}  // cache: ticker -> {score, trend, mom, rs, vol, atr, ext, ts}
-let SCR_SORT = { col: 'score', dir: -1 }  // col: score|sig|fg|dte, dir: -1=desc 1=asc
+let SCR_SORT = { col: 'score', dir: -1 }  // col: score|sig|fg|gt, dir: -1=desc 1=asc
 const WIDE_SPREADS = new Set(['AMAT','ATI','CAT','DE','GS','COHR','TT','CLS','MOD','WSM'])
 const BULL_SECTORS = new Set(['Financials','Materials','Real Estate','Industrials'])
 
@@ -1326,9 +1326,7 @@ async function fetchSectorData() {
     } catch(e) { console.log('Sector error', etf, e) }
     // 13s gap to stay under 5 req/min -- use cache for subsequent calls
     // Only throttle if result wasn't cached (real network call)
-    const etfPath = '/v2/aggs/ticker/'+etf+'/range/1/day/'+from+'/'+to+'?adjusted=true&sort=asc&limit=22'
-    const wasCached = API_CACHE[etfPath] && (Date.now()-API_CACHE[etfPath].ts < 5*60*1000)
-    if(!wasCached) await new Promise(r => setTimeout(r, 13000))
+    // No rate limiting needed on paid Polygon plan
   }
 
   renderSectors()
@@ -1691,7 +1689,7 @@ function runFilter() {
   const tbody = document.getElementById('scr-body')
 
   if(!scored.length) {
-    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:24px;color:#555c6e">No tickers match filters</td></tr>'
+    tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:24px;color:#555c6e">No tickers match filters</td></tr>'
     return
   }
 
@@ -1705,13 +1703,6 @@ function runFilter() {
               : '#ff4560'                      // extreme greed -- avoid
     const spLbl = s.spreadOk ? '<span class="g">&#10003;</span>' : '<span class="r">&#10007;</span>'
     // DTE = days until May-15 expiry (from sizer) or next monthly expiry
-    const expiryEl = document.getElementById('scr-expiry') || document.getElementById('expiry')
-    const expiryStr = expiryEl ? expiryEl.value : 'May-15-2026'
-    const expiryDate = new Date(expiryStr)
-    const today = new Date()
-    const dte = Math.ceil((expiryDate - today) / (1000*60*60*24))
-    const dteColor = dte >= 21 ? '#00d68f' : dte >= 14 ? '#ff8c42' : '#ff4560'
-    const dteLbl = '<span style="color:' + dteColor + '">' + (dte > 0 ? dte + 'd' : '&#9888;exp') + '</span>'
     const eLbl  = s.earnOk   ? '<span class="g">&#10003;</span>' : '<span class="o">&#9888;</span>'
     const bw = Math.min(100, s.d.r / 8)
     const scoreBar = Math.round(s.score)
@@ -1971,6 +1962,9 @@ async function runGTScores() {
 
   setApi('GT Scores complete — ' + tickers.length + ' tickers scored', 'ok')
   if(btn) { btn.textContent = 'Run GT Scores ▶'; btn.disabled = false }
+  // Auto-sort by GT Score descending
+  SCR_SORT = { col: 'gt', dir: -1 }
+  runFilter()
 }
 
 
@@ -2010,14 +2004,14 @@ function toggleSpreadType() {
 }
 
 function resetFilters() {
-  document.getElementById('f-sig').value = 100
-  document.getElementById('f-fg-min').value = 0
-  document.getElementById('f-fg-max').value = 100
+  document.getElementById('f-sig').value = 0
+  document.getElementById('f-fg-min').value = 15
+  document.getElementById('f-fg-max').value = 65
   document.getElementById('f-spread').value = 0.50
-  document.getElementById('f-oi').value = 250
-  document.getElementById('f-vol').value = 1000000
+  document.getElementById('f-oi').value = 0
+  document.getElementById('f-vol').value = 0
   document.getElementById('f-earn').checked = true
-  document.getElementById('f-bull').checked = true
+  document.getElementById('f-bull').checked = false
   document.getElementById('f-wide').checked = true
   runFilter()
 }
