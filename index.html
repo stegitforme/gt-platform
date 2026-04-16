@@ -1696,7 +1696,13 @@ function runFilter() {
   }
 
   tbody.innerHTML = scored.map((s, i) => {
-    const fgc = s.d.fg <= 35 ? '#00d68f' : s.d.fg <= 60 ? '#ff8c42' : '#ff4560'
+    // F&G: 15-65 is Golden Ticket sweet spot
+    // <15 = extreme fear (avoid), 15-35 = fear (good entry), 36-65 = neutral/mild greed (ideal), >65 = extended (avoid)
+    const fgc = s.d.fg < 15 ? '#ff4560'       // extreme fear -- avoid
+              : s.d.fg <= 35 ? '#4da6ff'       // fear zone -- good entry  
+              : s.d.fg <= 65 ? '#00d68f'       // sweet spot -- ideal
+              : s.d.fg <= 80 ? '#ff8c42'       // greed -- extended
+              : '#ff4560'                      // extreme greed -- avoid
     const spLbl = s.spreadOk ? '<span class="g">&#10003;</span>' : '<span class="r">&#10007;</span>'
     // DTE = days until May-15 expiry (from sizer) or next monthly expiry
     const expiryEl = document.getElementById('scr-expiry') || document.getElementById('expiry')
