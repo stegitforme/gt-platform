@@ -1105,7 +1105,42 @@
       "s": "Financials",
       "v": 1000000,
       "earn": false
+    },
+    "IRM": {
+      "r": 290.82,
+      "fg": 9,
+      "s": "Real Estate",
+      "v": 1000000,
+      "earn": false
+    },
+    "VTR": {
+      "r": 109.54,
+      "fg": 9,
+      "s": "Real Estate",
+      "v": 1000000,
+      "earn": false
+    },
+    "PLD": {
+      "r": 103.27,
+      "fg": 102,
+      "s": "Real Estate",
+      "v": 1000000,
+      "earn": false
+    },
+    "SPG": {
+      "r": 80.45,
+      "fg": 9,
+      "s": "Real Estate",
+      "v": 1000000,
+      "earn": false
+    },
+    "CBRE": {
+      "r": 59.47,
+      "fg": 28,
+      "s": "Real Estate",
+      "v": 1000000,
+      "earn": false
     }
   },
-  "importedAt": "Apr 15, 2026, 11:26 PM"
+  "importedAt": "Apr 16, 2026, 07:49 AM"
 }
