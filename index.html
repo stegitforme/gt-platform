@@ -1288,7 +1288,7 @@ function runFilter() {
     if(noWide && !spreadOk) return null
     const score = Math.min(40, d.r/20) + (d.fg>=15&&d.fg<=65?20:5) + (earnOk?20:0) + (spreadOk?10:0) + (d.v>3e6?10:5)
     return {t, d, spreadOk, earnOk, score}
-  }).filter(Boolean).sort((a,b)=>{ var col=SCR_SORT.col,dir=SCR_SORT.dir; if(col==='sig')return dir*(b.d.r-a.d.r); if(col==='fg')return dir*(b.d.fg-a.d.fg); if(col==='dte')return dir*((a.dte||999)-(b.dte||999)); return dir*(b.score-a.score) })
+  }).filter(Boolean).sort((a,b)=>{ if(typeof SCR_SORT==='undefined')return b.score-a.score; var col=SCR_SORT.col,dir=SCR_SORT.dir; if(col==='sig')return dir*(b.d.r-a.d.r); if(col==='fg')return dir*(b.d.fg-a.d.fg); if(col==='dte')return dir*((a.dte||999)-(b.dte||999)); return dir*(b.score-a.score) })
 
   document.getElementById('scr-count').textContent = scored.length + ' tickers'
   const tbody = document.getElementById('scr-body')
