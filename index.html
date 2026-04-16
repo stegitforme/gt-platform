@@ -1436,7 +1436,19 @@ function importOVData() {
   
   try {
     // Clean up common paste artifacts
-    const cleaned = raw.replace(/^[^{]*/, '').replace(/[^}]*$/, '')
+    // Robust cleaning: find the outermost { } bounds
+    let cleaned = raw
+    // Strip any BOM or invisible characters
+    cleaned = cleaned.replace(/^[\s﻿ ]+/, '')
+    // Find first { and last }
+    const firstBrace = cleaned.indexOf('{')
+    const lastBrace  = cleaned.lastIndexOf('}')
+    if(firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
+      throw new Error('No valid JSON object found -- make sure the bookmarklet copied correctly')
+    }
+    cleaned = cleaned.substring(firstBrace, lastBrace + 1)
+    // Remove any control characters that break JSON
+    cleaned = cleaned.replace(/[ -]/g, ' ')
     const data = JSON.parse(cleaned)
     const keys = Object.keys(data)
     if(!keys.length) throw new Error('No tickers found in data')
@@ -1485,9 +1497,10 @@ function importOVData() {
     setApi('OVTLYR data refreshed: ' + updated + ' updated, ' + added + ' new . ' + keys.length + ' total', 'ok')
     
   } catch(err) {
-    status.textContent = 'Parse error: ' + err.message + ' -- check JSON format'
+    const preview = raw.substring(0,80).replace(/\n/g,' ')
+    status.textContent = 'Parse error: ' + err.message + ' | First 80 chars: ' + preview
     status.style.color = '#ff4560'
-    console.error('OV import error:', err)
+    console.error('OV import error:', err, 'Raw start:', raw.substring(0,200))
   }
 }
 
