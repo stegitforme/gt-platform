@@ -683,7 +683,6 @@ const OV = {
   RBA:{r:110,fg:22.0,s:'Industrials',v:1178345,earn:false},
 }
 
-const LIVE_PRICES = {}
 const WIDE_SPREADS = new Set() // Spread filtering uses live Polygon data
 const BULL_SECTORS = new Set(['Financials','Materials','Real Estate','Industrials','Technology','Tech','Communication','Discretionary','Staples','Consumer Staples','Energy'])
 
@@ -935,37 +934,6 @@ async function fetchTQQQSignal() {
     const dailyVol = Math.sqrt(variance)
     const annualVol = +(dailyVol * Math.sqrt(252) * 100).toFixed(1)
 
-
-    // -- TURBO MODE STATE MACHINE ---------------------------
-    const weekStep = 5
-    const weeklyCloses = []
-    for(let i = weekStep; i < n; i += weekStep) weeklyCloses.push(closes[i])
-    let weeksBelow = 0
-    for(let i = weeklyCloses.length-1; i >= 0; i--) {
-      const sliceEnd = i * weekStep
-      const sliceStart = Math.max(0, sliceEnd - 200)
-      const maThen = closes.slice(sliceStart, sliceEnd).reduce((a,b)=>a+b,0) / (sliceEnd - sliceStart)
-      if(weeklyCloses[i] < maThen) weeksBelow++
-      else break
-    }
-    let turboState = 'normal', turboWeek = 0, turboStartBar = 0
-    try { const sv=JSON.parse(localStorage.getItem('gt_turbo_state')||'{}')
-      turboState=sv.state||'normal'; turboWeek=sv.week||0; turboStartBar=sv.startBar||0 } catch(e){}
-    if(aboveMa) {
-      if(turboState==='armed'){turboState='active';turboWeek=1;turboStartBar=n}
-      else if(turboState==='active'){turboWeek=Math.min(12,Math.round((n-turboStartBar)/weekStep)+1);if(turboWeek>=12){turboState='normal';turboWeek=0;turboStartBar=0}}
-      else if(turboState==='arming'){turboState='normal';turboWeek=0}
-    } else {
-      if(turboState==='active'){turboState='normal';turboWeek=0;turboStartBar=0}
-      else{turboState=weeksBelow>=8?'armed':'arming'}
-    }
-    localStorage.setItem('gt_turbo_state',JSON.stringify({state:turboState,week:turboWeek,startBar:turboStartBar}))
-    let turboLabel='', turboBadge='', turboBadgeColor='#555c6e'
-    if(turboState==='arming'){turboLabel='| Arming '+weeksBelow+'/8wks';turboBadge='Arming '+weeksBelow+'/8wks';turboBadgeColor='#ff8c42'}
-    else if(turboState==='armed'){turboLabel='| TURBO ARMED';turboBadge='TURBO ARMED';turboBadgeColor='#f0c040'}
-    else if(turboState==='active'){turboLabel='| TURBO Wk'+turboWeek+'/12';turboBadge='TURBO Wk'+turboWeek+'/12';turboBadgeColor='#00d68f'}
-    // ---------------------------------------------------------
-
     // Vol(35%) + 200MA signal
     const VOL_TARGET = 35
     let tqqqPct = 0, sgov = 100, signal = '', signalColor = '#ff4560'
@@ -1024,7 +992,6 @@ async function fetchTQQQSignal() {
           '</div>' +
         '</div>' +
       '</div>' +
-      '<div style="margin-bottom:8px;display:flex;align-items:center;gap:8px">'+(turboBadge?'<div style="background:'+turboBadgeColor+';color:#0a0c0f;font-size:11px;font-weight:700;padding:4px 10px;border-radius:4px;letter-spacing:.05em">'+turboBadge+'</div>':'')+'<div style="font-size:11px;color:#555c6e">Turbo: 8wks below 200MA then reclaim</div></div>' +
       '<div style="font-size:11px;color:#555c6e">Based on '+n+' trading days of QQQ data �. 200MA uses '+ma200window+' days �. Vol uses '+vol20window+' days �. Run every Friday before market close</div>'
 
     if(body) body.innerHTML = html
@@ -1375,9 +1342,6 @@ async function fetchScreenerPrices(tickers) {
           cell.innerHTML = '<span style="color:#e8eaf0">$'+bar.c.toFixed(2)+'</span>' +
             '<div style="font-size:10px;color:'+cc+'">'+(chg>=0?'+':'')+(chg*100).toFixed(1)+'%</div>'
         }
-        if(!LIVE_PRICES[t]) LIVE_PRICES[t] = {}
-        LIVE_PRICES[t].price = bar.c
-        if(bar.h && bar.l) { const sp=Math.min(bar.h-bar.l,bar.c*0.015); LIVE_PRICES[t].bid=+(bar.c-sp/2).toFixed(2); LIVE_PRICES[t].ask=+(bar.c+sp/2).toFixed(2) }
         fetched++
       }
     } catch(e) {}
@@ -1393,8 +1357,8 @@ async function fetchScreenerPrices(tickers) {
 function toggleSpreadType(){var el=document.getElementById("f-spread-type");if(!el)return;if(el.textContent.trim()==="$"){el.textContent="%";var i=document.getElementById("f-spread");if(i&&+i.value<=2)i.value="10"}else{el.textContent="$";var i=document.getElementById("f-spread");if(i&&+i.value>=5)i.value="0.50"}runFilter()}
 function resetFilters() {
   document.getElementById('f-sig').value = 100
-  document.getElementById('f-fg-min').value = 0
-  document.getElementById('f-fg-max').value = 100
+  document.getElementById('f-fg-min').value = 15
+  document.getElementById('f-fg-max').value = 75
   document.getElementById('f-spread').value = 0.50
   document.getElementById('f-oi').value = 250
   document.getElementById('f-vol').value = 1000000
@@ -2389,6 +2353,8 @@ function initPlatform() {
       }
     }, 1000)
   }, 200)
+    // Auto-run TQQQ signal 5s after load
+    setTimeout(function() { try { fetchTQQQSignal() } catch(e) {} }, 5000)
 }
 
 // Wait for DOM to be fully ready
