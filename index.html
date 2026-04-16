@@ -291,13 +291,13 @@ tr:hover td{background:#171b22;cursor:pointer}
           <th style="width:32px">#</th>
           <th>Ticker</th>
           <th>Live Price</th>
-          <th>Signal %</th>
-          <th>F&G</th>
+          <th onclick="scrSort('sig')" style="cursor:pointer;user-select:none">Signal % <span id="sort-sig"></span></th>
+          <th onclick="scrSort('fg')" style="cursor:pointer;user-select:none">F&G <span id="sort-fg"></span></th>
           <th>Sector</th>
           <th>Spread</th>
           <th>Earnings</th>
-          <th>DTE</th>
-          <th>Score</th>
+          <th onclick="scrSort('dte')" style="cursor:pointer;user-select:none">DTE <span id="sort-dte"></span></th>
+          <th onclick="scrSort('score')" style="cursor:pointer;user-select:none">Score <span id="sort-score">&#9660;</span></th>
           <th></th>
         </tr></thead>
         <tbody id="scr-body"></tbody>
@@ -1282,7 +1282,7 @@ function runFilter() {
     if(noWide && !spreadOk) return null
     const score = Math.min(40, d.r/20) + (d.fg>=15&&d.fg<=65?20:5) + (earnOk?20:0) + (spreadOk?10:0) + (d.v>3e6?10:5)
     return {t, d, spreadOk, earnOk, score}
-  }).filter(Boolean).sort((a,b) => b.score - a.score)
+  }).filter(Boolean).sort((a,b) => { const col=SCR_SORT.col,dir=SCR_SORT.dir; if(col==='sig') return dir*(b.d.r-a.d.r); if(col==='fg') return dir*(b.d.fg-a.d.fg); if(col==='dte') return dir*((a.dte||999)-(b.dte||999)); return dir*(b.score-a.score) })
 
   document.getElementById('scr-count').textContent = scored.length + ' tickers'
   const tbody = document.getElementById('scr-body')
