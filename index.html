@@ -99,8 +99,8 @@ tr:hover td{background:#171b22;cursor:pointer}
 <!-- Firebase SDK -->
 <script type="module">
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js'
-  import { getAuth, signInAnonymously, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js'
-  import { getDatabase, ref, set, get, onValue } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js'
+  import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js'
+  import { getDatabase, ref, set, get } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js'
 
   const firebaseConfig = {
     apiKey: "AIzaSyC2gl09aCvefp3iWnOFjO8c5UBg-I3aR-A",
@@ -115,11 +115,22 @@ tr:hover td{background:#171b22;cursor:pointer}
   const app = initializeApp(firebaseConfig)
   const auth = getAuth(app)
   const db = getDatabase(app)
+  const provider = new GoogleAuthProvider()
 
-  // Sign in anonymously — no login needed
-  signInAnonymously(auth).catch(e => console.warn('Firebase auth error:', e))
+  // Sign in with Google
+  window.fbSignIn = () => {
+    signInWithPopup(auth, provider).catch(e => console.warn('Sign-in error:', e))
+  }
+  window.fbSignOut = () => {
+    signOut(auth).then(() => {
+      window.FBUID = null
+      document.getElementById('fb-signin-btn').style.display = 'flex'
+      document.getElementById('fb-user-info').style.display = 'none'
+      setApi('Signed out of Firebase', 'ok')
+    })
+  }
 
-  // Store uid globally once authenticated
+  // Watch auth state
   onAuthStateChanged(auth, user => {
     if(user) {
       window.FBUID = user.uid
@@ -127,11 +138,21 @@ tr:hover td{background:#171b22;cursor:pointer}
       window.FBRef = ref
       window.FBSet = set
       window.FBGet = get
-      window.FBOnValue = onValue
-      console.log('Firebase ready. UID:', user.uid.substring(0,8) + '...')
-      // Load cloud data once authenticated
+      // Update UI
+      const btn = document.getElementById('fb-signin-btn')
+      const info = document.getElementById('fb-user-info')
+      const name = document.getElementById('fb-user-name')
+      if(btn) btn.style.display = 'none'
+      if(info) info.style.display = 'flex'
+      if(name) name.textContent = user.displayName || user.email || 'Signed in'
+      setApi('Firebase · ' + (user.displayName || user.email), 'ok')
       if(typeof loadFromFirebase === 'function') loadFromFirebase()
-      document.getElementById('api-msg').textContent = 'Firebase connected · syncing...'
+    } else {
+      window.FBUID = null
+      const btn = document.getElementById('fb-signin-btn')
+      const info = document.getElementById('fb-user-info')
+      if(btn) btn.style.display = 'flex'
+      if(info) info.style.display = 'none'
     }
   })
 </script>
@@ -1035,17 +1056,18 @@ async function fetchTQQQSignal() {
     // -- TURBO MODE STATE MACHINE ---------------------------
     // Need weekly data: sample last 52 weeks of closes (one per ~5 bars)
     // Approximate weeks from daily bars
-    const weeklyCloses = []
+    // Count consecutive weeks below 200MA using actual bar indices
+    // Sample one close per week (every 5 bars) going back from most recent
     const weekStep = 5
-    for(let i = weekStep; i < n; i += weekStep) weeklyCloses.push(closes[i])
-    // Count consecutive weeks below 200MA from most recent backwards
     let weeksBelow = 0
-    for(let i = weeklyCloses.length-1; i >= 0; i--) {
-      // Recalculate MA at that point using available history
-      const windowEnd = Math.min(200, i+1)
-      const maThen = closes.slice(Math.max(0, i*weekStep-200), i*weekStep).reduce((a,b)=>a+b,0) / Math.min(200, i*weekStep)
-      if(weeklyCloses[i] < maThen) weeksBelow++
-      else break
+    for(let w = 0; w < 20; w++) {  // check up to 20 weeks back
+      const barIdx = n - 1 - (w * weekStep)
+      if(barIdx < 200) break  // need 200 bars for MA
+      const price = closes[barIdx]
+      const maWindow = closes.slice(barIdx - 200, barIdx)
+      const maThen = maWindow.reduce((a,b) => a+b, 0) / 200
+      if(price < maThen) weeksBelow++
+      else break  // stop at first week above MA (must be consecutive)
     }
 
     // Load saved turbo state
@@ -1176,7 +1198,7 @@ async function fetchTQQQSignal() {
       '<div style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:3px;background:'+(turboState==='normal'?'rgba(255,255,255,.05)':turboState==='arming'?'rgba(255,140,66,.15)':turboState==='armed'?'rgba(240,192,64,.2)':'rgba(0,214,143,.15)')+';color:'+(turboState==='normal'?'#555c6e':turboState==='arming'?'#ff8c42':turboState==='armed'?'#f0c040':'#00d68f')+'">'+(turboState==='normal'?'Normal':turboState==='arming'?'Arming':turboState==='armed'?'Armed':'Active')+'</div>' +
       '</div>' +
       (turboState==='arming'||turboState==='normal' ?
-        '<div style="font-size:10px;color:#555c6e;margin-bottom:4px">'+( turboState==='arming'?weeksBelow+' / 8 weeks below 200MA to arm':'0 / 8 — above 200MA, turbo not arming')+'</div>' +
+        '<div style="font-size:10px;color:#555c6e;margin-bottom:4px">'+( turboState==='arming'?weeksBelow+' / 8 weeks below 200MA to arm':'QQQ above 200MA — turbo not arming (needs 8 consecutive weeks below to arm)')+'</div>' +
         '<div style="height:8px;background:rgba(255,255,255,.06);border-radius:4px;overflow:hidden">' +
         '<div style="height:100%;border-radius:4px;background:'+(turboState==='arming'?'#ff8c42':'rgba(255,255,255,.08)')+';width:'+( turboState==='arming'?Math.round(weeksBelow/8*100):0)+'%;transition:width .4s"></div></div>'
       : turboState==='armed' ?
