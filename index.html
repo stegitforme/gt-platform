@@ -490,6 +490,34 @@ tr:hover td{background:#171b22;cursor:pointer}
         </div>
       </div>
     </div>
+    <!-- PORTFOLIO RISK SUMMARY -->
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-head" style="display:flex;align-items:center;justify-content:space-between">
+        <span class="card-title">Portfolio Risk</span>
+        <button class="btn btn-ghost" style="font-size:11px;padding:3px 9px" onclick="renderPortfolioRisk()">Refresh</button>
+      </div>
+      <div class="card-body" style="padding:12px">
+        <div id="port-risk-empty" style="font-size:12px;color:#555c6e;text-align:center;padding:8px">Save trades to see portfolio risk summary</div>
+        <div id="port-risk-body" style="display:none">
+          <div style="display:grid;grid-template-columns:72px 1fr 80px 90px 90px;gap:4px;margin-bottom:6px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e;padding:0 2px">
+            <div>Ticker</div><div>Strike · Expiry</div><div style="text-align:right">Contracts</div><div style="text-align:right;color:#ff8c42">½ATR Loss</div><div style="text-align:right;color:#ff4560">2x Exit Loss</div>
+          </div>
+          <div id="port-risk-rows"></div>
+          <div style="border-top:1px solid rgba(255,255,255,.07);margin-top:6px;padding-top:8px;display:grid;grid-template-columns:72px 1fr 80px 90px 90px;gap:4px;font-size:12px;font-weight:700;padding:8px 2px 4px">
+            <div style="color:#555c6e;grid-column:1/3">TOTAL</div>
+            <div style="text-align:right;color:#e8eaf0" id="port-total-cts">--</div>
+            <div style="text-align:right;color:#ff8c42" id="port-total-half">--</div>
+            <div style="text-align:right;color:#ff4560" id="port-total-full">--</div>
+          </div>
+          <div style="padding:8px 2px 2px;display:flex;gap:14px;flex-wrap:wrap;border-top:1px solid rgba(255,255,255,.07);margin-top:6px">
+            <div style="font-size:11px;color:#555c6e">Risk budget: <span id="port-budget" style="color:#f0c040;font-family:'SF Mono',monospace">--</span></div>
+            <div style="font-size:11px;color:#555c6e">Used: <span id="port-budget-used" style="color:#ff8c42;font-family:'SF Mono',monospace">--</span></div>
+            <div style="font-size:11px;color:#555c6e">Remaining: <span id="port-budget-left" style="color:#00d68f;font-family:'SF Mono',monospace">--</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="card">
       <div class="card-head">
         <span class="card-title">ATR Trade Levels</span>
@@ -504,13 +532,54 @@ tr:hover td{background:#171b22;cursor:pointer}
 
 <!-- &#9552;&#9552;&#9552; TRADE MANAGER &#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552; -->
 <div id="trades" class="trades-page">
-  <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
-    <button class="btn btn-gold" style="width:auto" onclick="openAddTrade()">+ New Trade</button>
-    <span id="trade-count" style="font-size:12px;color:#555c6e">0 open</span>
-    <span id="total-pnl-display" style="font-size:12px;color:#555c6e"></span>
-    <button id="pnl-refresh-btn" class="btn btn-ghost" style="font-size:11px;padding:4px 10px" onclick="refreshAllPnL()">Refresh P&amp;L</button>
-    <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px;margin-left:auto" onclick="clearAllTrades()">Clear all</button>
+
+  <!-- Sub-tabs: Open / Closed -->
+  <div style="display:flex;gap:0;margin-bottom:14px;border-bottom:1px solid rgba(255,255,255,.07)">
+    <button id="tm-tab-open" onclick="tmShowTab('open')" style="padding:8px 18px;background:transparent;border:none;border-bottom:2px solid #f0c040;color:#f0c040;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;margin-bottom:-1px">Open Trades</button>
+    <button id="tm-tab-closed" onclick="tmShowTab('closed')" style="padding:8px 18px;background:transparent;border:none;border-bottom:2px solid transparent;color:#555c6e;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;margin-bottom:-1px">Closed Trades</button>
   </div>
+
+  <!-- ── OPEN TRADES PANEL ───────────────────────────────────────── -->
+  <div id="tm-open-panel">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+      <button class="btn btn-ghost" style="width:auto;font-size:11px;padding:5px 11px" onclick="document.getElementById('fidelity-open-form').style.display=document.getElementById('fidelity-open-form').style.display==='none'?'block':'none'">⬇ Paste from Fidelity</button>
+      <button class="btn btn-ghost" style="width:auto;font-size:11px;padding:5px 11px" onclick="document.getElementById('bulk-form').style.display=document.getElementById('bulk-form').style.display==='none'?'block':'none'">⬇ Manual Bulk Import</button>
+      <button class="btn btn-gold" style="width:auto" onclick="openAddTrade()">+ New Trade</button>
+      <span id="trade-count" style="font-size:12px;color:#555c6e">0 open</span>
+      <span id="total-pnl-display" style="font-size:12px;color:#555c6e"></span>
+      <button id="pnl-refresh-btn" class="btn btn-ghost" style="font-size:11px;padding:4px 10px" onclick="refreshAllPnL()">Refresh P&amp;L</button>
+      <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px;margin-left:auto" onclick="clearAllTrades()">Clear all</button>
+    </div>
+
+    <!-- Fidelity Open Paste Form -->
+    <div id="fidelity-open-form" style="display:none;background:#111318;border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:14px;margin-bottom:12px">
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#f0c040;margin-bottom:6px">Paste Fidelity Open Positions</div>
+      <div style="font-size:11px;color:#555c6e;margin-bottom:8px;line-height:1.6">
+        In Fidelity → Accounts → select account → click <b style="color:#e8eaf0">Download</b> (CSV) → open in Excel → select all option rows → paste here.<br>
+        Smart dedup: existing trades are <b style="color:#00d68f">updated</b>, new ones added. ATR auto-fetched from Polygon.
+      </div>
+      <textarea id="fidelity-open-input" rows="6" style="width:100%;background:#0a0c0f;border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:8px;font-size:11px;color:#e8eaf0;font-family:'SF Mono',monospace;resize:vertical;outline:none;box-sizing:border-box" placeholder="Paste tab-separated Fidelity positions here...&#10;-NVDA260515C180  NVDA MAY 15 2026 $180 CALL  17  $21.00  ..."></textarea>
+      <div id="fidelity-open-status" style="font-size:11px;color:#555c6e;margin:6px 0;min-height:16px"></div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button class="btn btn-gold" onclick="runFidelityOpenSync()">Sync Positions + Fetch ATRs</button>
+        <button class="btn btn-ghost" onclick="document.getElementById('fidelity-open-form').style.display='none'" style="padding:8px 14px">Cancel</button>
+      </div>
+    </div>
+  <div id="bulk-form" style="display:none;background:#111318;border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:14px;margin-bottom:12px">
+    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#f0c040;margin-bottom:8px">Bulk Import Trades</div>
+    <div style="font-size:11px;color:#555c6e;margin-bottom:8px;line-height:1.6">
+      One trade per line: <span style="color:#e8eaf0;font-family:'SF Mono',monospace">TICKER, contracts, expiry, strike, cost</span><br>
+      Example: <span style="color:#00d68f;font-family:'SF Mono',monospace">LRCX, 1, May-15-2026, 230, 38.90</span><br>
+      ATR and entry price auto-fetch live from Polygon.
+    </div>
+    <textarea id="bulk-input" rows="8" style="width:100%;background:#0a0c0f;border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:8px;font-size:12px;color:#e8eaf0;font-family:'SF Mono',monospace;resize:vertical;outline:none;box-sizing:border-box" placeholder="LRCX, 1, May-15-2026, 230, 38.90&#10;NVDA, 2, May-15-2026, 150, 22.00&#10;PLTR, 3, Jun-20-2026, 120, 15.50"></textarea>
+    <div id="bulk-status" style="font-size:11px;color:#555c6e;margin:6px 0;min-height:16px"></div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="btn btn-gold" onclick="runBulkImport()">Import All Trades</button>
+      <button class="btn btn-ghost" onclick="document.getElementById('bulk-form').style.display='none'" style="padding:8px 14px">Cancel</button>
+    </div>
+  </div>
+
   <div class="card" id="add-form" style="display:none">
     <div class="card-head">
       <span class="card-title">Add Trade</span>
@@ -532,6 +601,45 @@ tr:hover td{background:#171b22;cursor:pointer}
     </div>
   </div>
   <div id="trades-list"></div>
+  </div><!-- end tm-open-panel -->
+
+  <!-- ── CLOSED TRADES PANEL ────────────────────────────────────────── -->
+  <div id="tm-closed-panel" style="display:none">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+      <button class="btn btn-ghost" style="width:auto;font-size:11px;padding:5px 11px" onclick="document.getElementById('fidelity-closed-form').style.display=document.getElementById('fidelity-closed-form').style.display==='none'?'block':'none'">⬇ Paste from Fidelity</button>
+      <span id="closed-trade-count" style="font-size:12px;color:#555c6e">0 closed trades</span>
+      <span id="closed-pnl-summary" style="font-size:12px;color:#555c6e"></span>
+      <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px;margin-left:auto;color:#ff4560;border-color:rgba(255,69,96,.3)" onclick="if(confirm('Clear all closed trades?')){CLOSED_TRADES=[];saveClosedTrades();renderClosedTrades()}">Clear all</button>
+    </div>
+
+    <!-- Fidelity Closed Paste Form -->
+    <div id="fidelity-closed-form" style="display:none;background:#111318;border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:14px;margin-bottom:12px">
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#f0c040;margin-bottom:6px">Paste Fidelity Closed Trade History</div>
+      <div style="font-size:11px;color:#555c6e;margin-bottom:8px;line-height:1.6">
+        In Fidelity → Accounts → History → Gains &amp; Losses → Download (CSV) → open in Excel → select all option rows → paste here.<br>
+        Format: Symbol(CUSIP) · Description · Date acquired · Date sold · Qty · Cost · Proceeds · ST G/L · LT G/L<br>
+        Duplicates skipped. ATR fetched at date of acquisition.
+      </div>
+      <textarea id="fidelity-closed-input" rows="6" style="width:100%;background:#0a0c0f;border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:8px;font-size:11px;color:#e8eaf0;font-family:'SF Mono',monospace;resize:vertical;outline:none;box-sizing:border-box" placeholder="Paste Fidelity closed trades here...&#10;AMD260515C220(7971239NH)  CALL (AMD) ...  4/14/26  4/16/26  1  $4,040.67  $5,886.20  $1,845.53  --"></textarea>
+      <div id="fidelity-closed-status" style="font-size:11px;color:#555c6e;margin:6px 0;min-height:16px"></div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button class="btn btn-gold" onclick="runFidelityClosedImport()">Import Closed Trades</button>
+        <button class="btn btn-ghost" onclick="document.getElementById('fidelity-closed-form').style.display='none'" style="padding:8px 14px">Cancel</button>
+      </div>
+    </div>
+
+    <!-- Stats bar -->
+    <div id="closed-stats-bar" style="display:none;background:#111318;border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:12px 16px;margin-bottom:12px;display:flex;gap:24px;flex-wrap:wrap">
+      <div style="font-size:11px;color:#555c6e">Total trades: <span id="cs-count" style="color:#e8eaf0;font-family:'SF Mono',monospace">0</span></div>
+      <div style="font-size:11px;color:#555c6e">Win rate: <span id="cs-winrate" style="color:#00d68f;font-family:'SF Mono',monospace">--</span></div>
+      <div style="font-size:11px;color:#555c6e">Total P&L: <span id="cs-total-pnl" style="font-family:'SF Mono',monospace">--</span></div>
+      <div style="font-size:11px;color:#555c6e">Avg win: <span id="cs-avg-win" style="color:#00d68f;font-family:'SF Mono',monospace">--</span></div>
+      <div style="font-size:11px;color:#555c6e">Avg loss: <span id="cs-avg-loss" style="color:#ff4560;font-family:'SF Mono',monospace">--</span></div>
+    </div>
+
+    <div id="closed-trades-list"></div>
+  </div><!-- end tm-closed-panel -->
+
 </div>
 
 <!-- &#9552;&#9552;&#9552; PORTFOLIO &#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552; -->
@@ -574,6 +682,7 @@ tr:hover td{background:#171b22;cursor:pointer}
         or drag &amp; drop CSV file here
       </div>
       <div id="port-import-status" style="margin-top:8px;font-size:12px;min-height:16px"></div>
+      <button id="port-sync-trades-btn" onclick="syncOptionsToTrades()" style="display:none;margin-top:8px;padding:6px 14px;background:rgba(77,166,255,.15);color:#4da6ff;border:1px solid rgba(77,166,255,.3);border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">→ Sync options to Trade Manager</button>
     </div>
   </div>
 
@@ -2208,6 +2317,11 @@ async function loadFromFirebase() {
       localStorage.setItem('gt_trades', JSON.stringify(TRADES))
       if(typeof renderTrades === 'function') renderTrades()
     }
+    // Closed trades
+    if(data.closed_trades && Array.isArray(data.closed_trades)) {
+      CLOSED_TRADES = data.closed_trades
+      localStorage.setItem('gt_closed_trades', JSON.stringify(CLOSED_TRADES))
+    }
 
     // Rebalancer accounts
     if(data.reb_accounts && Array.isArray(data.reb_accounts)) {
@@ -2305,6 +2419,506 @@ function loadRiskSettings() {
   if(a) { const el = document.getElementById('acct'); if(el) el.value = a }
   if(r) { const el = document.getElementById('riskpct'); if(el) el.value = r }
 }
+// ── TRADE MANAGER TAB SWITCHING ───────────────────────────────────────────────
+function tmShowTab(tab) {
+  const open   = document.getElementById('tm-open-panel')
+  const closed = document.getElementById('tm-closed-panel')
+  const btnO   = document.getElementById('tm-tab-open')
+  const btnC   = document.getElementById('tm-tab-closed')
+  if(tab === 'open') {
+    open.style.display   = 'block'
+    closed.style.display = 'none'
+    btnO.style.color = '#f0c040'; btnO.style.borderBottomColor = '#f0c040'
+    btnC.style.color = '#555c6e'; btnC.style.borderBottomColor = 'transparent'
+  } else {
+    open.style.display   = 'none'
+    closed.style.display = 'block'
+    btnO.style.color = '#555c6e'; btnO.style.borderBottomColor = 'transparent'
+    btnC.style.color = '#f0c040'; btnC.style.borderBottomColor = '#f0c040'
+    renderClosedTrades()
+  }
+}
+
+// ── FIDELITY OPEN SYNC RUNNER ─────────────────────────────────────────────────
+async function runFidelityOpenSync() {
+  const text = document.getElementById('fidelity-open-input').value.trim()
+  if(!text) return
+  const statusEl = document.getElementById('fidelity-open-status')
+  await syncOpenPositionsPaste(text, (msg, type) => {
+    statusEl.textContent = msg
+    statusEl.style.color = type === 'ok' ? '#00d68f' : type === 'err' ? '#ff4560' : '#f0c040'
+  })
+}
+
+// ── FIDELITY CLOSED IMPORT RUNNER ────────────────────────────────────────────
+async function runFidelityClosedImport() {
+  const text = document.getElementById('fidelity-closed-input').value.trim()
+  if(!text) return
+  const statusEl = document.getElementById('fidelity-closed-status')
+  await importClosedTradesPaste(text, (msg, type) => {
+    statusEl.textContent = msg
+    statusEl.style.color = type === 'ok' ? '#00d68f' : type === 'err' ? '#ff4560' : '#f0c040'
+  })
+}
+
+// ── RENDER CLOSED TRADES ──────────────────────────────────────────────────────
+function renderClosedTrades() {
+  const listEl = document.getElementById('closed-trades-list')
+  const countEl = document.getElementById('closed-trade-count')
+  const summaryEl = document.getElementById('closed-pnl-summary')
+  if(!listEl) return
+
+  if(!CLOSED_TRADES.length) {
+    listEl.innerHTML = '<div style="text-align:center;padding:32px;color:#555c6e;font-size:13px">No closed trades yet — paste Fidelity history above</div>'
+    if(countEl) countEl.textContent = '0 closed trades'
+    return
+  }
+
+  // Stats
+  const wins   = CLOSED_TRADES.filter(t => t.pnl > 0)
+  const losses = CLOSED_TRADES.filter(t => t.pnl <= 0)
+  const totalPnl = CLOSED_TRADES.reduce((s,t) => s + t.pnl, 0)
+  const avgWin  = wins.length   ? wins.reduce((s,t) => s+t.pnl, 0)   / wins.length   : 0
+  const avgLoss = losses.length ? losses.reduce((s,t) => s+t.pnl, 0) / losses.length : 0
+  const winRate = CLOSED_TRADES.length ? ((wins.length / CLOSED_TRADES.length)*100).toFixed(0) : 0
+
+  if(countEl) countEl.textContent = CLOSED_TRADES.length + ' closed trades'
+  if(summaryEl) summaryEl.textContent = '| Total P&L: ' + (totalPnl >= 0 ? '+' : '') + '$' + Math.round(totalPnl).toLocaleString()
+  summaryEl.style.color = totalPnl >= 0 ? '#00d68f' : '#ff4560'
+
+  // Stats bar
+  const sb = document.getElementById('closed-stats-bar')
+  if(sb) {
+    sb.style.display = 'flex'
+    document.getElementById('cs-count').textContent = CLOSED_TRADES.length
+    document.getElementById('cs-winrate').textContent = winRate + '%'
+    document.getElementById('cs-winrate').style.color = winRate >= 50 ? '#00d68f' : '#ff4560'
+    const pnlEl = document.getElementById('cs-total-pnl')
+    pnlEl.textContent = (totalPnl >= 0 ? '+' : '') + '$' + Math.round(totalPnl).toLocaleString()
+    pnlEl.style.color = totalPnl >= 0 ? '#00d68f' : '#ff4560'
+    document.getElementById('cs-avg-win').textContent  = wins.length   ? '+$' + Math.round(avgWin).toLocaleString()  : '--'
+    document.getElementById('cs-avg-loss').textContent = losses.length ? '-$' + Math.round(Math.abs(avgLoss)).toLocaleString() : '--'
+  }
+
+  // Table
+  const rows = CLOSED_TRADES.map(t => {
+    const pnlColor = t.pnl > 0 ? '#00d68f' : '#ff4560'
+    const pnlStr = (t.pnl > 0 ? '+' : '') + '$' + Math.round(t.pnl).toLocaleString()
+    const pnlPctStr = (t.pnlPct > 0 ? '+' : '') + t.pnlPct.toFixed(1) + '%'
+    return '<div style="display:grid;grid-template-columns:130px 80px 90px 90px 1fr 90px 90px 80px;gap:6px;padding:8px 6px;border-bottom:1px solid rgba(255,255,255,.04);font-size:11px;align-items:center">' +
+      '<div style="font-family:\'SF Mono\',monospace;font-weight:600;color:#f0c040">' + t.display + '</div>' +
+      '<div style="color:#555c6e">' + t.cts + ' ct' + (t.cts>1?'s':'') + '</div>' +
+      '<div style="color:#555c6e;font-size:10px">' + t.dateAcq + '</div>' +
+      '<div style="color:#555c6e;font-size:10px">' + t.dateSold + '</div>' +
+      '<div style="color:#555c6e;font-size:10px">' + (t.atr ? 'ATR $' + t.atr : '—') + '</div>' +
+      '<div style="text-align:right;font-family:\'SF Mono\',monospace;color:#555c6e">$' + t.cost.toFixed(2) + '</div>' +
+      '<div style="text-align:right;font-family:\'SF Mono\',monospace;color:' + pnlColor + '">' + pnlStr + '</div>' +
+      '<div style="text-align:right;font-family:\'SF Mono\',monospace;color:' + pnlColor + ';font-size:10px">' + pnlPctStr + '</div>' +
+    '</div>'
+  })
+
+  // Header
+  const header = '<div style="display:grid;grid-template-columns:130px 80px 90px 90px 1fr 90px 90px 80px;gap:6px;padding:6px 6px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e;border-bottom:1px solid rgba(255,255,255,.08)">' +
+    '<div>Trade</div><div>Qty</div><div>Entered</div><div>Closed</div><div>ATR</div><div style="text-align:right">Cost/ct</div><div style="text-align:right">P&L</div><div style="text-align:right">%</div></div>'
+
+  listEl.innerHTML = header + rows.join('')
+}
+
+
+// ── PORTFOLIO RISK SUMMARY ────────────────────────────────────────────────────
+function renderPortfolioRisk() {
+  const acct    = +document.getElementById('acct').value || 300000
+  const rp      = +document.getElementById('riskpct').value || 6
+  const delta   = (+document.getElementById('delta').value || 80) / 100
+  const baseRisk = acct * (rp/100)
+
+  const openTrades = TRADES.filter(t => t.status === 'open')
+
+  const emptyEl = document.getElementById('port-risk-empty')
+  const bodyEl  = document.getElementById('port-risk-body')
+  if(!openTrades.length) {
+    if(emptyEl) emptyEl.style.display = 'block'
+    if(bodyEl)  bodyEl.style.display  = 'none'
+    return
+  }
+  if(emptyEl) emptyEl.style.display = 'none'
+  if(bodyEl)  bodyEl.style.display  = 'block'
+
+  let totalHalf = 0, totalFull = 0, totalCts = 0
+
+  const rows = openTrades.map(t => {
+    const atr  = t.atr  || 0
+    const cts  = t.cts  || 1
+    const d    = delta  // use current delta setting
+    const half = 0.5 * atr * d * 100 * cts
+    const full = 2.0 * atr * d * 100 * cts
+    totalHalf += half
+    totalFull += full
+    totalCts  += cts
+
+    const strikeExp = [
+      t.strike ? '$' + t.strike : '',
+      t.desc   ? t.desc.replace(/^May-/,'May ').replace(/-2026/,'') : ''
+    ].filter(Boolean).join(' · ')
+
+    const halfColor = half > baseRisk * 0.5 ? '#ff4560' : half > baseRisk * 0.25 ? '#ff8c42' : '#e8eaf0'
+
+    return '<div style="display:grid;grid-template-columns:72px 1fr 80px 90px 90px;gap:4px;padding:5px 2px;border-bottom:1px solid rgba(255,255,255,.04);font-size:11px;align-items:center">' +
+      '<div style="font-family:\'SF Mono\',monospace;font-weight:600;color:#f0c040">' + t.ticker + '</div>' +
+      '<div style="color:#555c6e;font-size:10px">' + (strikeExp || '—') + '</div>' +
+      '<div style="text-align:right;font-family:\'SF Mono\',monospace;color:#e8eaf0">' + cts + (cts===1?' ct':' cts') + '</div>' +
+      '<div style="text-align:right;font-family:\'SF Mono\',monospace;color:' + halfColor + '">' + (half > 0 ? '-$'+Math.round(half).toLocaleString() : '—') + '</div>' +
+      '<div style="text-align:right;font-family:\'SF Mono\',monospace;color:#ff4560">' + (full > 0 ? '-$'+Math.round(full).toLocaleString() : '—') + '</div>' +
+    '</div>'
+  })
+
+  const rowsEl = document.getElementById('port-risk-rows')
+  if(rowsEl) rowsEl.innerHTML = rows.join('')
+
+  // Totals
+  const halfPct = ((totalHalf / acct) * 100).toFixed(1)
+  document.getElementById('port-total-cts').textContent  = totalCts + ' cts'
+  document.getElementById('port-total-half').textContent = totalHalf > 0 ? '-$' + Math.round(totalHalf).toLocaleString() : '--'
+  document.getElementById('port-total-full').textContent = totalFull > 0 ? '-$' + Math.round(totalFull).toLocaleString() : '--'
+
+  // Budget metrics
+  const budgetUsedPct = ((totalHalf / baseRisk) * 100).toFixed(0)
+  const budgetLeft    = Math.max(0, baseRisk - totalHalf)
+  document.getElementById('port-budget').textContent      = '$' + Math.round(baseRisk).toLocaleString() + ' (' + rp + '%)'
+  document.getElementById('port-budget-used').textContent = '$' + Math.round(totalHalf).toLocaleString() + ' (' + budgetUsedPct + '%)'
+  document.getElementById('port-budget-left').textContent = '$' + Math.round(budgetLeft).toLocaleString() + ' remaining'
+}
+
+
+// ── FIDELITY OPEN POSITIONS PASTE PARSER ─────────────────────────────────────
+// Handles tab-separated paste directly from Fidelity (no file needed)
+// Dedup key: OCC symbol (e.g. EMBJ260515C60)
+// Auto-fetches current ATR from Polygon after parsing
+
+function parseOCCSymbol(raw) {
+  // Strip leading dash and whitespace
+  const sym = raw.replace(/^[-\s]+/, '').trim()
+  // OCC format: TICKER YYMMDD C/P STRIKE (e.g. EMBJ260515C60, NVDA260515C00180000)
+  const m = sym.match(/^([A-Z]+)(\d{2})(\d{2})(\d{2})([CP])(\d+)$/)
+  if(!m) return null
+  const [, ticker, yy, mm, dd, cp, strikeRaw] = m
+  // Strike: old format is just digits (60 = $60), new OCC is 8 digits with 3 decimal places
+  const strike = strikeRaw.length === 8 ? parseInt(strikeRaw) / 1000 : parseInt(strikeRaw)
+  const months = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+  return {
+    occ:    sym,
+    ticker: ticker,
+    strike: strike,
+    type:   cp === 'C' ? 'Call' : 'Put',
+    expiry: months[parseInt(mm)] + '-' + dd + '-20' + yy,
+    expiryISO: '20' + yy + '-' + mm + '-' + dd,
+    display: ticker + ' $' + strike + ' ' + (cp === 'C' ? 'Call' : 'Put')
+  }
+}
+
+function parseFidelityOpenPaste(text) {
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l)
+  const clean = s => {
+    if(!s) return 0
+    return parseFloat(s.replace(/[$,%()\s]/g,'').replace(/,/g,'').replace(/^-/,n=>n)) || 0
+  }
+  const cleanPct = s => {
+    if(!s) return 0
+    const n = s.replace(/[%\s]/g,'').replace(/[()]/g,m => m==='('?'-':'')
+    return parseFloat(n) || 0
+  }
+
+  const results = []
+  const skipped = []
+
+  for(const line of lines) {
+    const cols = line.split('\t')
+    if(cols.length < 8) continue
+    // Must start with - (option) or be a recognizable OCC symbol
+    const rawSym = cols[0]?.trim()
+    if(!rawSym || (!rawSym.startsWith('-') && !rawSym.match(/^[A-Z]+\d{6}[CP]/))) continue
+
+    const parsed = parseOCCSymbol(rawSym)
+    if(!parsed) continue
+
+    const qty      = Math.abs(clean(cols[4]) || clean(cols[2]) || 1)
+    const lastPx   = clean(cols[3] || cols[5])
+    const curVal   = clean(cols[7] || cols[5])
+    const todayGL  = clean(cols[8] || cols[6])
+    const todayPct = cleanPct(cols[9] || cols[7])
+    const totalGL  = clean(cols[10] || cols[8])
+    const totalPct = cleanPct(cols[11] || cols[9])
+    const costTotal= clean(cols[13] || cols[11])
+    const avgCost  = clean(cols[14] || cols[12]) || (qty > 0 && costTotal > 0 ? costTotal/qty/100 : 0)
+
+    results.push({
+      occ:      parsed.occ,
+      ticker:   parsed.ticker,
+      strike:   parsed.strike,
+      type:     parsed.type,
+      expiry:   parsed.expiry,
+      expiryISO:parsed.expiryISO,
+      display:  parsed.display,
+      cts:      qty,
+      cost:     +avgCost.toFixed(2),
+      costTotal:+costTotal.toFixed(2),
+      curVal:   Math.round(curVal),
+      lastPx:   lastPx,
+      todayGL:  Math.round(todayGL),
+      todayPct: +todayPct.toFixed(2),
+      totalGL:  Math.round(totalGL),
+      totalPct: +totalPct.toFixed(2),
+    })
+  }
+  return { results, skipped }
+}
+
+// ── FIDELITY CLOSED TRADES PASTE PARSER ───────────────────────────────────────
+// Format: Symbol(CUSIP) | Description | Date acquired | Date sold | Qty | Cost | Proceeds | ST G/L | LT G/L
+// Dedup key: OCC symbol + date acquired (same symbol can have multiple lots)
+
+function parseFidelityClosedPaste(text) {
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l)
+  const clean = s => {
+    if(!s || s.trim() === '--' || s.trim() === ' --') return 0
+    return parseFloat(s.replace(/[$,\s]/g,'').replace(/[()]/g, m => m==='('?'-':'')) || 0
+  }
+  const parseDate = s => {
+    if(!s) return ''
+    // Convert 4/14/26 → Apr-14-2026
+    const m = s.trim().match(/^(\d+)\/(\d+)\/(\d+)$/)
+    if(!m) return s.trim()
+    const months = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+    const yr = m[3].length === 2 ? '20' + m[3] : m[3]
+    return months[parseInt(m[1])] + '-' + m[2].padStart(2,'0') + '-' + yr
+  }
+  const toISO = s => {
+    if(!s) return ''
+    const m = s.trim().match(/^(\d+)\/(\d+)\/(\d+)$/)
+    if(!m) return ''
+    const yr = m[3].length === 2 ? '20' + m[3] : m[3]
+    return yr + '-' + m[1].padStart(2,'0') + '-' + m[2].padStart(2,'0')
+  }
+
+  const results = []
+
+  for(const line of lines) {
+    const cols = line.split('\t')
+    if(cols.length < 7) continue
+    // Skip header row
+    if(cols[0].toLowerCase().includes('symbol') || cols[0].toLowerCase().includes('cusip')) continue
+
+    // Strip CUSIP from symbol: AMD260515C220(7971239NH) → AMD260515C220
+    const rawSym = cols[0].replace(/\(.*?\)/g,'').trim()
+    const parsed = parseOCCSymbol(rawSym)
+    if(!parsed) continue  // skip non-options (ETFs, stocks)
+
+    const dateAcq  = cols[2]?.trim()
+    const dateSold = cols[3]?.trim()
+    const qty      = Math.abs(clean(cols[4])) || 1
+    const costTotal= clean(cols[5])
+    const proceeds = clean(cols[6])
+    const stGL     = clean(cols[7])
+    const ltGL     = clean(cols[8])
+    const totalGL  = stGL + ltGL
+    const avgCost  = qty > 0 && costTotal > 0 ? costTotal / qty / 100 : 0
+
+    // Dedup key: OCC + acquired date (different lots on different days)
+    const dedupKey = parsed.occ + '|' + dateAcq
+
+    results.push({
+      occ:       parsed.occ,
+      dedupKey:  dedupKey,
+      ticker:    parsed.ticker,
+      strike:    parsed.strike,
+      type:      parsed.type,
+      expiry:    parsed.expiry,
+      display:   parsed.display,
+      cts:       qty,
+      cost:      +avgCost.toFixed(2),
+      costTotal: +costTotal.toFixed(2),
+      proceeds:  +proceeds.toFixed(2),
+      pnl:       +totalGL.toFixed(2),
+      pnlPct:    costTotal > 0 ? +((totalGL/costTotal)*100).toFixed(2) : 0,
+      dateAcq:   parseDate(dateAcq),
+      dateSold:  parseDate(dateSold),
+      dateAcqISO:toISO(dateAcq),
+      status:    'closed'
+    })
+  }
+  return results
+}
+
+// ── ATR FETCHER FOR IMPORTED TRADES ───────────────────────────────────────────
+// Fetches 14-day ATR for a ticker at a specific date (or current if no date)
+// Uses Polygon daily bars: calc ATR as avg of 14 daily true ranges
+
+async function fetchATRAtDate(ticker, dateISO) {
+  try {
+    // Get 20 days of bars ending at dateISO (for ATR14 we need 14+ bars)
+    const endDate = dateISO || new Date().toISOString().split('T')[0]
+    const startDate = new Date(new Date(endDate).getTime() - 30*864e5).toISOString().split('T')[0]
+    const url = '/v2/aggs/ticker/' + ticker + '/range/1/day/' + startDate + '/' + endDate + '?adjusted=true&sort=asc&limit=25'
+    const data = await apiGet(url)
+    if(!data || !data.results || data.results.length < 5) return 0
+
+    const bars = data.results
+    // Calculate true ranges
+    const trs = []
+    for(let i = 1; i < bars.length; i++) {
+      const high = bars[i].h, low = bars[i].l, prevClose = bars[i-1].c
+      trs.push(Math.max(high - low, Math.abs(high - prevClose), Math.abs(low - prevClose)))
+    }
+    // 14-day ATR = average of last 14 true ranges
+    const last14 = trs.slice(-14)
+    const atr = last14.reduce((a,b) => a+b, 0) / last14.length
+    return +atr.toFixed(2)
+  } catch(e) {
+    return 0
+  }
+}
+
+// Batch-fetch ATRs for a list of {ticker, dateISO} pairs
+// Returns {ticker: atr} map, deduped by ticker (uses most recent date)
+async function batchFetchATRs(items, onProgress) {
+  const seen = {}
+  const unique = []
+  items.forEach(item => {
+    if(!seen[item.ticker]) {
+      seen[item.ticker] = true
+      unique.push(item)
+    }
+  })
+
+  const results = {}
+  for(let i = 0; i < unique.length; i++) {
+    if(onProgress) onProgress(i+1, unique.length, unique[i].ticker)
+    const atr = await fetchATRAtDate(unique[i].ticker, unique[i].dateISO)
+    results[unique[i].ticker] = atr
+    // Small delay to avoid hammering API
+    if(i < unique.length-1) await new Promise(r => setTimeout(r, 150))
+  }
+  return results
+}
+
+// ── SYNC OPEN POSITIONS PASTE → TRADE MANAGER ─────────────────────────────────
+async function syncOpenPositionsPaste(text, statusCallback) {
+  const { results } = parseFidelityOpenPaste(text)
+  if(!results.length) {
+    if(statusCallback) statusCallback('No options positions found in pasted data', 'err')
+    return
+  }
+
+  if(statusCallback) statusCallback('Fetching ATRs for ' + results.length + ' positions...', 'loading')
+
+  // Fetch current ATR for each unique ticker
+  const atrMap = await batchFetchATRs(
+    results.map(r => ({ ticker: r.ticker, dateISO: null })),
+    (i, total, ticker) => {
+      if(statusCallback) statusCallback('Fetching ATR ' + i + '/' + total + ' (' + ticker + ')...', 'loading')
+    }
+  )
+
+  let added = 0, updated = 0, skipped = 0
+
+  results.forEach(r => {
+    // Dedup by OCC symbol
+    const existing = TRADES.find(t => t.occ === r.occ && t.status === 'open')
+    if(existing) {
+      // UPDATE existing — refresh current value, P&L, last price
+      existing.curVal   = r.curVal
+      existing.todayGL  = r.todayGL
+      existing.todayPct = r.todayPct
+      existing.totalGL  = r.totalGL
+      existing.totalPct = r.totalPct
+      existing.lastPx   = r.lastPx
+      existing.cts      = r.cts  // qty may have changed (partial close)
+      // Update ATR if we got one and existing doesn't have it
+      if(!existing.atr && atrMap[r.ticker]) existing.atr = atrMap[r.ticker]
+      updated++
+    } else {
+      // ADD new trade
+      TRADES.push({
+        id:       Date.now() + added,
+        occ:      r.occ,
+        ticker:   r.display,
+        strike:   r.strike,
+        type:     r.type,
+        desc:     r.expiry,
+        cts:      r.cts,
+        cost:     r.cost,
+        costTotal:r.costTotal,
+        entry:    0,
+        atr:      atrMap[r.ticker] || 0,
+        date:     new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}).replace(',',''),
+        notes:    'Imported from Fidelity',
+        status:   'open',
+        rolls:    [],
+        curVal:   r.curVal,
+        todayGL:  r.todayGL,
+        totalGL:  r.totalGL,
+        totalPct: r.totalPct,
+        lastPx:   r.lastPx
+      })
+      added++
+    }
+  })
+
+  saveTrades()
+  if(typeof renderTrades === 'function') renderTrades()
+  renderPortfolioRisk()
+  fbAutoSave(1500)
+
+  const msg = 'Synced: ' + added + ' new, ' + updated + ' updated' + (skipped ? ', ' + skipped + ' skipped' : '')
+  if(statusCallback) statusCallback(msg, 'ok')
+  setApi(msg + ' ✓', 'ok')
+}
+
+// ── IMPORT CLOSED TRADES PASTE ────────────────────────────────────────────────
+async function importClosedTradesPaste(text, statusCallback) {
+  const results = parseFidelityClosedPaste(text)
+  if(!results.length) {
+    if(statusCallback) statusCallback('No closed trades found in pasted data', 'err')
+    return
+  }
+
+  if(statusCallback) statusCallback('Fetching ATRs for closed trades...', 'loading')
+
+  // Fetch ATR at date of acquisition for each unique ticker
+  const atrMap = await batchFetchATRs(
+    results.map(r => ({ ticker: r.ticker, dateISO: r.dateAcqISO })),
+    (i, total, ticker) => {
+      if(statusCallback) statusCallback('Fetching ATR ' + i + '/' + total + ' (' + ticker + ')...', 'loading')
+    }
+  )
+
+  let added = 0, dupes = 0
+
+  results.forEach(r => {
+    // Dedup by OCC + acquired date
+    const exists = CLOSED_TRADES.find(t => t.dedupKey === r.dedupKey)
+    if(exists) { dupes++; return }
+
+    CLOSED_TRADES.push({
+      ...r,
+      atr:   atrMap[r.ticker] || 0,
+      id:    Date.now() + added
+    })
+    added++
+  })
+
+  // Sort by date sold desc
+  CLOSED_TRADES.sort((a,b) => new Date(b.dateSold) - new Date(a.dateSold))
+  saveClosedTrades()
+  if(typeof renderClosedTrades === 'function') renderClosedTrades()
+  fbAutoSave(1500)
+
+  const msg = added + ' closed trades imported' + (dupes ? ', ' + dupes + ' duplicates skipped' : '')
+  if(statusCallback) statusCallback(msg, 'ok')
+  setApi(msg + ' ✓', 'ok')
+}
+
+
 function calc() {
   saveRiskSettings()
   const acct   = +document.getElementById('acct').value || 300000
@@ -2337,6 +2951,7 @@ function calc() {
   document.getElementById('m-g30').textContent  = g30 > 0 ? '+$'+Math.round(g30).toLocaleString() : '--'
 
   renderLevels(entry, atr)
+  renderPortfolioRisk()
 }
 
 function renderLevels(entry, atr) {
@@ -2611,6 +3226,89 @@ function calcEM() {
   dnEl.style.cssText = 'flex:1;padding:7px;text-align:center;border-radius:6px;font-family:\'SF Mono\',monospace;font-size:12px;font-weight:500;background:rgba(255,69,96,.1);color:#ff4560;border:1px solid rgba(255,69,96,.3)'
 }
 
+// ── BULK TRADE IMPORT ─────────────────────────────────────────────────────────
+async function runBulkImport() {
+  const raw = document.getElementById('bulk-input').value.trim()
+  if(!raw) return
+  const statusEl = document.getElementById('bulk-status')
+  const lines = raw.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('//') && !l.startsWith('#'))
+  if(!lines.length) return
+
+  statusEl.style.color = '#f0c040'
+  statusEl.textContent = 'Parsing ' + lines.length + ' trades...'
+
+  const KEY = localStorage.getItem('gt_api_key') || ''
+  let imported = 0, failed = []
+
+  for(let i = 0; i < lines.length; i++) {
+    const parts = lines[i].split(',').map(s => s.trim())
+    if(parts.length < 2) { failed.push(lines[i] + ' (bad format)'); continue }
+
+    const ticker  = parts[0].toUpperCase()
+    const cts     = parseInt(parts[1]) || 1
+    const expiry  = parts[2] || 'May-15-2026'
+    const strike  = parseFloat(parts[3]) || 0
+    const optcost = parseFloat(parts[4]) || 0
+
+    statusEl.textContent = 'Fetching ' + ticker + ' (' + (i+1) + '/' + lines.length + ')...'
+
+    // Fetch live price + ATR from Polygon
+    let entryPrice = 0, atr = 0
+    try {
+      if(KEY) {
+        const today = new Date()
+        const from  = new Date(today - 100*864e5).toISOString().split('T')[0]
+        const to    = today.toISOString().split('T')[0]
+        const url   = 'https://api.polygon.io/v2/aggs/ticker/' + ticker + '/range/1/day/' + from + '/' + to + '?adjusted=true&sort=asc&limit=90&apiKey=' + KEY
+        const r     = await fetch(url)
+        const d     = await r.json()
+        if(d.results && d.results.length >= 14) {
+          const bars = d.results
+          entryPrice = bars[bars.length-1].c
+          // ATR(14)
+          let atrSum = 0
+          for(let j = bars.length-14; j < bars.length; j++) {
+            atrSum += bars[j].h - bars[j].l
+          }
+          atr = +(atrSum / 14).toFixed(2)
+        }
+      }
+    } catch(e) {}
+
+    // Build trade object
+    const trade = {
+      id:     Date.now() + i,
+      ticker: ticker,
+      desc:   expiry,
+      cts:    cts,
+      cost:   optcost,
+      entry:  entryPrice,
+      atr:    atr,
+      strike: strike,
+      date:   new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}).replace(',',''),
+      notes:  'Bulk imported',
+      status: 'open',
+      rolls:  []
+    }
+    TRADES.push(trade)
+    imported++
+
+    // Small delay to avoid rate limiting
+    if(i < lines.length-1) await new Promise(r => setTimeout(r, 400))
+  }
+
+  saveTrades()
+  renderTrades()
+  renderPortfolioRisk()
+  fbAutoSave(1000)
+
+  document.getElementById('bulk-form').style.display = 'none'
+  statusEl.style.color = '#00d68f'
+  statusEl.textContent = '✓ Imported ' + imported + ' trades' + (failed.length ? ' | Failed: ' + failed.join(', ') : '')
+  setApi('Bulk imported ' + imported + ' trades', 'ok')
+}
+
+
 function goSaveAsTrade() {
   show('trades', document.querySelectorAll('.nav button')[3])
   openAddTrade()
@@ -2619,6 +3317,12 @@ function goSaveAsTrade() {
 // -- TRADE MANAGER =================================
 let TRADES = []
 try { TRADES = JSON.parse(localStorage.getItem('gt_trades') || '[]') } catch(e) { TRADES = [] }
+let CLOSED_TRADES = []
+try { CLOSED_TRADES = JSON.parse(localStorage.getItem('gt_closed_trades') || '[]') } catch(e) { CLOSED_TRADES = [] }
+function saveClosedTrades() {
+  try { localStorage.setItem('gt_closed_trades', JSON.stringify(CLOSED_TRADES)) } catch(e) {}
+}
+setTimeout(renderPortfolioRisk, 1000)
 
 function saveTrades() {
   try { localStorage.setItem('gt_trades', JSON.stringify(TRADES)) } catch(e) {}
@@ -2668,6 +3372,7 @@ function saveTrade() {
   saveTrades()
   document.getElementById('add-form').style.display = 'none'
   renderTrades()
+  renderPortfolioRisk()
   fbAutoSave(1000)  // sync to Firebase
 }
 
@@ -3065,6 +3770,9 @@ function parseFidelityCSV(text) {
     const pnl   = clean(row[iTotal])
     const pnlP  = cleanPct(row[iTotalP])
     const cost  = clean(row[iCost])
+    // iCost is Cost Basis Total; avg cost per contract = Cost Basis Total / qty / 100
+    const avgCost = qty > 0 ? +(cost / qty / 100).toFixed(2) : 0
+    let strikeNum = 0
     
     // Detect options: symbol starts with - or contains option pattern
     const isOption = sym.startsWith('-') || /[CP]\d{8}[CP]\d{8}/.test(sym) || /\d{6}[CP]\d{8}/.test(sym)
@@ -3076,14 +3784,16 @@ function parseFidelityCSV(text) {
     
     if(isOption) {
       // Try to parse from description first
-      const optMatch = desc.match(/^(\w+)\s+(\w+)\s+(\d+)\s+(\d+)\s+\$(\d+(?:\.\d+)?)\s+(CALL|PUT)/i)
+      // Parse option description: handles both "NVDA MAY 15 26 $180 CALL" and "NVDA MAY 15 2026 $180 CALL"
+      const optMatch = desc.match(/^(\w+)\s+(\w+)\s+(\d+),?\s+(\d{2,4})\s+\$(\d+(?:\.\d+)?)\s+(CALL|PUT)/i)
       if(optMatch) {
-        const [,ticker,,day,yr,strike,type] = optMatch
-        const mon = optMatch[2]
-        const t = type[0].toUpperCase() === 'C' ? 'C' : 'P'
+        const [,ticker,mon,day,yr,strike,cptype] = optMatch
+        const t = cptype[0].toUpperCase() === 'C' ? 'C' : 'P'
         const strikeFmt = parseFloat(strike) % 1 === 0 ? parseInt(strike) : parseFloat(strike)
-        display = ticker + ' ' + strikeFmt + t
-        expiry = mon.substring(0,3) + '-' + yr.substring(2)
+        strikeNum = strikeFmt
+        const yrShort = yr.length === 4 ? yr.substring(2) : yr
+        display = ticker + ' $' + strikeFmt + ' ' + cptype.charAt(0).toUpperCase() + cptype.slice(1).toLowerCase()
+        expiry = mon.substring(0,3) + '-' + day + '-20' + yrShort
         contracts = qty
       } else {
         // Fall back: parse from OCC symbol e.g. NVDA260515C00180000
@@ -3113,8 +3823,10 @@ function parseFidelityCSV(text) {
       pct:     +pnlP.toFixed(2),
       today:   Math.round(today),
       todayPct:+todayP.toFixed(2),
+      cost:    +avgCost.toFixed(2),  // avg cost basis = original premium per contract
+      strike:  strikeNum || 0,       // parsed strike price
       type:    isOption ? 'option' : 'stock',
-      gt:      isOption ? true : false,  // options default to GT, equities to long-term
+      gt:      isOption ? true : false,
       raw:     sym,
       desc:    desc
     })
@@ -3124,6 +3836,60 @@ function parseFidelityCSV(text) {
   
   return { positions, totalVal, totalPnl, totalToday, count: positions.length }
 }
+
+// Sync options positions from portfolio into Trade Manager
+function syncOptionsToTrades() {
+  const options = POSITIONS.filter(p => p.type === 'option')
+  if(!options.length) return
+  
+  let added = 0, skipped = 0
+  
+  options.forEach(p => {
+    // Check if already in trades (match by ticker display + expiry)
+    const exists = TRADES.find(t => 
+      t.ticker === p.t && t.desc === p.e && t.status === 'open'
+    )
+    if(exists) { skipped++; return }
+    
+    // Build trade from portfolio position
+    const trade = {
+      id:     Date.now() + added,
+      ticker: p.t,
+      desc:   p.e || '',
+      cts:    p.c || 1,
+      cost:   p.cost || 0,       // avg cost basis = original premium
+      strike: p.strike || 0,
+      entry:  0,                  // stock entry price unknown from CSV
+      atr:    0,                  // ATR unknown from CSV -- user can fill in
+      date:   new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}).replace(',',''),
+      notes:  'Imported from Fidelity CSV',
+      status: 'open',
+      rolls:  [],
+      // Live data from portfolio
+      currentVal: p.val,
+      pnl:    p.pnl,
+      pct:    p.pct
+    }
+    TRADES.push(trade)
+    added++
+  })
+  
+  saveTrades()
+  renderPortfolioRisk()
+  
+  const btn = document.getElementById('port-sync-trades-btn')
+  if(btn) {
+    btn.textContent = '✓ Synced ' + added + ' trades' + (skipped ? ' (' + skipped + ' already existed)' : '')
+    btn.style.color = '#00d68f'
+    btn.style.borderColor = 'rgba(0,214,143,.3)'
+    btn.style.background = 'rgba(0,214,143,.1)'
+    setTimeout(() => { btn.style.display = 'none' }, 5000)
+  }
+  
+  setApi('Synced ' + added + ' options to Trade Manager ✓', 'ok')
+  fbAutoSave(1000)
+}
+
 
 function importCSV(input) {
   const file = input.files && input.files[0]
@@ -3149,8 +3915,21 @@ function importCSV(input) {
       // Update last import label
       document.getElementById('port-last-import').textContent = 'Last import: ' + saved.savedAt
       
-      status.textContent = 'Imported ' + result.count + ' positions from ' + file.name
+      // Count options positions
+      const optionsCount = result.positions.filter(p => p.type === 'option').length
+      const syncMsg = optionsCount > 0 ? ` — ${optionsCount} options found. ` : ''
+      
+      status.textContent = 'Imported ' + result.count + ' positions' + syncMsg
       status.style.color = '#00d68f'
+      
+      // If there are options, show sync-to-trades button
+      if(optionsCount > 0) {
+        const syncBtn = document.getElementById('port-sync-trades-btn')
+        if(syncBtn) {
+          syncBtn.style.display = 'inline-block'
+          syncBtn.textContent = '→ Sync ' + optionsCount + ' options to Trade Manager'
+        }
+      }
       
       renderPortfolio()
       
