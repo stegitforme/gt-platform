@@ -683,7 +683,6 @@ const OV = {
   RBA:{r:110,fg:22.0,s:'Industrials',v:1178345,earn:false},
 }
 
-var LIVE_PRICES={}
 const WIDE_SPREADS = new Set() // Spread filtering uses live Polygon data
 const BULL_SECTORS = new Set(['Financials','Materials','Real Estate','Industrials','Technology','Tech','Communication','Discretionary','Staples','Consumer Staples','Energy'])
 
@@ -911,10 +910,15 @@ async function fetchTQQQSignal() {
   try {
     // Need 200+ trading days for 200MA  fetch 300 calendar days
     const to   = new Date().toISOString().split('T')[0]
-    const from = new Date(Date.now()-300*864e5).toISOString().split('T')[0]
-    const d = await apiGet('/v2/aggs/ticker/QQQ/range/1/day/'+from+'/'+to+'?adjusted=true&sort=asc&limit=220')
-
-    if(!d || !d.results || d.results.length < 30) throw new Error('Need more QQQ history')
+    const from = new Date(Date.now()-400*864e5).toISOString().split('T')[0]
+    let d = await apiGet('/v2/aggs/ticker/QQQ/range/1/day/'+from+'/'+to+'?adjusted=true&sort=asc&limit=220')
+    // Retry once after 15s if rate limited (empty result)
+    if(!d || !d.results || !d.results.length) {
+      if(body) body.innerHTML = '<div style="font-size:12px;color:#ff8c42;text-align:center;padding:8px">Rate limited -- retrying in 15s...</div>'
+      await new Promise(function(r){setTimeout(r,15000)})
+      d = await apiGet('/v2/aggs/ticker/QQQ/range/1/day/'+from+'/'+to+'?adjusted=true&sort=asc&limit=220')
+    }
+    if(!d || !d.results || d.results.length < 5) throw new Error('Need more QQQ history -- check API key and rate limits')
 
     const bars   = d.results
     const closes = bars.map(b => b.c)
@@ -934,27 +938,6 @@ async function fetchTQQQSignal() {
     const variance = returns.reduce((a,b) => a + Math.pow(b-mean,2), 0) / (returns.length-1)
     const dailyVol = Math.sqrt(variance)
     const annualVol = +(dailyVol * Math.sqrt(252) * 100).toFixed(1)
-
-
-    // -- TURBO MODE --
-    var wStep=5,wkCloses=[]
-    for(var wi=wStep;wi<n;wi+=wStep)wkCloses.push(closes[wi])
-    var wkBelow=0
-    for(var wi2=wkCloses.length-1;wi2>=0;wi2--){var slE=wi2*wStep,slS=Math.max(0,slE-200),maThen=closes.slice(slS,slE).reduce(function(a,b){return a+b},0)/(slE-slS);if(wkCloses[wi2]<maThen)wkBelow++;else break}
-    var tState='normal',tWeek=0,tBar=0
-    try{var ts=JSON.parse(localStorage.getItem('gt_turbo_state')||'{}')
-      tState=ts.state||'normal';tWeek=ts.week||0;tBar=ts.startBar||0}catch(e){}
-    if(aboveMa){if(tState==='armed'){tState='active';tWeek=1;tBar=n}
-      else if(tState==='active'){tWeek=Math.min(12,Math.round((n-tBar)/wStep)+1);if(tWeek>=12){tState='normal';tWeek=0;tBar=0}}
-      else if(tState==='arming'){tState='normal';tWeek=0}}
-    else{if(tState==='active'){tState='normal';tWeek=0;tBar=0}
-      else{tState=wkBelow>=8?'armed':'arming'}}
-    localStorage.setItem('gt_turbo_state',JSON.stringify({state:tState,week:tWeek,startBar:tBar}))
-    var tLabel='',tBadge='',tColor='#555c6e'
-    if(tState==='arming'){tLabel='| Arming '+wkBelow+'/8wks';tBadge='Arming '+wkBelow+'/8wks';tColor='#ff8c42'}
-    else if(tState==='armed'){tLabel='| TURBO ARMED';tBadge='TURBO ARMED';tColor='#f0c040'}
-    else if(tState==='active'){tLabel='| TURBO Wk'+tWeek+'/12';tBadge='TURBO Wk'+tWeek+'/12';tColor='#00d68f'}
-    // -- END TURBO MODE --
 
     // Vol(35%) + 200MA signal
     const VOL_TARGET = 35
@@ -1014,7 +997,6 @@ async function fetchTQQQSignal() {
           '</div>' +
         '</div>' +
       '</div>' +
-      '<div style="margin-bottom:8px">'+(tBadge?'<span style="background:'+tColor+';color:#0a0c0f;font-size:11px;font-weight:700;padding:3px 10px;border-radius:4px;margin-right:8px">'+tBadge+'</span>':'')+'<span style="font-size:11px;color:#555c6e">Turbo arms after 8wks below 200MA</span></div>'+
       '<div style="font-size:11px;color:#555c6e">Based on '+n+' trading days of QQQ data �. 200MA uses '+ma200window+' days �. Vol uses '+vol20window+' days �. Run every Friday before market close</div>'
 
     if(body) body.innerHTML = html
@@ -1365,7 +1347,6 @@ async function fetchScreenerPrices(tickers) {
           cell.innerHTML = '<span style="color:#e8eaf0">$'+bar.c.toFixed(2)+'</span>' +
             '<div style="font-size:10px;color:'+cc+'">'+(chg>=0?'+':'')+(chg*100).toFixed(1)+'%</div>'
         }
-        if(!LIVE_PRICES[t])LIVE_PRICES[t]={};LIVE_PRICES[t].price=bar.c;if(bar.h&&bar.l){var sp2=Math.min(bar.h-bar.l,bar.c*0.015);LIVE_PRICES[t].bid=+(bar.c-sp2/2).toFixed(2);LIVE_PRICES[t].ask=+(bar.c+sp2/2).toFixed(2)}
         fetched++
       }
     } catch(e) {}
@@ -1381,8 +1362,8 @@ async function fetchScreenerPrices(tickers) {
 function toggleSpreadType(){var el=document.getElementById("f-spread-type");if(!el)return;if(el.textContent.trim()==="$"){el.textContent="%";var i=document.getElementById("f-spread");if(i&&+i.value<=2)i.value="10"}else{el.textContent="$";var i=document.getElementById("f-spread");if(i&&+i.value>=5)i.value="0.50"}runFilter()}
 function resetFilters() {
   document.getElementById('f-sig').value = 100
-  document.getElementById('f-fg-min').value = 0
-  document.getElementById('f-fg-max').value = 100
+  document.getElementById('f-fg-min').value = 15
+  document.getElementById('f-fg-max').value = 75
   document.getElementById('f-spread').value = 0.50
   document.getElementById('f-oi').value = 250
   document.getElementById('f-vol').value = 1000000
