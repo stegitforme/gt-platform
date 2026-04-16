@@ -8,36 +8,36 @@
       "earn": false
     },
     "NVDA": {
-      "r": 878.23,
-      "fg": 3.8,
+      "r": 978,
+      "fg": 1.2,
       "s": "Tech",
       "v": 169287470,
       "earn": false
     },
     "GGAL": {
-      "r": 676.42,
-      "fg": 0.59,
+      "r": 681.09,
+      "fg": 0.49,
       "s": "Financials",
       "v": 1190752,
       "earn": false
     },
     "IBKR": {
-      "r": 694.46,
-      "fg": 3.42,
+      "r": 727.91,
+      "fg": 3.36,
       "s": "Financials",
       "v": 4745581,
       "earn": true
     },
     "HWM": {
-      "r": 534.38,
-      "fg": 0.74,
+      "r": 524.66,
+      "fg": 9,
       "s": "Industrials",
       "v": 2240168,
       "earn": false
     },
     "TPR": {
-      "r": 512.94,
-      "fg": 0.6,
+      "r": 516.52,
+      "fg": 0.33,
       "s": "Discretionary",
       "v": 1870429,
       "earn": false
@@ -50,15 +50,15 @@
       "earn": false
     },
     "WSM": {
-      "r": 388.92,
-      "fg": 0.17,
+      "r": 387.77,
+      "fg": 9,
       "s": "Discretionary",
       "v": 1389138,
       "earn": false
     },
     "AGI": {
-      "r": 358.05,
-      "fg": 1.22,
+      "r": 346.87,
+      "fg": 9,
       "s": "Materials",
       "v": 3744467,
       "earn": false
@@ -71,15 +71,15 @@
       "earn": false
     },
     "DECK": {
-      "r": 304.65,
-      "fg": 9,
+      "r": 307.77,
+      "fg": 0.98,
       "s": "Discretionary",
       "v": 2103791,
       "earn": false
     },
     "UMC": {
-      "r": 294.42,
-      "fg": 9,
+      "r": 306.6,
+      "fg": 3.75,
       "s": "Tech",
       "v": 8520543,
       "earn": false
@@ -92,15 +92,15 @@
       "earn": false
     },
     "DB": {
-      "r": 292.2,
-      "fg": 2.81,
+      "r": 295.8,
+      "fg": 9,
       "s": "Financials",
       "v": 3772984,
       "earn": false
     },
     "FUTU": {
-      "r": 289.28,
-      "fg": 3.47,
+      "r": 298.46,
+      "fg": 1.78,
       "s": "Financials",
       "v": 1592163,
       "earn": true
@@ -113,14 +113,14 @@
       "earn": true
     },
     "AMD": {
-      "r": 288.62,
-      "fg": 3.34,
+      "r": 303.22,
+      "fg": 1.2,
       "s": "Tech",
       "v": 33249634,
       "earn": false
     },
     "JCI": {
-      "r": 246.8,
+      "r": 233.77,
       "fg": 9,
       "s": "Industrials",
       "v": 3771000,
@@ -134,8 +134,8 @@
       "earn": true
     },
     "CAT": {
-      "r": 229.25,
-      "fg": 0.32,
+      "r": 213.56,
+      "fg": 9,
       "s": "Industrials",
       "v": 2505655,
       "earn": true
@@ -148,15 +148,15 @@
       "earn": false
     },
     "CVNA": {
-      "r": 240.28,
-      "fg": 4.16,
+      "r": 243.33,
+      "fg": 9,
       "s": "Discretionary",
       "v": 2676380,
       "earn": false
     },
     "GE": {
-      "r": 217.29,
-      "fg": 1.96,
+      "r": 215.9,
+      "fg": 9,
       "s": "Industrials",
       "v": 5479466,
       "earn": false
@@ -190,7 +190,7 @@
       "earn": true
     },
     "TT": {
-      "r": 192.78,
+      "r": 185.77,
       "fg": 9,
       "s": "Industrials",
       "v": 1279315,
@@ -211,22 +211,22 @@
       "earn": false
     },
     "CRH": {
-      "r": 181.97,
-      "fg": 0.12,
+      "r": 179.04,
+      "fg": 9,
       "s": "Materials",
       "v": 5666588,
       "earn": false
     },
     "TSM": {
-      "r": 198.25,
-      "fg": 2.79,
+      "r": 198.89,
+      "fg": 9,
       "s": "Tech",
       "v": 13397132,
       "earn": false
     },
     "KKR": {
-      "r": 180.76,
-      "fg": 2.33,
+      "r": 196.6,
+      "fg": 3.41,
       "s": "Financials",
       "v": 7164758,
       "earn": false
@@ -246,8 +246,8 @@
       "earn": false
     },
     "RY": {
-      "r": 174.91,
-      "fg": 0.71,
+      "r": 177.12,
+      "fg": 0.6,
       "s": "Financials",
       "v": 1195220,
       "earn": false
@@ -260,8 +260,8 @@
       "earn": true
     },
     "ING": {
-      "r": 172.62,
-      "fg": 0.65,
+      "r": 174.62,
+      "fg": 0.51,
       "s": "Financials",
       "v": 3489656,
       "earn": false
@@ -281,22 +281,22 @@
       "earn": false
     },
     "APG": {
-      "r": 160.6,
-      "fg": 1.43,
+      "r": 158,
+      "fg": 8,
       "s": "Industrials",
       "v": 3010089,
       "earn": false
     },
     "EWBC": {
-      "r": 154.55,
-      "fg": 0.41,
+      "r": 153.9,
+      "fg": 8,
       "s": "Financials",
       "v": 1184271,
       "earn": false
     },
     "SATS": {
-      "r": 156.18,
-      "fg": 3.92,
+      "r": 164.01,
+      "fg": 0.71,
       "s": "Communication",
       "v": 7541362,
       "earn": false
@@ -309,21 +309,21 @@
       "earn": false
     },
     "SAN": {
-      "r": 151.14,
-      "fg": 1.95,
+      "r": 152.54,
+      "fg": 9,
       "s": "Financials",
       "v": 15232881,
       "earn": false
     },
     "AEM": {
-      "r": 143.87,
-      "fg": 1.18,
+      "r": 136.64,
+      "fg": 9,
       "s": "Materials",
       "v": 2792401,
       "earn": false
     },
     "VMC": {
-      "r": 140.24,
+      "r": 136.15,
       "fg": 9,
       "s": "Materials",
       "v": 1433335,
@@ -337,21 +337,21 @@
       "earn": false
     },
     "MU": {
-      "r": 212.27,
-      "fg": 9.17,
+      "r": 230.54,
+      "fg": 9,
       "s": "Tech",
       "v": 45677579,
       "earn": false
     },
     "NEM": {
-      "r": 138.51,
-      "fg": 2.4,
+      "r": 126.95,
+      "fg": 9,
       "s": "Materials",
       "v": 10898399,
       "earn": false
     },
     "SCCO": {
-      "r": 134.09,
+      "r": 120.44,
       "fg": 9,
       "s": "Materials",
       "v": 1785575,
@@ -365,8 +365,8 @@
       "earn": true
     },
     "RGLD": {
-      "r": 122.87,
-      "fg": 2.67,
+      "r": 124.55,
+      "fg": 9,
       "s": "Materials",
       "v": 1200799,
       "earn": false
@@ -379,49 +379,49 @@
       "earn": false
     },
     "WMT": {
-      "r": 113.91,
-      "fg": 0.39,
+      "r": 113.77,
+      "fg": 9,
       "s": "Staples",
       "v": 19249263,
       "earn": true
     },
     "NWG": {
-      "r": 119.59,
-      "fg": 1.61,
+      "r": 120.23,
+      "fg": 9,
       "s": "Financials",
       "v": 4414653,
       "earn": false
     },
     "RBA": {
-      "r": 110.48,
-      "fg": 0.31,
+      "r": 111.81,
+      "fg": 0.39,
       "s": "Industrials",
       "v": 1178345,
       "earn": false
     },
     "RKLB": {
       "r": 1094.11,
-      "fg": 2.27,
+      "fg": 1.91,
       "s": "Industrials",
       "v": 1000000,
       "earn": false
     },
     "ORCL": {
       "r": 297.15,
-      "fg": 4.74,
+      "fg": 4.18,
       "s": "Technology",
       "v": 1000000,
       "earn": false
     },
     "CG": {
       "r": 170.75,
-      "fg": 4.04,
+      "fg": 1.7,
       "s": "Financials",
       "v": 1000000,
       "earn": false
     },
     "BE": {
-      "r": 165.2,
+      "r": 252.34,
       "fg": 9,
       "s": "Industrials",
       "v": 1000000,
@@ -429,7 +429,7 @@
     },
     "RJF": {
       "r": 144.92,
-      "fg": 1.9,
+      "fg": 1.66,
       "s": "Financials",
       "v": 1000000,
       "earn": false
@@ -449,15 +449,15 @@
       "earn": false
     },
     "BX": {
-      "r": 114.79,
-      "fg": 3.7,
+      "r": 126.28,
+      "fg": 3.06,
       "s": "Financials",
       "v": 1000000,
       "earn": false
     },
     "AVGO": {
-      "r": 105.33,
-      "fg": 0.27,
+      "r": 163.78,
+      "fg": 4.19,
       "s": "Technology",
       "v": 1000000,
       "earn": false
@@ -470,7 +470,7 @@
       "earn": false
     },
     "JPM": {
-      "r": 105.18,
+      "r": 100.37,
       "fg": 8,
       "s": "Financials",
       "v": 1000000,
@@ -478,7 +478,7 @@
     },
     "KT": {
       "r": 104.75,
-      "fg": 0.89,
+      "fg": 9,
       "s": "Communication",
       "v": 1000000,
       "earn": false
@@ -492,7 +492,7 @@
     },
     "CP": {
       "r": 103.78,
-      "fg": 0.93,
+      "fg": 9,
       "s": "Industrials",
       "v": 1000000,
       "earn": false
@@ -505,15 +505,15 @@
       "earn": false
     },
     "NSC": {
-      "r": 99.88,
-      "fg": 0.72,
+      "r": 99.4,
+      "fg": 9,
       "s": "Industrials",
       "v": 1000000,
       "earn": false
     },
     "FOXA": {
-      "r": 91.14,
-      "fg": 1.54,
+      "r": 93.44,
+      "fg": 0.39,
       "s": "Communication",
       "v": 1000000,
       "earn": false
@@ -526,43 +526,43 @@
       "earn": false
     },
     "COF": {
-      "r": 87.62,
-      "fg": 1.16,
+      "r": 91.83,
+      "fg": 1.57,
       "s": "Financials",
       "v": 1000000,
       "earn": false
     },
     "PCAR": {
-      "r": 87.23,
+      "r": 81.14,
       "fg": 9,
       "s": "Industrials",
       "v": 1000000,
       "earn": false
     },
     "GOOGL": {
-      "r": 86.43,
-      "fg": 3.61,
+      "r": 101.06,
+      "fg": 1.26,
       "s": "Communication",
       "v": 1000000,
       "earn": false
     },
     "DOV": {
-      "r": 85.9,
+      "r": 82.93,
       "fg": 9,
       "s": "Industrials",
       "v": 1000000,
       "earn": false
     },
     "GM": {
-      "r": 85.31,
-      "fg": 3.42,
+      "r": 84.32,
+      "fg": 9,
       "s": "Discretionary",
       "v": 1000000,
       "earn": false
     },
     "SCHW": {
-      "r": 84.45,
-      "fg": 1.64,
+      "r": 90.13,
+      "fg": 1.92,
       "s": "Financials",
       "v": 1000000,
       "earn": false
@@ -575,43 +575,43 @@
       "earn": false
     },
     "LSCC": {
-      "r": 82.15,
-      "fg": 2.83,
+      "r": 77.6,
+      "fg": 9,
       "s": "Technology",
       "v": 1000000,
       "earn": false
     },
     "BNS": {
-      "r": 80.65,
-      "fg": 1.03,
+      "r": 83.04,
+      "fg": 1.18,
       "s": "Financials",
       "v": 1000000,
       "earn": false
     },
     "XYZ": {
-      "r": 80.57,
-      "fg": 3.01,
+      "r": 83.2,
+      "fg": 2.75,
       "s": "Technology",
       "v": 1000000,
       "earn": false
     },
     "FWONK": {
-      "r": 80.06,
-      "fg": 0.1,
+      "r": 79.33,
+      "fg": 9,
       "s": "Communication",
       "v": 1000000,
       "earn": false
     },
     "AXP": {
-      "r": 78.51,
-      "fg": 0.97,
+      "r": 81.48,
+      "fg": 0.64,
       "s": "Financials",
       "v": 1000000,
       "earn": false
     },
     "BK": {
-      "r": 75.13,
-      "fg": 1.05,
+      "r": 79.48,
+      "fg": 1.11,
       "s": "Financials",
       "v": 1000000,
       "earn": false
@@ -624,28 +624,28 @@
       "earn": false
     },
     "APH": {
-      "r": 74.02,
-      "fg": 2.37,
+      "r": 73.96,
+      "fg": 9,
       "s": "Technology",
       "v": 1000000,
       "earn": false
     },
     "LHX": {
-      "r": 70.54,
-      "fg": 9,
+      "r": 70.12,
+      "fg": 0.1,
       "s": "Industrials",
       "v": 1000000,
       "earn": false
     },
     "CCL": {
-      "r": 70.51,
-      "fg": 3.39,
+      "r": 71.7,
+      "fg": 0.45,
       "s": "Discretionary",
       "v": 1000000,
       "earn": false
     },
     "RPM": {
-      "r": 70,
+      "r": 65.46,
       "fg": 9,
       "s": "Materials",
       "v": 1000000,
@@ -659,22 +659,22 @@
       "earn": false
     },
     "RTX": {
-      "r": 65.89,
-      "fg": 0.7,
+      "r": 60.83,
+      "fg": 9,
       "s": "Industrials",
       "v": 1000000,
       "earn": false
     },
     "MUFG": {
-      "r": 65.87,
-      "fg": 9,
+      "r": 70.46,
+      "fg": 1.54,
       "s": "Financials",
       "v": 1000000,
       "earn": false
     },
     "FOX": {
-      "r": 64.49,
-      "fg": 1.01,
+      "r": 66.29,
+      "fg": 0.4,
       "s": "Communication",
       "v": 1000000,
       "earn": false
@@ -687,22 +687,22 @@
       "earn": false
     },
     "TKC": {
-      "r": 61.51,
-      "fg": 0.16,
+      "r": 62,
+      "fg": 0.31,
       "s": "Communication",
       "v": 1000000,
       "earn": false
     },
     "ORLY": {
-      "r": 59.05,
-      "fg": 8,
+      "r": 58.48,
+      "fg": 0.09,
       "s": "Discretionary",
       "v": 1000000,
       "earn": false
     },
     "ACGL": {
-      "r": 56.9,
-      "fg": 9,
+      "r": 58.79,
+      "fg": 1.32,
       "s": "Financials",
       "v": 1000000,
       "earn": false
@@ -715,56 +715,56 @@
       "earn": false
     },
     "BEN": {
-      "r": 55.27,
-      "fg": 2.96,
+      "r": 57.68,
+      "fg": 0.76,
       "s": "Financials",
       "v": 1000000,
       "earn": false
     },
     "CUK": {
-      "r": 54.61,
-      "fg": 3.32,
+      "r": 55.99,
+      "fg": 0.7,
       "s": "Discretionary",
       "v": 1000000,
       "earn": false
     },
     "BBD": {
-      "r": 53.27,
+      "r": 53.41,
       "fg": 0.49,
       "s": "Financials",
       "v": 1000000,
       "earn": false
     },
     "RIO": {
-      "r": 51.18,
+      "r": 50.25,
       "fg": 8,
       "s": "Materials",
       "v": 1000000,
       "earn": false
     },
     "HBAN": {
-      "r": 51.13,
-      "fg": 9,
+      "r": 51.59,
+      "fg": 0.48,
       "s": "Financials",
       "v": 1000000,
       "earn": false
     },
     "AFRM": {
-      "r": 51,
-      "fg": 7.41,
+      "r": 65.43,
+      "fg": 6.81,
       "s": "Technology",
       "v": 1000000,
       "earn": false
     },
     "BUD": {
-      "r": 47.61,
+      "r": 47.18,
       "fg": 9,
       "s": "Staples",
       "v": 1000000,
       "earn": false
     },
     "HIG": {
-      "r": 46.43,
+      "r": 46.14,
       "fg": 9,
       "s": "Financials",
       "v": 1000000,
@@ -800,7 +800,7 @@
     },
     "DIS": {
       "r": 37.45,
-      "fg": 1.39,
+      "fg": 0.44,
       "s": "Communication",
       "v": 1000000,
       "earn": false
@@ -813,8 +813,8 @@
       "earn": false
     },
     "MCHP": {
-      "r": 33.33,
-      "fg": 1.29,
+      "r": 34.22,
+      "fg": 9,
       "s": "Technology",
       "v": 1000000,
       "earn": false
@@ -834,8 +834,8 @@
       "earn": false
     },
     "RF": {
-      "r": 26.4,
-      "fg": 9,
+      "r": 26.77,
+      "fg": 0.36,
       "s": "Financials",
       "v": 1000000,
       "earn": false
@@ -862,8 +862,8 @@
       "earn": false
     },
     "BKNG": {
-      "r": 20.57,
-      "fg": 2.18,
+      "r": 28.55,
+      "fg": 2.52,
       "s": "Discretionary",
       "v": 1000000,
       "earn": false
@@ -951,7 +951,126 @@
       "s": "Technology",
       "v": 1000000,
       "earn": false
+    },
+    "MSTR": {
+      "r": 2097.22,
+      "fg": 4.46,
+      "s": "Technology",
+      "v": 1000000,
+      "earn": false
+    },
+    "HOOD": {
+      "r": 799.53,
+      "fg": 9,
+      "s": "Financials",
+      "v": 1000000,
+      "earn": false
+    },
+    "IONQ": {
+      "r": 368.02,
+      "fg": 9,
+      "s": "Technology",
+      "v": 1000000,
+      "earn": false
+    },
+    "AJG": {
+      "r": 173.37,
+      "fg": 1.48,
+      "s": "Financials",
+      "v": 1000000,
+      "earn": false
+    },
+    "SNPS": {
+      "r": 138.33,
+      "fg": 4.69,
+      "s": "Technology",
+      "v": 1000000,
+      "earn": false
+    },
+    "APO": {
+      "r": 131.27,
+      "fg": 4.98,
+      "s": "Financials",
+      "v": 1000000,
+      "earn": false
+    },
+    "SPOT": {
+      "r": 128.32,
+      "fg": 3.87,
+      "s": "Communication",
+      "v": 1000000,
+      "earn": false
+    },
+    "KGC": {
+      "r": 127.2,
+      "fg": 9,
+      "s": "Materials",
+      "v": 1000000,
+      "earn": false
+    },
+    "DASH": {
+      "r": 122.71,
+      "fg": 8,
+      "s": "Communication",
+      "v": 1000000,
+      "earn": false
+    },
+    "MSFT": {
+      "r": 120.47,
+      "fg": 4.61,
+      "s": "Technology",
+      "v": 1000000,
+      "earn": false
+    },
+    "UBER": {
+      "r": 115.63,
+      "fg": 5.99,
+      "s": "Industrials",
+      "v": 1000000,
+      "earn": false
+    },
+    "EMR": {
+      "r": 101.97,
+      "fg": 9,
+      "s": "Industrials",
+      "v": 1000000,
+      "earn": false
+    },
+    "ARES": {
+      "r": 87.49,
+      "fg": 5.92,
+      "s": "Financials",
+      "v": 1000000,
+      "earn": false
+    },
+    "CDNS": {
+      "r": 85.04,
+      "fg": 4.01,
+      "s": "Technology",
+      "v": 1000000,
+      "earn": false
+    },
+    "TTWO": {
+      "r": 62.69,
+      "fg": 4.41,
+      "s": "Communication",
+      "v": 1000000,
+      "earn": false
+    },
+    "VIV": {
+      "r": 55.39,
+      "fg": 0.6,
+      "s": "Communication",
+      "v": 1000000,
+      "earn": false
+    },
+    "FISV": {
+      "r": 53.87,
+      "fg": 3.85,
+      "s": "Technology",
+      "v": 1000000,
+      "earn": false
     }
   },
-  "importedAt": "Apr 15, 2026, 03:10 PM"
+  "importedAt": "Apr 15, 2026, 11:00 PM"
 }
