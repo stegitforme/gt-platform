@@ -1492,16 +1492,35 @@ const BOOKMARKLET_CODE = `javascript:(function(){
     });
     if(!Object.keys(data).length){alert('GT Scrape: No data found. Try waiting for page to fully load.');return;}
     var json=JSON.stringify(data);
-    navigator.clipboard.writeText(json).then(function(){
-      alert('GT Scrape: Copied '+Object.keys(data).length+' tickers! Return to GT Platform -> Screener tab -> paste -> Import. Platform will sort by signal %.');
-    }).catch(function(){
+    // Show non-blocking notification instead of alert
+    function showNotice(msg) {
+      var n = document.createElement('div');
+      n.style.cssText = 'position:fixed;top:20px;right:20px;z-index:99999;background:#0a0c0f;color:#00d68f;border:2px solid #00d68f;border-radius:8px;padding:14px 18px;font-size:14px;font-weight:600;font-family:monospace;max-width:380px;box-shadow:0 4px 20px rgba(0,0,0,.5)';
+      n.textContent = msg;
+      document.body.appendChild(n);
+      setTimeout(function(){ if(n.parentNode) n.parentNode.removeChild(n); }, 5000);
+    }
+    var count = Object.keys(data).length;
+    try {
+      navigator.clipboard.writeText(json).then(function(){
+        showNotice('✓ GT Scrape: Copied ' + count + ' tickers! Go to GOGO → Screener → paste → Import.');
+      }).catch(function(){
+        var ta=document.createElement('textarea');ta.value=json;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);
+        showNotice('✓ GT Scrape: Copied ' + count + ' tickers! Go to GOGO → Screener → paste → Import.');
+      });
+    } catch(e) {
       var ta=document.createElement('textarea');ta.value=json;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);
-      alert('GT Scrape: Copied '+Object.keys(data).length+' tickers! Return to GT Platform -> Screener -> paste -> Import.');
-    });
+      showNotice('✓ GT Scrape: Copied ' + count + ' tickers! Go to GOGO → Screener → paste → Import.');
+    }
   }
-  // Start: sort first, then after short delay start loading more
-  alert('GT Scrape: Loading all data... ~10 seconds. Click OK and wait for the copy confirmation.');
-  setTimeout(function(){clickLoadMore(0);},300);
+  // Show start indicator
+  var startNote = document.createElement('div');
+  startNote.id = 'gt-scrape-notice';
+  startNote.style.cssText = 'position:fixed;top:20px;right:20px;z-index:99999;background:#0a0c0f;color:#f0c040;border:2px solid #f0c040;border-radius:8px;padding:14px 18px;font-size:14px;font-weight:600;font-family:monospace;box-shadow:0 4px 20px rgba(0,0,0,.5)';
+  startNote.textContent = '⟳ GT Scrape: Loading data...';
+  document.body.appendChild(startNote);
+  // Start immediately
+  clickLoadMore(0);
 })();`
 
 function copyBookmarklet() {
