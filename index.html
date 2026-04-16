@@ -2535,6 +2535,50 @@ function renderClosedTrades() {
 }
 
 
+// ── FETCH LIVE STOCK PRICES FOR OPEN TRADES ───────────────────────────────────
+// Sets entry price = current stock price so ATR levels are meaningful
+async function fetchStockPricesForTrades() {
+  const openTrades = TRADES.filter(t => t.status === 'open')
+  if(!openTrades.length) return
+
+  // Get unique tickers (strip display suffix like " $180 Call")
+  const tickerMap = {}
+  openTrades.forEach(t => {
+    const baseTicker = t.occ && t.occ.match(/^([A-Z]+)\d/) ? t.occ.match(/^([A-Z]+)/)[1] : t.ticker.split(' ')[0]
+    if(!tickerMap[baseTicker]) tickerMap[baseTicker] = []
+    tickerMap[baseTicker].push(t.id)
+  })
+
+  const tickers = Object.keys(tickerMap)
+  let updated = 0
+
+  for(const ticker of tickers) {
+    try {
+      const data = await apiGet('/v2/aggs/ticker/' + ticker + '/prev?adjusted=true')
+      if(data && data.results && data.results[0]) {
+        const price = data.results[0].c
+        tickerMap[ticker].forEach(id => {
+          const trade = TRADES.find(t => t.id === id)
+          if(trade && (!trade.entry || trade.entry === 0 || trade.entry === trade.cost)) {
+            trade.entry = price
+            trade.stockPrice = price
+            updated++
+          }
+        })
+      }
+    } catch(e) { /* skip */ }
+    await new Promise(r => setTimeout(r, 120))
+  }
+
+  if(updated > 0) {
+    saveTrades()
+    renderTrades()
+    renderPortfolioRisk()
+    setApi('Stock prices updated for ' + updated + ' trades ✓', 'ok')
+  }
+}
+
+
 // ── PORTFOLIO RISK SUMMARY ────────────────────────────────────────────────────
 function renderPortfolioRisk() {
   const acct    = +document.getElementById('acct').value || 300000
@@ -2870,7 +2914,18 @@ async function batchFetchATRs(items, onProgress) {
 async function syncOpenPositionsPaste(text, statusCallback) {
   const { results } = parseFidelityOpenPaste(text)
   if(!results.length) {
-    if(statusCallback) statusCallback('No options positions found in pasted data', 'err')
+    // Try to diagnose why
+    const firstLine = text.split('\n').find(l => l.trim())
+    const cols = firstLine ? firstLine.split('\t') : []
+    let msg = 'No positions found in pasted data.'
+    if(cols.length > 0 && cols[0].trim().startsWith('(')) {
+      msg = 'Missing Symbol column — paste the full CSV starting from column A (Account Number). The Symbol column is required.'
+    } else if(cols.length < 8) {
+      msg = 'Too few columns (' + cols.length + ') — paste the full Fidelity CSV with all 16 columns.'
+    } else if(cols[0] === 'Last Price' || cols[0] === 'Last Price Change') {
+      msg = 'Partial CSV detected — make sure to include Symbol column. Start copying from the header row (Account Number).'
+    }
+    if(statusCallback) statusCallback(msg, 'err')
     return
   }
 
@@ -2915,7 +2970,7 @@ async function syncOpenPositionsPaste(text, statusCallback) {
         cts:      r.cts,       // contracts for options, shares for stocks
         cost:     r.cost,      // cost per contract/share
         costTotal:r.costTotal,
-        entry:    isStock ? r.cost : 0,   // for stocks, avg cost = entry price
+        entry:    isStock ? r.cost : r.cost,  // use option cost as proxy until stock price fetched
         atr:      atrMap[r.ticker] || 0,
         date:     new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}).replace(',',''),
         notes:    'Imported from Fidelity',
@@ -2935,6 +2990,8 @@ async function syncOpenPositionsPaste(text, statusCallback) {
   if(typeof renderTrades === 'function') renderTrades()
   renderPortfolioRisk()
   fbAutoSave(1500)
+  // Fetch live stock prices for all imported trades in background
+  fetchStockPricesForTrades()
 
   const msg = 'Synced: ' + added + ' new, ' + updated + ' updated' + (skipped ? ', ' + skipped + ' skipped' : '')
   if(statusCallback) statusCallback(msg, 'ok')
@@ -3389,7 +3446,7 @@ try { CLOSED_TRADES = JSON.parse(localStorage.getItem('gt_closed_trades') || '[]
 function saveClosedTrades() {
   try { localStorage.setItem('gt_closed_trades', JSON.stringify(CLOSED_TRADES)) } catch(e) {}
 }
-setTimeout(renderPortfolioRisk, 1000)
+setTimeout(() => { renderTrades(); renderPortfolioRisk(); }, 800)
 
 function saveTrades() {
   try { localStorage.setItem('gt_trades', JSON.stringify(TRADES)) } catch(e) {}
