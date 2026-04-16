@@ -3621,8 +3621,7 @@ function btSimulate(tqqqBars, qqqBars, spyBars, sgovBars, startDate) {
   function ddOnly(eq) { let pk=0,dd=0; for(let i=0;i<eq.length;i++){if(eq[i]>pk)pk=eq[i];const d=(eq[i]-pk)/pk;if(d<dd)dd=d} return dd }
   sm.maxDD = ddOnly(sEqD); tm.maxDD = ddOnly(tEqD)
   return {
-    stratM:sm, tqqqM:tm, qqqM:qm, spyM:spm, sEqD, tEqD,
-    qqqM:metrics(qEq,cDates), spyM:metrics(spEq,cDates),
+    stratM:sm, tqqqM:tm, qqqM:qm, spyM:spm,
     cDates, sEq, tEq, qEq, spEq, signals, allocC, total:signals.length
   }
 }
