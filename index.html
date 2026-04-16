@@ -1436,19 +1436,13 @@ function importOVData() {
   
   try {
     // Clean up common paste artifacts
-    // Robust cleaning: find the outermost { } bounds
-    let cleaned = raw
-    // Strip any BOM or invisible characters
-    cleaned = cleaned.replace(/^[\s﻿ ]+/, '')
-    // Find first { and last }
-    const firstBrace = cleaned.indexOf('{')
-    const lastBrace  = cleaned.lastIndexOf('}')
+    // Find the outermost { } bounds
+    const firstBrace = raw.indexOf('{')
+    const lastBrace  = raw.lastIndexOf('}')
     if(firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
-      throw new Error('No valid JSON object found -- make sure the bookmarklet copied correctly')
+      throw new Error('No JSON found -- check bookmarklet copied correctly')
     }
-    cleaned = cleaned.substring(firstBrace, lastBrace + 1)
-    // Remove any control characters that break JSON
-    cleaned = cleaned.replace(/[ -]/g, ' ')
+    const cleaned = raw.substring(firstBrace, lastBrace + 1)
     const data = JSON.parse(cleaned)
     const keys = Object.keys(data)
     if(!keys.length) throw new Error('No tickers found in data')
