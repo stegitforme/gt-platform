@@ -1360,10 +1360,27 @@ function showBreadthUpdate() {
 const LIVE_EARNINGS = {}   // populated by fetchEarningsCalendar()
 
 async function fetchEarningsCalendar() {
-  // Polygon /vX/reference/tickers/{t}/events does not support earnings event type
-  // Using hardcoded OV earnings flags (updated monthly with OVTLYR data)
-  // LIVE_EARNINGS stays empty -- hasEarnings() falls back to OV flags
-  console.log('Earnings: using hardcoded OV flags (Polygon earnings API not available on Starter)')
+  // Fetch upcoming earnings for all OV tickers using Polygon /vX/reference/earnings
+  // This endpoint is available on paid plans
+  try {
+    const today = new Date().toISOString().split('T')[0]
+    const future = new Date(Date.now() + 30*864e5).toISOString().split('T')[0]
+    const tickers = Object.keys(OV).join(',')
+    const d = await apiGet('/vX/reference/earnings?ticker.any_of=' + tickers +
+      '&period_of_report_date.gte=' + today +
+      '&period_of_report_date.lte=' + future +
+      '&limit=50')
+    if(d && d.results && d.results.length) {
+      d.results.forEach(e => {
+        if(e.tickers) e.tickers.forEach(t => { LIVE_EARNINGS[t] = true })
+        else if(e.ticker) LIVE_EARNINGS[e.ticker] = true
+      })
+      console.log('Earnings loaded: ' + Object.keys(LIVE_EARNINGS).length + ' tickers with upcoming earnings')
+      runFilter()
+    }
+  } catch(e) {
+    // Silently fall back to hardcoded OV earn flags
+  }
 }
 
 function hasEarnings(ticker) {
