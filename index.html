@@ -548,6 +548,16 @@ tr:hover td{background:#171b22;cursor:pointer}
       <span id="trade-count" style="font-size:12px;color:#555c6e">0 open</span>
       <span id="total-pnl-display" style="font-size:12px;color:#555c6e"></span>
       <button id="pnl-refresh-btn" class="btn btn-ghost" style="font-size:11px;padding:4px 10px" onclick="refreshAllPnL()">Refresh P&amp;L</button>
+      <select id="tm-sort" onchange="renderTrades()" style="background:#0a0c0f;border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:3px 8px;font-size:11px;color:#8b91a0;outline:none;cursor:pointer">
+        <option value="date-desc">Newest first</option>
+        <option value="date-asc">Oldest first</option>
+        <option value="pnl-desc">P&amp;L: best first</option>
+        <option value="pnl-asc">P&amp;L: worst first</option>
+        <option value="pnl-pct-desc">P&amp;L %: best first</option>
+        <option value="ticker-asc">Ticker A→Z</option>
+        <option value="val-desc">Value: largest</option>
+        <option value="expiry-asc">Expiry: soonest</option>
+      </select>
       <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px;margin-left:auto" onclick="clearAllTrades()">Clear all</button>
     </div>
 
@@ -2547,11 +2557,13 @@ function renderPortfolioRisk() {
   let totalHalf = 0, totalFull = 0, totalCts = 0
 
   const rows = openTrades.map(t => {
+    const isStk = t.isStock || t.type === 'Stock'
     const atr  = t.atr  || 0
     const cts  = t.cts  || 1
-    const d    = delta  // use current delta setting
-    const half = 0.5 * atr * d * 100 * cts
-    const full = 2.0 * atr * d * 100 * cts
+    const d    = isStk ? 1 : delta  // stocks use delta=1 (direct share exposure)
+    const mult = isStk ? 1 : 100    // stocks: 1 share, options: 100 share equivalent
+    const half = 0.5 * atr * d * mult * cts
+    const full = 2.0 * atr * d * mult * cts
     totalHalf += half
     totalFull += full
     totalCts  += cts
@@ -2619,13 +2631,12 @@ function parseOCCSymbol(raw) {
 function parseFidelityOpenPaste(text) {
   const lines = text.split('\n').map(l => l.trim()).filter(l => l)
   const clean = s => {
-    if(!s) return 0
-    return parseFloat(s.replace(/[$,%()\s]/g,'').replace(/,/g,'').replace(/^-/,n=>n)) || 0
+    if(!s || s.trim() === '--') return 0
+    return parseFloat(s.replace(/[$,%\s]/g,'').replace(/,/g,'').replace(/\((.+)\)/, '-$1')) || 0
   }
   const cleanPct = s => {
     if(!s) return 0
-    const n = s.replace(/[%\s]/g,'').replace(/[()]/g,m => m==='('?'-':'')
-    return parseFloat(n) || 0
+    return parseFloat(s.replace(/[%\s]/g,'').replace(/\((.+)\)/, '-$1')) || 0
   }
 
   const results = []
@@ -2634,22 +2645,76 @@ function parseFidelityOpenPaste(text) {
   for(const line of lines) {
     const cols = line.split('\t')
     if(cols.length < 8) continue
-    // Must start with - (option) or be a recognizable OCC symbol
-    const rawSym = cols[0]?.trim()
-    if(!rawSym || (!rawSym.startsWith('-') && !rawSym.match(/^[A-Z]+\d{6}[CP]/))) continue
 
+    // Detect format: Fidelity full export has AccountNum in col[0]
+    // Format A (full): AccountNum | AccountName | Symbol | Desc | Qty | LastPx | PxChg | CurVal | TodayGL$ | TodayGL% | TotalGL$ | TotalGL% | PctAcct | CostTotal | AvgCost | Type
+    // Format B (short): Symbol | Desc | Qty | LastPx | ... (no account cols)
+    let symIdx, descIdx, qtyIdx, lastPxIdx, curValIdx, todayGLIdx, todayPctIdx, totalGLIdx, totalPctIdx, costTotalIdx, avgCostIdx
+
+    const col0 = cols[0]?.trim()
+    const col2 = cols[2]?.trim()
+
+    // Full Fidelity export: col[0] = account number (starts with letter+digits), col[2] = symbol
+    if(col0 && /^[A-Z]\d+/.test(col0) && col2 && (col2.startsWith('-') || /^[A-Z]+\d{6}[CP]/.test(col2))) {
+      symIdx=2; descIdx=3; qtyIdx=4; lastPxIdx=5; curValIdx=7; todayGLIdx=8; todayPctIdx=9; totalGLIdx=10; totalPctIdx=11; costTotalIdx=13; avgCostIdx=14
+    }
+    // Short format: col[0] = symbol directly
+    else if(col0 && (col0.startsWith('-') || /^[A-Z]+\d{6}[CP]/.test(col0))) {
+      symIdx=0; descIdx=1; qtyIdx=2; lastPxIdx=3; curValIdx=5; todayGLIdx=6; todayPctIdx=7; totalGLIdx=8; totalPctIdx=9; costTotalIdx=11; avgCostIdx=12
+    }
+    else continue  // skip header rows, disclaimer text, etc
+
+    const rawSym = cols[symIdx]?.trim()
+    if(!rawSym) continue
     const parsed = parseOCCSymbol(rawSym)
-    if(!parsed) continue
 
-    const qty      = Math.abs(clean(cols[4]) || clean(cols[2]) || 1)
-    const lastPx   = clean(cols[3] || cols[5])
-    const curVal   = clean(cols[7] || cols[5])
-    const todayGL  = clean(cols[8] || cols[6])
-    const todayPct = cleanPct(cols[9] || cols[7])
-    const totalGL  = clean(cols[10] || cols[8])
-    const totalPct = cleanPct(cols[11] || cols[9])
-    const costTotal= clean(cols[13] || cols[11])
-    const avgCost  = clean(cols[14] || cols[12]) || (qty > 0 && costTotal > 0 ? costTotal/qty/100 : 0)
+    // If not an option, handle as stock position
+    if(!parsed) {
+      // Only skip header/disclaimer rows — accept stocks
+      const rawTicker = cols[symIdx]?.trim().replace(/^[-\s]+/, '')
+      if(!rawTicker || rawTicker.length > 10 || rawTicker.includes(' ') || /[a-z]/.test(rawTicker)) continue
+      // It's a stock — build a stock trade entry
+      const qty      = Math.abs(clean(cols[qtyIdx])) || 0
+      const lastPx   = clean(cols[lastPxIdx])
+      const curVal   = clean(cols[curValIdx])
+      const todayGL  = clean(cols[todayGLIdx])
+      const todayPct = cleanPct(cols[todayPctIdx])
+      const totalGL  = clean(cols[totalGLIdx])
+      const totalPct = cleanPct(cols[totalPctIdx])
+      const costTotal= clean(cols[costTotalIdx])
+      const avgCost  = clean(cols[avgCostIdx]) || (qty > 0 && costTotal > 0 ? costTotal/qty : 0)
+      if(!qty || !avgCost) continue
+      results.push({
+        occ:      rawTicker,  // use ticker as dedup key for stocks
+        ticker:   rawTicker,
+        strike:   0,
+        type:     'Stock',
+        expiry:   '',
+        expiryISO:'',
+        display:  rawTicker,
+        cts:      qty,        // shares
+        cost:     +avgCost.toFixed(2),   // cost per share
+        costTotal:+costTotal.toFixed(2),
+        curVal:   Math.round(curVal),
+        lastPx:   lastPx,
+        todayGL:  Math.round(todayGL),
+        todayPct: +todayPct.toFixed(2),
+        totalGL:  Math.round(totalGL),
+        totalPct: +totalPct.toFixed(2),
+        isStock:  true
+      })
+      continue
+    }
+
+    const qty      = Math.abs(clean(cols[qtyIdx]))  || 1
+    const lastPx   = clean(cols[lastPxIdx])
+    const curVal   = clean(cols[curValIdx])
+    const todayGL  = clean(cols[todayGLIdx])
+    const todayPct = cleanPct(cols[todayPctIdx])
+    const totalGL  = clean(cols[totalGLIdx])
+    const totalPct = cleanPct(cols[totalPctIdx])
+    const costTotal= clean(cols[costTotalIdx])
+    const avgCost  = clean(cols[avgCostIdx]) || (qty > 0 && costTotal > 0 ? costTotal/qty/100 : 0)
 
     results.push({
       occ:      parsed.occ,
@@ -2838,17 +2903,19 @@ async function syncOpenPositionsPaste(text, statusCallback) {
       updated++
     } else {
       // ADD new trade
+      const isStock = r.isStock || false
       TRADES.push({
         id:       Date.now() + added,
         occ:      r.occ,
         ticker:   r.display,
-        strike:   r.strike,
-        type:     r.type,
-        desc:     r.expiry,
-        cts:      r.cts,
-        cost:     r.cost,
+        strike:   r.strike || 0,
+        type:     r.type || (isStock ? 'Stock' : 'Call'),
+        isStock:  isStock,
+        desc:     isStock ? '' : r.expiry,
+        cts:      r.cts,       // contracts for options, shares for stocks
+        cost:     r.cost,      // cost per contract/share
         costTotal:r.costTotal,
-        entry:    0,
+        entry:    isStock ? r.cost : 0,   // for stocks, avg cost = entry price
         atr:      atrMap[r.ticker] || 0,
         date:     new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}).replace(',',''),
         notes:    'Imported from Fidelity',
@@ -3427,9 +3494,32 @@ function mkLevel(cls, dot, label, price, dist) {
 }
 
 function renderTrades() {
-  const open   = TRADES.filter(t => t.status === 'open')
-  const closed = TRADES.filter(t => t.status === 'closed')
-  document.getElementById('trade-count').textContent = open.length + ' open . ' + closed.length + ' closed'
+  const sortVal = document.getElementById('tm-sort')?.value || 'date-desc'
+  const sortFn = (a, b) => {
+    switch(sortVal) {
+      case 'date-asc':     return (a.id||0) - (b.id||0)
+      case 'date-desc':    return (b.id||0) - (a.id||0)
+      case 'pnl-desc':     return (b.totalGL||b.pnl||0) - (a.totalGL||a.pnl||0)
+      case 'pnl-asc':      return (a.totalGL||a.pnl||0) - (b.totalGL||b.pnl||0)
+      case 'pnl-pct-desc': return (b.totalPct||b.pnlPct||0) - (a.totalPct||a.pnlPct||0)
+      case 'ticker-asc':   return (a.ticker||'').localeCompare(b.ticker||'')
+      case 'val-desc':     return (b.curVal||b.costTotal||0) - (a.curVal||a.costTotal||0)
+      case 'expiry-asc': {
+        const da = new Date(a.desc||'9999'), db = new Date(b.desc||'9999')
+        return da - db
+      }
+      default: return (b.id||0) - (a.id||0)
+    }
+  }
+  const open   = TRADES.filter(t => t.status === 'open').sort(sortFn)
+  const closed = TRADES.filter(t => t.status === 'closed').sort(sortFn)
+  document.getElementById('trade-count').textContent = open.length + ' open' + (closed.length ? ' · ' + closed.length + ' closed' : '')
+  const totalGL = TRADES.filter(t=>t.status==='open').reduce((s,t)=>s+(t.totalGL||0),0)
+  const pnlEl = document.getElementById('total-pnl-display')
+  if(pnlEl && totalGL !== 0) {
+    pnlEl.textContent = '| Total P&L: ' + (totalGL>=0?'+':'') + '$' + Math.round(totalGL).toLocaleString()
+    pnlEl.style.color = totalGL >= 0 ? '#00d68f' : '#ff4560'
+  }
 
   if(!TRADES.length) {
     document.getElementById('trades-list').innerHTML =
@@ -3456,12 +3546,19 @@ function renderTrades() {
       ? (t.pnl>=0?'<span class="g">+$':'<span class="r">-$') + Math.abs(Math.round(t.pnl)).toLocaleString() + '</span>'
       : ''
 
+    const isStk = t.isStock || t.type === 'Stock'
+    const qtyLabel = isStk ? (t.cts||0).toLocaleString() + ' shares' : (t.cts||0) + ' ct' + ((t.cts||0)===1?'':'s')
+    const typeTag = isStk
+      ? '<span style="background:rgba(77,166,255,.15);color:#4da6ff;font-size:9px;font-weight:700;padding:2px 5px;border-radius:3px;letter-spacing:.04em">STOCK</span>'
+      : '<span style="background:rgba(240,192,64,.12);color:#f0c040;font-size:9px;font-weight:700;padding:2px 5px;border-radius:3px;letter-spacing:.04em">' + (t.type||'CALL').toUpperCase() + (t.strike ? ' $'+t.strike : '') + '</span>'
+
     return '<div class="trade-card">' +
       '<div class="trade-card-head">' +
         '<div style="display:flex;align-items:center;gap:9px">' +
           '<span style="font-family:\'SF Mono\',monospace;font-weight:700;font-size:15px;color:#f0c040">' + t.ticker + '</span>' +
+          typeTag +
           '<span class="dim" style="font-size:11px">' + (t.desc||'') + '</span>' +
-          '<span class="dim" style="font-size:11px">' + t.cts + ' cts</span>' +
+          '<span class="dim" style="font-size:11px">' + qtyLabel + '</span>' +
           '<span class="dim" style="font-size:10px">' + (t.date||'') + '</span>' +
           statusBadge +
           pnlStr +
@@ -3477,22 +3574,23 @@ function renderTrades() {
       '<div class="trade-card-body">' +
         '<div>' +
           '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e;margin-bottom:7px">Levels</div>' +
+          (isStk && !t.atr ? '<div style="font-size:11px;color:#555c6e">Enter ATR to see levels</div>' :
           mkLevel('bg-g','#00d68f','Entry',  t.entry, 0) +
           mkLevel('bg-b','#4da6ff','.5 ATR roll', r1, pct(r1)) +
           mkLevel('bg-b','#4da6ff','1x ATR roll',r2, pct(r2)) +
           mkLevel('bg-b','#4da6ff','2x ATR roll',r3, pct(r3)) +
           mkLevel('bg-o','#ff8c42','Stop loss -.5 ATR', sl, pct(sl)) +
-          mkLevel('bg-r','#ff4560','Emergency -2x ATR', em, pct(em)) +
+          mkLevel('bg-r','#ff4560','Emergency -2x ATR', em, pct(em))) +
         '</div>' +
         '<div>' +
           '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e;margin-bottom:7px">Risk & P/L</div>' +
           '<div class="grid2" style="gap:6px">' +
-            mkMini('Entry price', '$'+t.entry.toFixed(2), '') +
-            mkMini('Cost basis', basis>0?'$'+Math.round(basis).toLocaleString():'--', '') +
-            mkMini('Loss @ .5ATR', '$'+Math.round(lH).toLocaleString(), 'o') +
-            mkMini('Loss @ 2xATR', '$'+Math.round(lF).toLocaleString(), 'r') +
-            mkMini('+30% target', basis>0?'+$'+Math.round(basis*.3).toLocaleString():'--', 'g') +
-            mkMini(t.pnl!==undefined ? 'Realized P/L' : 'ATR', t.pnl!==undefined ? (t.pnl>=0?'+$':'-$')+Math.abs(Math.round(t.pnl)).toLocaleString() : '$'+t.atr, t.pnl!==undefined?(t.pnl>=0?'g':'r'):'') +
+            mkMini(isStk ? 'Avg cost/share' : 'Entry price', '$'+(isStk ? t.cost : t.entry).toFixed(2), '') +
+            mkMini(isStk ? 'Total cost' : 'Cost basis', basis>0?'$'+Math.round(basis).toLocaleString():'--', '') +
+            (isStk ? '' : mkMini('Loss @ .5ATR', '$'+Math.round(lH).toLocaleString(), 'o')) +
+            (isStk ? '' : mkMini('Loss @ 2xATR', '$'+Math.round(lF).toLocaleString(), 'r')) +
+            mkMini(isStk ? 'Current value' : '+30% target', isStk ? (t.curVal?'$'+t.curVal.toLocaleString():'--') : (basis>0?'+$'+Math.round(basis*.3).toLocaleString():'--'), isStk?'':'g') +
+            mkMini(t.totalGL !== undefined ? 'Total P/L' : (isStk ? 'ATR' : 'ATR'), t.totalGL !== undefined ? (t.totalGL>=0?'+$':'-$')+Math.abs(Math.round(t.totalGL)).toLocaleString() : '$'+t.atr, t.totalGL !== undefined?(t.totalGL>=0?'g':'r'):'') +
           '</div>' +
           (t.rolls.length ? '<div style="margin-top:9px;padding-top:9px;border-top:1px solid rgba(255,255,255,.06)"><div style="font-size:10px;color:#555c6e;margin-bottom:4px">ROLLS</div>' + t.rolls.map(r=>'<div style="font-size:11px;color:#8b91a0;font-family:\'SF Mono\',monospace">'+r.date+' . $'+r.from.toFixed(2)+' -> $'+r.to.toFixed(2)+'</div>').join('') + '</div>' : '') +
           (t.notes ? '<div style="margin-top:7px;font-size:11px;color:#555c6e;border-top:1px solid rgba(255,255,255,.06);padding-top:7px">' + t.notes + '</div>' : '') +
