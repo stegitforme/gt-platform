@@ -777,6 +777,7 @@ const CHECKS = [
 function setCheck(id, pass) {
   CHECKS.forEach(g => g.items.forEach(i => { if(i.id===id) i.pass=pass }))
 }
+
 function renderChecklist() {
   setTimeout(function(){rebCalc()},200)
   let html = '', total = 0, passing = 0
@@ -1129,22 +1130,22 @@ async function fetchTQQQSignal() {
       '<div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,.07)">' +
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
       '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#555c6e">Turbo Mode</div>' +
-      '<div style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:3px;background:'+(tSt==='normal'?'rgba(255,255,255,.05)':tSt==='arming'?'rgba(255,140,66,.15)':tSt==='armed'?'rgba(240,192,64,.2)':'rgba(0,214,143,.15)')+';color:'+(tSt==='normal'?'#555c6e':tSt==='arming'?'#ff8c42':tSt==='armed'?'#f0c040':'#00d68f')+'">'+(tSt==='normal'?'Normal':tSt==='arming'?'Arming':tSt==='armed'?'Armed':'Active')+'</div>' +
+      '<div style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:3px;background:'+(turboState==='normal'?'rgba(255,255,255,.05)':turboState==='arming'?'rgba(255,140,66,.15)':turboState==='armed'?'rgba(240,192,64,.2)':'rgba(0,214,143,.15)')+';color:'+(turboState==='normal'?'#555c6e':turboState==='arming'?'#ff8c42':turboState==='armed'?'#f0c040':'#00d68f')+'">'+(turboState==='normal'?'Normal':turboState==='arming'?'Arming':turboState==='armed'?'Armed':'Active')+'</div>' +
       '</div>' +
-      (tSt==='arming'||tSt==='normal' ?
-        '<div style="font-size:10px;color:#555c6e;margin-bottom:4px">'+( tSt==='arming'?wkBl+' / 8 weeks below 200MA to arm':'0 / 8 — above 200MA, turbo not arming')+'</div>' +
+      (turboState==='arming'||turboState==='normal' ?
+        '<div style="font-size:10px;color:#555c6e;margin-bottom:4px">'+( turboState==='arming'?weeksBelow+' / 8 weeks below 200MA to arm':'0 / 8 — above 200MA, turbo not arming')+'</div>' +
         '<div style="height:8px;background:rgba(255,255,255,.06);border-radius:4px;overflow:hidden">' +
-        '<div style="height:100%;border-radius:4px;background:'+(tSt==='arming'?'#ff8c42':'rgba(255,255,255,.08)')+';width:'+( tSt==='arming'?Math.round(wkBl/8*100):0)+'%;transition:width .4s"></div></div>'
-      : tSt==='armed' ?
+        '<div style="height:100%;border-radius:4px;background:'+(turboState==='arming'?'#ff8c42':'rgba(255,255,255,.08)')+';width:'+( turboState==='arming'?Math.round(weeksBelow/8*100):0)+'%;transition:width .4s"></div></div>'
+      : turboState==='armed' ?
         '<div style="font-size:10px;color:#f0c040;margin-bottom:4px">8+ weeks below 200MA — waiting for QQQ to reclaim 200MA</div>' +
         '<div style="height:8px;background:rgba(240,192,64,.15);border-radius:4px;overflow:hidden">' +
         '<div style="height:100%;border-radius:4px;background:linear-gradient(90deg,#f0c040,#ff8c42);width:100%"></div></div>'
       :
-        '<div style="font-size:10px;color:#00d68f;margin-bottom:4px">Week '+tWk+' of 12 — '+(12-tWk)+' weeks remaining</div>' +
+        '<div style="font-size:10px;color:#00d68f;margin-bottom:4px">Week '+turboWeek+' of 12 — '+(12-turboWeek)+' weeks remaining</div>' +
         '<div style="height:8px;background:rgba(0,214,143,.12);border-radius:4px;overflow:hidden">' +
-        '<div style="height:100%;border-radius:4px;background:#00d68f;width:'+Math.round(tWk/12*100)+'%;transition:width .4s"></div></div>'
+        '<div style="height:100%;border-radius:4px;background:#00d68f;width:'+Math.round(turboWeek/12*100)+'%;transition:width .4s"></div></div>'
       ) +
-      '<div style="font-size:10px;color:#333a4a;margin-top:6px">'+(tSt==='normal'?'Arms after 8 consecutive weeks below 200MA, fires on reclaim for 12 weeks':tSt==='arming'?'Needs '+(8-wkBl)+' more weeks below to arm':tSt==='armed'?'Primed — reclaim 200MA starts the 12-week window':'Turbo active — elevated conviction window')+'</div>' +
+      '<div style="font-size:10px;color:#333a4a;margin-top:6px">'+(turboState==='normal'?'Arms after 8 consecutive weeks below 200MA, fires on reclaim for 12 weeks':turboState==='arming'?'Needs '+(8-weeksBelow)+' more weeks below to arm':turboState==='armed'?'Primed — reclaim 200MA starts the 12-week window':'Turbo active — elevated conviction window')+'</div>' +
       '</div>'
 
     if(body) body.innerHTML = html
@@ -1217,9 +1218,9 @@ function rebCalc() {
     return '<tr style="border-bottom:1px solid rgba(255,255,255,.04)">'
       + '<td style="padding:6px 12px"><input id="reb-name-'+i+'" value="'+acc.name+'" onblur="rebCalc()"'
       + ' style="background:transparent;border:none;color:#e8eaf0;font-size:12px;width:118px;outline:none"></td>'
-      + '<td style="padding:6px 8px;text-align:right"><input id="reb-tqqq-'+i+'" value="'+Math.round(acc.tqqq).toLocaleString()+'" oninput="rebCalc()"'
+      + '<td style="padding:6px 8px;text-align:right"><input id="reb-tqqq-'+i+'" value="'+Math.round(acc.tqqq).toLocaleString()+'" onblur="rebCalc()"'
       + ' style="'+inp+'border:1px solid rgba(0,214,143,.2);color:#00d68f"></td>'
-      + '<td style="padding:6px 8px;text-align:right"><input id="reb-sgov-'+i+'" value="'+Math.round(acc.sgov).toLocaleString()+'" oninput="rebCalc()"'
+      + '<td style="padding:6px 8px;text-align:right"><input id="reb-sgov-'+i+'" value="'+Math.round(acc.sgov).toLocaleString()+'" onblur="rebCalc()"'
       + ' style="'+inp+'border:1px solid rgba(77,166,255,.2);color:#4da6ff"></td>'
       + '<td style="padding:6px 8px;text-align:right;font-family:SF Mono,monospace;color:#555c6e;font-size:11px">$'+Math.round(total).toLocaleString()+'</td>'
       + '<td style="padding:6px 12px;line-height:1.5">'+act+'</td>'
@@ -1679,7 +1680,7 @@ function runFilter() {
     return '<tr onclick="goSize(\'' + s.t + '\')">' +
       '<td class="dim" style="width:28px">' + (i+1) + '</td>' +
       '<td style="font-family:\'SF Mono\',monospace;font-weight:600">' + s.t + '<div style="font-size:10px;color:#555c6e">' + s.d.s + '</div></td>' +
-      '<td id="px-' + s.t + '" style="font-family:\'SF Mono\',monospace;color:#555c6e;font-size:11px">--</td>' +
+      '<td id="price-' + s.t + '" style="font-family:\'SF Mono\',monospace;color:#555c6e;font-size:11px">--</td>' +
       '<td><div style="display:flex;align-items:center;gap:5px"><div style="width:48px;height:3px;background:#1e2330;border-radius:2px;overflow:hidden"><div style="width:' + bw + '%;height:100%;background:#f0c040;border-radius:2px"></div></div><span class="gold" style="font-family:\'SF Mono\',monospace;font-size:12px">' + s.d.r + '%</span></div></td>' +
       '<td style="font-family:\'SF Mono\',monospace;color:' + fgc + '">' + s.d.fg.toFixed(0) + '</td>' +
       '<td class="dim" style="font-size:11px">' + s.d.s + '</td>' +
