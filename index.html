@@ -345,7 +345,7 @@ tr:hover td{background:#171b22;cursor:pointer}
             <span id="cloud-sync-status" style="font-size:9px;color:#555c6e;white-space:nowrap;flex-shrink:0">not set</span>
           </div>
           <button class="btn btn-ghost" style="font-size:11px" onclick="copyBookmarklet()">Copy Script</button>
-          <button class="btn btn-ghost" style="font-size:11px" onclick="showBookmarkletHelp()">Setup guide</button>
+          <button class="btn btn-ghost" style="font-size:11px" onclick="showBookmarkletHelp()">Install extension</button>
         </div>
       </div>
     </div>
@@ -433,7 +433,8 @@ tr:hover td{background:#171b22;cursor:pointer}
         <div id="tkr-st" style="font-size:11px;color:#555c6e;font-family:\'SF Mono\',monospace;margin:-5px 0 9px;min-height:14px;line-height:1.6"></div>
         <div class="field"><label>Entry Price $</label><input type="number" id="entry" placeholder="189.40" step="0.01" oninput="calc()"></div>
         <div class="field"><label>ATR (14) $</label><input type="number" id="atr" placeholder="5.27" step="0.01" oninput="calc()"></div>
-        <div class="field"><label>Option Cost Per Contract $</label><input type="number" id="optcost" placeholder="17.00" step="0.01" oninput="calc()"></div>
+        <div class="field"><label>Option Cost Per Contract $</label><input type="number" id="optcost" placeholder="38.90" step="0.01" oninput="calc()"></div>
+        <div class="field"><label>Strike Price $</label><input type="number" id="strike" placeholder="230" step="1" oninput="calc()"></div>
         <div class="field"><label>Expiry</label><input type="text" id="expiry" value="May-15-2026"></div>
         <div id="opt-live" style="font-size:11px;color:#555c6e;font-family:\'SF Mono\',monospace;padding:7px 10px;background:#171b22;border:1px solid rgba(255,255,255,.07);border-radius:6px;min-height:26px;margin-bottom:9px;line-height:1.6">Type ticker + Enter to fetch live option chain</div>
         <button class="btn btn-gold" onclick="calc()">Calculate</button>
@@ -520,7 +521,8 @@ tr:hover td{background:#171b22;cursor:pointer}
         <div class="field" style="margin:0"><label>Ticker</label><input type="text" id="nt-t" placeholder="NVDA" oninput="this.value=this.value.toUpperCase()"></div>
         <div class="field" style="margin:0"><label>Description</label><input type="text" id="nt-d" placeholder="$180C May-26"></div>
         <div class="field" style="margin:0"><label>Contracts</label><input type="number" id="nt-c" placeholder="14"></div>
-        <div class="field" style="margin:0"><label>Cost / contract $</label><input type="number" id="nt-oc" placeholder="17.00" step="0.01"></div>
+        <div class="field" style="margin:0"><label>Cost / contract $</label><input type="number" id="nt-oc" placeholder="38.90" step="0.01"></div>
+        <div class="field" style="margin:0"><label>Strike $</label><input type="number" id="nt-sk" placeholder="230" step="1"></div>
         <div class="field" style="margin:0"><label>Entry price $</label><input type="number" id="nt-e" placeholder="189.40" step="0.01"></div>
         <div class="field" style="margin:0"><label>ATR at entry $</label><input type="number" id="nt-a" placeholder="5.27" step="0.01"></div>
         <div class="field" style="margin:0"><label>Date</label><input type="text" id="nt-dt" placeholder="Apr-14-2026"></div>
@@ -2633,6 +2635,7 @@ function openAddTrade() {
     'a': document.getElementById('atr').value,
     'c': document.getElementById('m-cts').textContent === '--' ? '' : document.getElementById('m-cts').textContent,
     'oc': document.getElementById('optcost').value,
+    'sk': document.getElementById('strike')?.value || '',
     'd': document.getElementById('expiry').value,
   }
   if(vals.t) document.getElementById('nt-t').value  = vals.t
@@ -2640,6 +2643,7 @@ function openAddTrade() {
   if(vals.a) document.getElementById('nt-a').value  = vals.a
   if(vals.c) document.getElementById('nt-c').value  = vals.c
   if(vals.oc)document.getElementById('nt-oc').value = vals.oc
+  if(vals.sk)document.getElementById('nt-sk').value = vals.sk
   if(vals.d) document.getElementById('nt-d').value  = vals.d
   document.getElementById('nt-dt').value = new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}).replace(',','')
 }
@@ -2653,6 +2657,7 @@ function saveTrade() {
     cost:   +document.getElementById('nt-oc').value || 0,
     entry:  +document.getElementById('nt-e').value  || 0,
     atr:    +document.getElementById('nt-a').value  || 0,
+    strike: +document.getElementById('nt-sk')?.value || 0,
     date:   document.getElementById('nt-dt').value,
     notes:  document.getElementById('nt-n').value,
     status: 'open',
