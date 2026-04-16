@@ -1,8 +1,8 @@
 {
   "ov": {
     "CLS": {
-      "r": 769,
-      "fg": 64.7,
+      "r": 1165.25,
+      "fg": 9,
       "s": "Tech",
       "v": 1845006,
       "earn": false
@@ -127,8 +127,8 @@
       "earn": true
     },
     "GS": {
-      "r": 240,
-      "fg": 64.3,
+      "r": 245.06,
+      "fg": 9,
       "s": "Financials",
       "v": 2290932,
       "earn": true
@@ -652,8 +652,8 @@
       "earn": false
     },
     "NFLX": {
-      "r": 68.67,
-      "fg": 3.02,
+      "r": 74.49,
+      "fg": 135,
       "s": "Communication",
       "v": 1000000,
       "earn": false
@@ -848,8 +848,8 @@
       "earn": false
     },
     "MET": {
-      "r": 22.88,
-      "fg": 0.9,
+      "r": 26.6,
+      "fg": 195,
       "s": "Financials",
       "v": 1000000,
       "earn": false
@@ -869,7 +869,7 @@
       "earn": false
     },
     "KEY": {
-      "r": 16.04,
+      "r": 15.48,
       "fg": 9,
       "s": "Financials",
       "v": 1000000,
@@ -883,7 +883,7 @@
       "earn": false
     },
     "AIG": {
-      "r": 14.12,
+      "r": 13.44,
       "fg": 9,
       "s": "Financials",
       "v": 1000000,
@@ -897,8 +897,8 @@
       "earn": false
     },
     "CPNG": {
-      "r": 11.35,
-      "fg": 2.83,
+      "r": 16.95,
+      "fg": 2.75,
       "s": "Discretionary",
       "v": 1000000,
       "earn": false
@@ -918,8 +918,8 @@
       "earn": false
     },
     "PNC": {
-      "r": 7.7,
-      "fg": 9,
+      "r": 7.67,
+      "fg": 39,
       "s": "Financials",
       "v": 1000000,
       "earn": false
@@ -932,7 +932,7 @@
       "earn": false
     },
     "TRV": {
-      "r": 3.2,
+      "r": 2.36,
       "fg": 9,
       "s": "Financials",
       "v": 1000000,
@@ -1140,7 +1140,133 @@
       "s": "Real Estate",
       "v": 1000000,
       "earn": false
+    },
+    "STX": {
+      "r": 568.51,
+      "fg": 9,
+      "s": "Technology",
+      "v": 1000000,
+      "earn": false
+    },
+    "LRCX": {
+      "r": 406.51,
+      "fg": 9,
+      "s": "Technology",
+      "v": 1000000,
+      "earn": false
+    },
+    "ASX": {
+      "r": 237.8,
+      "fg": 134,
+      "s": "Technology",
+      "v": 1000000,
+      "earn": false
+    },
+    "MS": {
+      "r": 201.6,
+      "fg": 4.52,
+      "s": "Financials",
+      "v": 1000000,
+      "earn": false
+    },
+    "ASML": {
+      "r": 175.59,
+      "fg": 9,
+      "s": "Technology",
+      "v": 1000000,
+      "earn": false
+    },
+    "TD": {
+      "r": 108.2,
+      "fg": 83,
+      "s": "Financials",
+      "v": 1000000,
+      "earn": false
+    },
+    "FLEX": {
+      "r": 105.89,
+      "fg": 9,
+      "s": "Technology",
+      "v": 1000000,
+      "earn": false
+    },
+    "C": {
+      "r": 95.52,
+      "fg": 163,
+      "s": "Financials",
+      "v": 1000000,
+      "earn": false
+    },
+    "BAC": {
+      "r": 68.38,
+      "fg": 182,
+      "s": "Financials",
+      "v": 1000000,
+      "earn": false
+    },
+    "NOK": {
+      "r": 59.3,
+      "fg": 9,
+      "s": "Technology",
+      "v": 1000000,
+      "earn": false
+    },
+    "EXR": {
+      "r": 38.2,
+      "fg": 9,
+      "s": "Real Estate",
+      "v": 1000000,
+      "earn": false
+    },
+    "AMX": {
+      "r": 27.97,
+      "fg": 4,
+      "s": "Communication",
+      "v": 1000000,
+      "earn": false
+    },
+    "MAR": {
+      "r": 27.22,
+      "fg": 9,
+      "s": "Discretionary",
+      "v": 1000000,
+      "earn": false
+    },
+    "ABNB": {
+      "r": 15.43,
+      "fg": 2.73,
+      "s": "Discretionary",
+      "v": 1000000,
+      "earn": false
+    },
+    "USB": {
+      "r": 14.39,
+      "fg": 50,
+      "s": "Financials",
+      "v": 1000000,
+      "earn": false
+    },
+    "OXLC": {
+      "r": 11.8,
+      "fg": 2.6,
+      "s": "Financials",
+      "v": 1000000,
+      "earn": false
+    },
+    "LYV": {
+      "r": 8.28,
+      "fg": 9,
+      "s": "Communication",
+      "v": 1000000,
+      "earn": false
+    },
+    "PSA": {
+      "r": 7.43,
+      "fg": 8,
+      "s": "Real Estate",
+      "v": 1000000,
+      "earn": false
     }
   },
-  "importedAt": "Apr 16, 2026, 07:49 AM"
+  "importedAt": "Apr 16, 2026, 09:07 AM"
 }
