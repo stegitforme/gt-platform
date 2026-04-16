@@ -310,7 +310,6 @@ tr:hover td{background:#171b22;cursor:pointer}
           <th>Sector</th>
           <th>Spread</th>
           <th>Earnings</th>
-          <th onclick="scrSort('dte')" style="cursor:pointer;user-select:none" title="Sort by DTE">DTE <span id="sort-dte"></span></th>
           <th onclick="scrSort('gt')" style="cursor:pointer;user-select:none" title="Sort by GT Score">GT Score <span id="sort-gt"></span></th>
           <th onclick="scrSort('score')" style="cursor:pointer;user-select:none" title="Sort by GOGO Score">Score <span id="sort-score">&#9660;</span></th>
           <th></th>
@@ -1668,7 +1667,6 @@ function runFilter() {
     if(col === 'gt')    return dir * ((GT_SCORES[b.t]?.score||0) - (GT_SCORES[a.t]?.score||0))
     if(col === 'sig')   return dir * (b.d.r - a.d.r)
     if(col === 'fg')    return dir * (b.d.fg - a.d.fg)
-    if(col === 'dte')   return dir * ((a.dte||999) - (b.dte||999))
     return dir * (b.score - a.score)  // default: score
   })
 
@@ -1676,7 +1674,7 @@ function runFilter() {
   const tbody = document.getElementById('scr-body')
 
   if(!scored.length) {
-    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:24px;color:#555c6e">No tickers match filters</td></tr>'
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:24px;color:#555c6e">No tickers match filters</td></tr>'
     return
   }
 
@@ -1961,7 +1959,7 @@ function scrSort(col) {
     SCR_SORT.dir = -1   // new col always starts descending
   }
   // Update header indicators
-  var cols = ['sig','fg','dte','score']
+  var cols = ['sig','fg','score','gt']
   cols.forEach(function(c) {
     var el = document.getElementById('sort-'+c)
     if(!el) return
