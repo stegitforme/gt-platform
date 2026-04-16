@@ -3649,7 +3649,7 @@ function renderTrades() {
             mkMini(isStk ? 'Current value' : '+50% target', isStk ? (t.curVal?'$'+t.curVal.toLocaleString():'--') : (basis>0?'+$'+Math.round(basis*.5).toLocaleString():'--'), isStk?'':'g') +
             mkMini(t.totalGL !== undefined ? 'Total P/L' : (isStk ? 'ATR' : 'ATR'), t.totalGL !== undefined ? (t.totalGL>=0?'+$':'-$')+Math.abs(Math.round(t.totalGL)).toLocaleString() : '$'+t.atr, t.totalGL !== undefined?(t.totalGL>=0?'g':'r'):'') +
           '</div>' +
-          (t.rolls.length ? '<div style="margin-top:9px;padding-top:9px;border-top:1px solid rgba(255,255,255,.06)"><div style="font-size:10px;color:#555c6e;margin-bottom:4px">ROLLS</div>' + t.rolls.map(r=>'<div style="font-size:11px;color:#8b91a0;font-family:\'SF Mono\',monospace">'+r.date+' . $'+r.from.toFixed(2)+' -> $'+r.to.toFixed(2)+'</div>').join('') + '</div>' : '') +
+          ((t.rolls||[]).length ? '<div style="margin-top:9px;padding-top:9px;border-top:1px solid rgba(255,255,255,.06)"><div style="font-size:10px;color:#555c6e;margin-bottom:4px">ROLLS</div>' + (t.rolls||[]).map(r=>'<div style="font-size:11px;color:#8b91a0;font-family:\'SF Mono\',monospace">'+r.date+' . $'+r.from.toFixed(2)+' -> $'+r.to.toFixed(2)+'</div>').join('') + '</div>' : '') +
           (t.notes ? '<div style="margin-top:7px;font-size:11px;color:#555c6e;border-top:1px solid rgba(255,255,255,.06);padding-top:7px">' + t.notes + '</div>' : '') +
         '</div>' +
       '</div>' +
