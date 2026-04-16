@@ -245,6 +245,7 @@ tr:hover td{background:#171b22;cursor:pointer}
         </div>
         <div style="display:flex;flex-direction:column;gap:7px;min-width:145px">
           <button class="btn btn-gold" style="font-size:11px" onclick="importOVData()">Import data</button>
+          <div style="display:flex;align-items:center;gap:5px;margin-top:2px"><input type="password" id="gh-token-input" placeholder="GitHub token (cloud sync)" title="Enter GitHub token for cross-device sync" style="flex:1;background:#0a0c0f;border:1px solid rgba(255,255,255,.08);border-radius:4px;padding:4px 7px;font-size:10px;color:#8b91a0;outline:none;min-width:0" oninput="localStorage.setItem('gt_github_token',this.value);document.getElementById('cloud-sync-status').textContent=this.value?'cloud on':'not set'"><span id="cloud-sync-status" style="font-size:9px;color:#555c6e;white-space:nowrap;flex-shrink:0">not set</span></div>
           <button class="btn btn-ghost" style="font-size:11px" onclick="copyBookmarklet()">Copy bookmarklet</button>
           <button class="btn btn-ghost" style="font-size:11px" onclick="showBookmarkletHelp()">Setup guide</button>
         </div>
@@ -1208,6 +1209,7 @@ function importOVData() {
     // Persist to localStorage
     const saveData = { ov: OV, importedAt: new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'}) }
     localStorage.setItem('gt_ov_data', JSON.stringify(saveData))
+    saveOVToCloud()
     
     // Update last update display
     document.getElementById('ov-last-update').textContent = 'Updated ' + saveData.importedAt
