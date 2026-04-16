@@ -1482,20 +1482,9 @@ const BOOKMARKLET_CODE = `javascript:(function(){
       if(!ticker||ticker.length>7||ticker==='SYMBOL')return;
       var sig=parseFloat((cells[4].innerText||'').replace(/[^0-9.-]/g,''))||0;
       if(!sig)return;
-      // F&G: OVTLYR stores as decimal (0.0-1.0 range maps to 0-100)
-      // Try cells 10-14, pick the one that makes most sense as F&G
-      var fgCandidates = [10,11,12,13,14].map(function(i){
-        return parseFloat((cells[i]?.innerText||'0').replace(/[^0-9.-]/g,''))||0;
-      });
-      // F&G raw from OVTLYR is in 0-1 decimal range. Multiply by 100.
-      // Pick candidate that when multiplied by 100 falls in 0-100 range
-      var fgRaw = fgCandidates[2]; // default cells[12]
-      for(var ci=0;ci<fgCandidates.length;ci++){
-        var v=fgCandidates[ci];
-        if(v>0 && v<=1.0){fgRaw=v;break;} // found clean 0-1 decimal
-      }
-      // Convert: if <=1.0 it's a decimal fraction (0.35 = 35), if >1 already a number
-      var fg = fgRaw > 0 && fgRaw <= 1.0 ? Math.round(fgRaw*100) : (fgRaw > 100 ? Math.round(fgRaw/100) : Math.round(fgRaw));
+      // F&G is cells[12]: value like "41.18 (Moving Up)" -> 41.18
+      // Confirmed by inspecting OVTLYR table structure directly
+      var fg = parseFloat((cells[12]?.innerText||'0').replace(/[^0-9.-]/g,''))||0;
       var vol=parseInt((cells[11].innerText||'0').replace(/,/g,''))||0;
       var sec=(cells[6].innerText||'').split('/')[0].trim();
       var nine=(cells[15].innerText||'').trim();
@@ -1516,11 +1505,38 @@ const BOOKMARKLET_CODE = `javascript:(function(){
 })();`
 
 function copyBookmarklet() {
-  navigator.clipboard.writeText(BOOKMARKLET_CODE).then(() => {
+  // Primary: clipboard API
+  // Fallback: textarea execCommand (works even when page not focused)
+  var status = document.getElementById('ov-import-status')
+  var success = function() {
     setApi('Bookmarklet copied! Add it to your browser bookmarks bar.', 'ok')
-    document.getElementById('ov-import-status').textContent = 'Bookmarklet copied to clipboard -- paste it as a bookmark URL'
-    document.getElementById('ov-import-status').style.color = '#00d68f'
-  })
+    if(status) { status.textContent = 'Bookmarklet copied! Paste as bookmark URL in Chrome'; status.style.color = '#00d68f' }
+  }
+  var fail = function() {
+    // Last resort: show the code for manual copy
+    if(status) { status.textContent = 'Click the text below and press Ctrl+A, Ctrl+C to copy'; status.style.color = '#ff8c42' }
+    var ta = document.createElement('textarea')
+    ta.value = BOOKMARKLET_CODE
+    ta.style.cssText = 'position:fixed;top:10px;left:10px;width:90%;height:120px;z-index:9999;font-size:10px;background:#111;color:#0f0;border:2px solid #f0c040'
+    document.body.appendChild(ta)
+    ta.focus(); ta.select()
+    setTimeout(() => { if(ta.parentNode) ta.parentNode.removeChild(ta) }, 8000)
+  }
+  try {
+    // Try textarea method first (more reliable across focus states)
+    var ta = document.createElement('textarea')
+    ta.value = BOOKMARKLET_CODE
+    ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0'
+    document.body.appendChild(ta)
+    ta.focus(); ta.select()
+    var ok = document.execCommand('copy')
+    document.body.removeChild(ta)
+    if(ok) { success(); return }
+  } catch(e) {}
+  // Try modern clipboard API
+  if(navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(BOOKMARKLET_CODE).then(success).catch(fail)
+  } else { fail() }
 }
 
 function showBookmarkletHelp() {
@@ -1554,16 +1570,15 @@ function importOVData() {
       if(OV[ticker]) {
         // Update existing
         OV[ticker].r  = +d.r  || OV[ticker].r
-        var rawFg = +d.fg || OV[ticker].fg
-        // Normalize F&G: OVTLYR returns 0-1 decimal, we store as 0-100
-        OV[ticker].fg = rawFg > 100 ? Math.round(rawFg / 100) : rawFg <= 1.0 ? Math.round(rawFg * 100) : Math.round(rawFg)
+        var rawFg = +d.fg
+        if(rawFg && rawFg > 0) OV[ticker].fg = rawFg > 100 ? Math.round(rawFg / 100) : rawFg
         if(d.v) OV[ticker].v = +d.v
         updated++
       } else {
         // Add new ticker
         OV[ticker] = {
           r:    +d.r  || 0,
-          fg:   (+d.fg > 100 ? Math.round(+d.fg/100) : +d.fg <= 1.0 ? Math.round(+d.fg*100) : Math.round(+d.fg)) || 50,
+          fg:   (+d.fg > 100 ? Math.round(+d.fg/100) : +d.fg) || 50,
           s:    d.s   || 'Unknown',
           v:    +d.v  || 1000000,
           earn: false
