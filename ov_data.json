@@ -1,1 +1,1279 @@
-{"ov":{"CLS":{"r":1165.25,"fg":9,"s":"Tech","v":1845006,"earn":false},"NVDA":{"r":978,"fg":1,"s":"Tech","v":169287470,"earn":false},"GGAL":{"r":681.09,"fg":49,"s":"Financials","v":1190752,"earn":false},"IBKR":{"r":727.91,"fg":3,"s":"Financials","v":4745581,"earn":true},"HWM":{"r":524.66,"fg":9,"s":"Industrials","v":2240168,"earn":false},"TPR":{"r":516.52,"fg":33,"s":"Discretionary","v":1870429,"earn":false},"ATI":{"r":486,"fg":64.3,"s":"Materials","v":2039318,"earn":false},"WSM":{"r":387.77,"fg":9,"s":"Discretionary","v":1389138,"earn":false},"AGI":{"r":346.87,"fg":9,"s":"Materials","v":3744467,"earn":false},"UBS":{"r":347,"fg":61.9,"s":"Financials","v":2953626,"earn":false},"DECK":{"r":307.77,"fg":98,"s":"Discretionary","v":2103791,"earn":false},"UMC":{"r":306.6,"fg":3.75,"s":"Tech","v":8520543,"earn":false},"MOD":{"r":65.55,"fg":9,"s":"Discretionary","v":1062335,"earn":false},"DB":{"r":295.8,"fg":9,"s":"Financials","v":3772984,"earn":false},"FUTU":{"r":298.46,"fg":178,"s":"Financials","v":1592163,"earn":true},"NUE":{"r":273,"fg":61.6,"s":"Materials","v":1395570,"earn":true},"AMD":{"r":303.22,"fg":120,"s":"Tech","v":33249634,"earn":false},"JCI":{"r":233.77,"fg":9,"s":"Industrials","v":3771000,"earn":true},"GS":{"r":245.06,"fg":9,"s":"Financials","v":2290932,"earn":true},"CAT":{"r":213.56,"fg":9,"s":"Industrials","v":2505655,"earn":true},"STLD":{"r":234.15,"fg":8,"s":"Materials","v":1143431,"earn":false},"CVNA":{"r":243.33,"fg":9,"s":"Discretionary","v":2676380,"earn":false},"GE":{"r":215.9,"fg":9,"s":"Industrials","v":5479466,"earn":false},"CM":{"r":212.37,"fg":1.31,"s":"Financials","v":1521640,"earn":false},"COHR":{"r":202,"fg":63.5,"s":"Tech","v":8613996,"earn":true},"GFI":{"r":216.7,"fg":2.37,"s":"Materials","v":3714832,"earn":false},"DE":{"r":192.33,"fg":9,"s":"Industrials","v":1313316,"earn":true},"TT":{"r":185.77,"fg":9,"s":"Industrials","v":1279315,"earn":false},"EMBJ":{"r":189.07,"fg":9,"s":"Industrials","v":1766080,"earn":false},"SKM":{"r":182,"fg":64,"s":"Communication","v":1639499,"earn":false},"CRH":{"r":179.04,"fg":9,"s":"Materials","v":5666588,"earn":false},"TSM":{"r":198.89,"fg":9,"s":"Tech","v":13397132,"earn":false},"KKR":{"r":196.6,"fg":3.41,"s":"Financials","v":7164758,"earn":false},"AMAT":{"r":177.65,"fg":9,"s":"Tech","v":6391302,"earn":false},"RRX":{"r":179,"fg":64.9,"s":"Industrials","v":1110076,"earn":false},"RY":{"r":177.12,"fg":60,"s":"Financials","v":1195220,"earn":false},"SYF":{"r":176.61,"fg":2.39,"s":"Financials","v":3653139,"earn":true},"ING":{"r":174.62,"fg":51,"s":"Financials","v":3489656,"earn":false},"BVN":{"r":166.15,"fg":9,"s":"Materials","v":1621016,"earn":false},"GOOG":{"r":172.38,"fg":3.56,"s":"Communication","v":19236450,"earn":false},"APG":{"r":158,"fg":8,"s":"Industrials","v":3010089,"earn":false},"EWBC":{"r":153.9,"fg":8,"s":"Financials","v":1184271,"earn":false},"SATS":{"r":164.01,"fg":71,"s":"Communication","v":7541362,"earn":false},"BCS":{"r":147.83,"fg":0.38,"s":"Financials","v":9214835,"earn":false},"SAN":{"r":152.54,"fg":9,"s":"Financials","v":15232881,"earn":false},"AEM":{"r":136.64,"fg":9,"s":"Materials","v":2792401,"earn":false},"VMC":{"r":136.15,"fg":9,"s":"Materials","v":1433335,"earn":false},"NVT":{"r":139,"fg":65,"s":"Industrials","v":2249141,"earn":false},"MU":{"r":230.54,"fg":9,"s":"Tech","v":45677579,"earn":false},"NEM":{"r":126.95,"fg":9,"s":"Materials","v":10898399,"earn":false},"SCCO":{"r":120.44,"fg":9,"s":"Materials","v":1785575,"earn":false},"FDX":{"r":118.28,"fg":8,"s":"Industrials","v":1898625,"earn":true},"RGLD":{"r":124.55,"fg":9,"s":"Materials","v":1200799,"earn":false},"AME":{"r":117,"fg":62.2,"s":"Industrials","v":1383197,"earn":false},"WMT":{"r":113.77,"fg":9,"s":"Staples","v":19249263,"earn":true},"NWG":{"r":120.23,"fg":9,"s":"Financials","v":4414653,"earn":false},"RBA":{"r":111.81,"fg":39,"s":"Industrials","v":1178345,"earn":false},"RKLB":{"r":1094.11,"fg":191,"s":"Industrials","v":1000000,"earn":false},"ORCL":{"r":297.15,"fg":4.18,"s":"Technology","v":1000000,"earn":false},"CG":{"r":170.75,"fg":170,"s":"Financials","v":1000000,"earn":false},"BE":{"r":252.34,"fg":9,"s":"Industrials","v":1000000,"earn":false},"RJF":{"r":144.92,"fg":166,"s":"Financials","v":1000000,"earn":false},"USFD":{"r":144.62,"fg":1.18,"s":"Staples","v":1000000,"earn":false},"B":{"r":127.42,"fg":1.86,"s":"Materials","v":1000000,"earn":false},"BX":{"r":126.28,"fg":3.06,"s":"Financials","v":1000000,"earn":false},"AVGO":{"r":163.78,"fg":4,"s":"Technology","v":1000000,"earn":false},"CMG":{"r":105.28,"fg":95,"s":"Discretionary","v":1000000,"earn":false},"JPM":{"r":100.37,"fg":8,"s":"Financials","v":1000000,"earn":false},"KT":{"r":104.75,"fg":9,"s":"Communication","v":1000000,"earn":false},"MFG":{"r":104.69,"fg":0.46,"s":"Financials","v":1000000,"earn":false},"CP":{"r":103.78,"fg":9,"s":"Industrials","v":1000000,"earn":false},"DD":{"r":100.87,"fg":9,"s":"Materials","v":1000000,"earn":false},"NSC":{"r":99.4,"fg":9,"s":"Industrials","v":1000000,"earn":false},"FOXA":{"r":93.44,"fg":39,"s":"Communication","v":1000000,"earn":false},"SHW":{"r":89.78,"fg":9,"s":"Materials","v":1000000,"earn":false},"COF":{"r":91.83,"fg":157,"s":"Financials","v":1000000,"earn":false},"PCAR":{"r":81.14,"fg":9,"s":"Industrials","v":1000000,"earn":false},"GOOGL":{"r":101.06,"fg":126,"s":"Communication","v":1000000,"earn":false},"DOV":{"r":82.93,"fg":9,"s":"Industrials","v":1000000,"earn":false},"GM":{"r":84.32,"fg":9,"s":"Discretionary","v":1000000,"earn":false},"SCHW":{"r":90.13,"fg":2,"s":"Financials","v":1000000,"earn":false},"SMFG":{"r":83.4,"fg":9,"s":"Financials","v":1000000,"earn":false},"LSCC":{"r":77.6,"fg":9,"s":"Technology","v":1000000,"earn":false},"BNS":{"r":83.04,"fg":1,"s":"Financials","v":1000000,"earn":false},"XYZ":{"r":83.2,"fg":2.75,"s":"Technology","v":1000000,"earn":false},"FWONK":{"r":79.33,"fg":9,"s":"Communication","v":1000000,"earn":false},"AXP":{"r":81.48,"fg":64,"s":"Financials","v":1000000,"earn":false},"BK":{"r":79.48,"fg":1,"s":"Financials","v":1000000,"earn":false},"F":{"r":74.09,"fg":4.52,"s":"Discretionary","v":1000000,"earn":false},"APH":{"r":73.96,"fg":9,"s":"Technology","v":1000000,"earn":false},"LHX":{"r":70.12,"fg":10,"s":"Industrials","v":1000000,"earn":false},"CCL":{"r":71.7,"fg":45,"s":"Discretionary","v":1000000,"earn":false},"RPM":{"r":65.46,"fg":9,"s":"Materials","v":1000000,"earn":false},"NFLX":{"r":74.49,"fg":1,"s":"Communication","v":1000000,"earn":false},"RTX":{"r":60.83,"fg":9,"s":"Industrials","v":1000000,"earn":false},"MUFG":{"r":70.46,"fg":154,"s":"Financials","v":1000000,"earn":false},"FOX":{"r":66.29,"fg":40,"s":"Communication","v":1000000,"earn":false},"XYL":{"r":62.18,"fg":0.63,"s":"Industrials","v":1000000,"earn":false},"TKC":{"r":62,"fg":31,"s":"Communication","v":1000000,"earn":false},"ORLY":{"r":58.48,"fg":9,"s":"Discretionary","v":1000000,"earn":false},"ACGL":{"r":58.79,"fg":132,"s":"Financials","v":1000000,"earn":false},"TXN":{"r":56.7,"fg":1,"s":"Technology","v":1000000,"earn":false},"BEN":{"r":57.68,"fg":76,"s":"Financials","v":1000000,"earn":false},"CUK":{"r":55.99,"fg":70,"s":"Discretionary","v":1000000,"earn":false},"BBD":{"r":53.41,"fg":49,"s":"Financials","v":1000000,"earn":false},"RIO":{"r":50.25,"fg":8,"s":"Materials","v":1000000,"earn":false},"HBAN":{"r":51.59,"fg":48,"s":"Financials","v":1000000,"earn":false},"AFRM":{"r":65.43,"fg":6.81,"s":"Technology","v":1000000,"earn":false},"BUD":{"r":47.18,"fg":9,"s":"Staples","v":1000000,"earn":false},"HIG":{"r":46.14,"fg":9,"s":"Financials","v":1000000,"earn":false},"AMZN":{"r":43.09,"fg":3.81,"s":"Discretionary","v":1000000,"earn":false},"MAS":{"r":41.97,"fg":0.93,"s":"Industrials","v":1000000,"earn":false},"BSBR":{"r":40.93,"fg":50,"s":"Financials","v":1000000,"earn":false},"TXT":{"r":39.74,"fg":9,"s":"Industrials","v":1000000,"earn":false},"DIS":{"r":37.45,"fg":0.44,"s":"Communication","v":1000000,"earn":false},"LOW":{"r":36.06,"fg":0.55,"s":"Discretionary","v":1000000,"earn":false},"MCHP":{"r":34.22,"fg":9,"s":"Technology","v":1000000,"earn":false},"GGG":{"r":29.88,"fg":9,"s":"Industrials","v":1000000,"earn":false},"IR":{"r":28.96,"fg":0.72,"s":"Industrials","v":1000000,"earn":false},"RF":{"r":26.77,"fg":0.36,"s":"Financials","v":1000000,"earn":false},"BA":{"r":24.08,"fg":0.73,"s":"Industrials","v":1000000,"earn":false},"MET":{"r":26.6,"fg":2,"s":"Financials","v":1000000,"earn":false},"NTRS":{"r":21.46,"fg":1.19,"s":"Financials","v":1000000,"earn":false},"BKNG":{"r":28.55,"fg":2.52,"s":"Discretionary","v":1000000,"earn":false},"KEY":{"r":15.48,"fg":9,"s":"Financials","v":1000000,"earn":false},"NU":{"r":15.89,"fg":2.68,"s":"Financials","v":1000000,"earn":false},"AIG":{"r":13.44,"fg":9,"s":"Financials","v":1000000,"earn":false},"SGI":{"r":13.51,"fg":2.45,"s":"Discretionary","v":1000000,"earn":false},"CPNG":{"r":16.95,"fg":3,"s":"Discretionary","v":1000000,"earn":false},"LVS":{"r":10.97,"fg":1.24,"s":"Discretionary","v":1000000,"earn":false},"TROW":{"r":8.58,"fg":1.56,"s":"Financials","v":1000000,"earn":false},"PNC":{"r":7.67,"fg":39,"s":"Financials","v":1000000,"earn":false},"AFL":{"r":7.31,"fg":9,"s":"Financials","v":1000000,"earn":false},"TRV":{"r":2.36,"fg":9,"s":"Financials","v":1000000,"earn":false},"ALL":{"r":2.37,"fg":9,"s":"Financials","v":1000000,"earn":false},"AAPL":{"r":0.97,"fg":9,"s":"Technology","v":1000000,"earn":false},"MSTR":{"r":2097.22,"fg":4.46,"s":"Technology","v":1000000,"earn":false},"HOOD":{"r":799.53,"fg":9,"s":"Financials","v":1000000,"earn":false},"IONQ":{"r":368.02,"fg":9,"s":"Technology","v":1000000,"earn":false},"AJG":{"r":173.37,"fg":148,"s":"Financials","v":1000000,"earn":false},"SNPS":{"r":138.33,"fg":5,"s":"Technology","v":1000000,"earn":false},"APO":{"r":131.27,"fg":5,"s":"Financials","v":1000000,"earn":false},"SPOT":{"r":128.32,"fg":4,"s":"Communication","v":1000000,"earn":false},"KGC":{"r":127.2,"fg":9,"s":"Materials","v":1000000,"earn":false},"DASH":{"r":122.71,"fg":8,"s":"Communication","v":1000000,"earn":false},"MSFT":{"r":120.47,"fg":4.61,"s":"Technology","v":1000000,"earn":false},"UBER":{"r":115.63,"fg":6,"s":"Industrials","v":1000000,"earn":false},"EMR":{"r":101.97,"fg":9,"s":"Industrials","v":1000000,"earn":false},"ARES":{"r":87.49,"fg":5.92,"s":"Financials","v":1000000,"earn":false},"CDNS":{"r":85.04,"fg":4.01,"s":"Technology","v":1000000,"earn":false},"TTWO":{"r":62.69,"fg":4.41,"s":"Communication","v":1000000,"earn":false},"VIV":{"r":55.39,"fg":60,"s":"Communication","v":1000000,"earn":false},"FISV":{"r":53.87,"fg":4,"s":"Technology","v":1000000,"earn":false},"GME":{"r":3442.14,"fg":3.16,"s":"Discretionary","v":1000000,"earn":false},"IAG":{"r":160.19,"fg":9,"s":"Materials","v":1000000,"earn":false},"MP":{"r":111.84,"fg":3.77,"s":"Materials","v":1000000,"earn":false},"IVZ":{"r":109.72,"fg":9,"s":"Financials","v":1000000,"earn":false},"SF":{"r":90.82,"fg":148,"s":"Financials","v":1000000,"earn":false},"IRM":{"r":290.82,"fg":9,"s":"Real Estate","v":1000000,"earn":false},"VTR":{"r":109.54,"fg":9,"s":"Real Estate","v":1000000,"earn":false},"PLD":{"r":103.27,"fg":1,"s":"Real Estate","v":1000000,"earn":false},"SPG":{"r":80.45,"fg":9,"s":"Real Estate","v":1000000,"earn":false},"CBRE":{"r":59.47,"fg":28,"s":"Real Estate","v":1000000,"earn":false},"STX":{"r":568.51,"fg":9,"s":"Technology","v":1000000,"earn":false},"LRCX":{"r":406.51,"fg":9,"s":"Technology","v":1000000,"earn":false},"ASX":{"r":237.8,"fg":1,"s":"Technology","v":1000000,"earn":false},"MS":{"r":201.6,"fg":5,"s":"Financials","v":1000000,"earn":false},"ASML":{"r":175.59,"fg":9,"s":"Technology","v":1000000,"earn":false},"TD":{"r":108.2,"fg":83,"s":"Financials","v":1000000,"earn":false},"FLEX":{"r":105.89,"fg":9,"s":"Technology","v":1000000,"earn":false},"C":{"r":95.52,"fg":2,"s":"Financials","v":1000000,"earn":false},"BAC":{"r":68.38,"fg":2,"s":"Financials","v":1000000,"earn":false},"NOK":{"r":59.3,"fg":9,"s":"Technology","v":1000000,"earn":false},"EXR":{"r":38.2,"fg":9,"s":"Real Estate","v":1000000,"earn":false},"AMX":{"r":27.97,"fg":4,"s":"Communication","v":1000000,"earn":false},"MAR":{"r":27.22,"fg":9,"s":"Discretionary","v":1000000,"earn":false},"ABNB":{"r":15.43,"fg":3,"s":"Discretionary","v":1000000,"earn":false},"USB":{"r":14.39,"fg":50,"s":"Financials","v":1000000,"earn":false},"OXLC":{"r":11.8,"fg":3,"s":"Financials","v":1000000,"earn":false},"LYV":{"r":8.28,"fg":9,"s":"Communication","v":1000000,"earn":false},"PSA":{"r":7.43,"fg":8,"s":"Real Estate","v":1000000,"earn":false}},"importedAt":"Apr 16, 2026, 10:43 AM"}
+{
+  "ov": {
+    "CLS": {
+      "r": 1165.25,
+      "fg": 71,
+      "s": "Tech",
+      "v": 1884930,
+      "earn": false
+    },
+    "NVDA": {
+      "r": 978,
+      "fg": 41,
+      "s": "Tech",
+      "v": 167986684,
+      "earn": false
+    },
+    "GGAL": {
+      "r": 681.09,
+      "fg": 49,
+      "s": "Financials",
+      "v": 1190752,
+      "earn": false
+    },
+    "IBKR": {
+      "r": 727.91,
+      "fg": 3,
+      "s": "Financials",
+      "v": 2890456,
+      "earn": true
+    },
+    "HWM": {
+      "r": 524.66,
+      "fg": 9,
+      "s": "Industrials",
+      "v": 2240168,
+      "earn": false
+    },
+    "TPR": {
+      "r": 516.52,
+      "fg": 33,
+      "s": "Discretionary",
+      "v": 1870429,
+      "earn": false
+    },
+    "ATI": {
+      "r": 486,
+      "fg": 64.3,
+      "s": "Materials",
+      "v": 2039318,
+      "earn": false
+    },
+    "WSM": {
+      "r": 387.77,
+      "fg": 9,
+      "s": "Discretionary",
+      "v": 1389138,
+      "earn": false
+    },
+    "AGI": {
+      "r": 346.87,
+      "fg": 9,
+      "s": "Materials",
+      "v": 3744467,
+      "earn": false
+    },
+    "UBS": {
+      "r": 347,
+      "fg": 61.9,
+      "s": "Financials",
+      "v": 2953626,
+      "earn": false
+    },
+    "DECK": {
+      "r": 307.77,
+      "fg": 98,
+      "s": "Discretionary",
+      "v": 2103791,
+      "earn": false
+    },
+    "UMC": {
+      "r": 306.6,
+      "fg": 3.75,
+      "s": "Tech",
+      "v": 8520543,
+      "earn": false
+    },
+    "MOD": {
+      "r": 65.55,
+      "fg": 9,
+      "s": "Discretionary",
+      "v": 1062335,
+      "earn": false
+    },
+    "DB": {
+      "r": 295.8,
+      "fg": 9,
+      "s": "Financials",
+      "v": 3772984,
+      "earn": false
+    },
+    "FUTU": {
+      "r": 298.46,
+      "fg": 178,
+      "s": "Financials",
+      "v": 1592163,
+      "earn": true
+    },
+    "NUE": {
+      "r": 273,
+      "fg": 61.6,
+      "s": "Materials",
+      "v": 1395570,
+      "earn": true
+    },
+    "AMD": {
+      "r": 303.48,
+      "fg": 41,
+      "s": "Tech",
+      "v": 39542110,
+      "earn": false
+    },
+    "JCI": {
+      "r": 233.77,
+      "fg": 9,
+      "s": "Industrials",
+      "v": 3771000,
+      "earn": true
+    },
+    "GS": {
+      "r": 245.06,
+      "fg": 68,
+      "s": "Financials",
+      "v": 2239946,
+      "earn": true
+    },
+    "CAT": {
+      "r": 213.56,
+      "fg": 65,
+      "s": "Industrials",
+      "v": 2465393,
+      "earn": true
+    },
+    "STLD": {
+      "r": 234.15,
+      "fg": 8,
+      "s": "Materials",
+      "v": 1143431,
+      "earn": false
+    },
+    "CVNA": {
+      "r": 243.33,
+      "fg": 9,
+      "s": "Discretionary",
+      "v": 2676380,
+      "earn": false
+    },
+    "GE": {
+      "r": 215.9,
+      "fg": 9,
+      "s": "Industrials",
+      "v": 5479466,
+      "earn": false
+    },
+    "CM": {
+      "r": 212.37,
+      "fg": 1.31,
+      "s": "Financials",
+      "v": 1521640,
+      "earn": false
+    },
+    "COHR": {
+      "r": 202,
+      "fg": 63.5,
+      "s": "Tech",
+      "v": 8613996,
+      "earn": true
+    },
+    "GFI": {
+      "r": 216.7,
+      "fg": 2.37,
+      "s": "Materials",
+      "v": 3714832,
+      "earn": false
+    },
+    "DE": {
+      "r": 192.33,
+      "fg": 9,
+      "s": "Industrials",
+      "v": 1313316,
+      "earn": true
+    },
+    "TT": {
+      "r": 185.77,
+      "fg": 9,
+      "s": "Industrials",
+      "v": 1279315,
+      "earn": false
+    },
+    "EMBJ": {
+      "r": 189.07,
+      "fg": 9,
+      "s": "Industrials",
+      "v": 1766080,
+      "earn": false
+    },
+    "SKM": {
+      "r": 182,
+      "fg": 64,
+      "s": "Communication",
+      "v": 1639499,
+      "earn": false
+    },
+    "CRH": {
+      "r": 179.04,
+      "fg": 9,
+      "s": "Materials",
+      "v": 5666588,
+      "earn": false
+    },
+    "TSM": {
+      "r": 198.89,
+      "fg": 39,
+      "s": "Tech",
+      "v": 12345678,
+      "earn": false
+    },
+    "KKR": {
+      "r": 196.6,
+      "fg": 3.41,
+      "s": "Financials",
+      "v": 7164758,
+      "earn": false
+    },
+    "AMAT": {
+      "r": 177.65,
+      "fg": 9,
+      "s": "Tech",
+      "v": 6391302,
+      "earn": false
+    },
+    "RRX": {
+      "r": 179,
+      "fg": 64.9,
+      "s": "Industrials",
+      "v": 1110076,
+      "earn": false
+    },
+    "RY": {
+      "r": 177.12,
+      "fg": 60,
+      "s": "Financials",
+      "v": 1195220,
+      "earn": false
+    },
+    "SYF": {
+      "r": 176.61,
+      "fg": 2.39,
+      "s": "Financials",
+      "v": 3653139,
+      "earn": true
+    },
+    "ING": {
+      "r": 174.62,
+      "fg": 51,
+      "s": "Financials",
+      "v": 3489656,
+      "earn": false
+    },
+    "BVN": {
+      "r": 166.15,
+      "fg": 9,
+      "s": "Materials",
+      "v": 1621016,
+      "earn": false
+    },
+    "GOOG": {
+      "r": 172.38,
+      "fg": 3.56,
+      "s": "Communication",
+      "v": 19236450,
+      "earn": false
+    },
+    "APG": {
+      "r": 158,
+      "fg": 8,
+      "s": "Industrials",
+      "v": 3010089,
+      "earn": false
+    },
+    "EWBC": {
+      "r": 153.9,
+      "fg": 8,
+      "s": "Financials",
+      "v": 1184271,
+      "earn": false
+    },
+    "SATS": {
+      "r": 92.28,
+      "fg": 72,
+      "s": "Communication",
+      "v": 2106488,
+      "earn": false
+    },
+    "BCS": {
+      "r": 147.83,
+      "fg": 0.38,
+      "s": "Financials",
+      "v": 9214835,
+      "earn": false
+    },
+    "SAN": {
+      "r": 152.54,
+      "fg": 9,
+      "s": "Financials",
+      "v": 15232881,
+      "earn": false
+    },
+    "AEM": {
+      "r": 136.64,
+      "fg": 9,
+      "s": "Materials",
+      "v": 2792401,
+      "earn": false
+    },
+    "VMC": {
+      "r": 136.15,
+      "fg": 9,
+      "s": "Materials",
+      "v": 1433335,
+      "earn": false
+    },
+    "NVT": {
+      "r": 139,
+      "fg": 65,
+      "s": "Industrials",
+      "v": 2249141,
+      "earn": false
+    },
+    "MU": {
+      "r": 230.54,
+      "fg": 9,
+      "s": "Tech",
+      "v": 45677579,
+      "earn": false
+    },
+    "NEM": {
+      "r": 126.95,
+      "fg": 9,
+      "s": "Materials",
+      "v": 10898399,
+      "earn": false
+    },
+    "SCCO": {
+      "r": 120.44,
+      "fg": 9,
+      "s": "Materials",
+      "v": 1785575,
+      "earn": false
+    },
+    "FDX": {
+      "r": 118.28,
+      "fg": 8,
+      "s": "Industrials",
+      "v": 1898625,
+      "earn": true
+    },
+    "RGLD": {
+      "r": 124.55,
+      "fg": 9,
+      "s": "Materials",
+      "v": 1200799,
+      "earn": false
+    },
+    "AME": {
+      "r": 117,
+      "fg": 62.2,
+      "s": "Industrials",
+      "v": 1383197,
+      "earn": false
+    },
+    "WMT": {
+      "r": 113.77,
+      "fg": 9,
+      "s": "Staples",
+      "v": 19249263,
+      "earn": true
+    },
+    "NWG": {
+      "r": 120.23,
+      "fg": 9,
+      "s": "Financials",
+      "v": 4414653,
+      "earn": false
+    },
+    "RBA": {
+      "r": 111.81,
+      "fg": 39,
+      "s": "Industrials",
+      "v": 1178345,
+      "earn": false
+    },
+    "RKLB": {
+      "r": 1094.11,
+      "fg": 191,
+      "s": "Industrials",
+      "v": 1000000,
+      "earn": false
+    },
+    "ORCL": {
+      "r": 297.15,
+      "fg": 4.18,
+      "s": "Technology",
+      "v": 1000000,
+      "earn": false
+    },
+    "CG": {
+      "r": 170.75,
+      "fg": 170,
+      "s": "Financials",
+      "v": 1000000,
+      "earn": false
+    },
+    "BE": {
+      "r": 252.34,
+      "fg": 57,
+      "s": "Industrials",
+      "v": 10435126,
+      "earn": false
+    },
+    "RJF": {
+      "r": 144.92,
+      "fg": 166,
+      "s": "Financials",
+      "v": 1000000,
+      "earn": false
+    },
+    "USFD": {
+      "r": 144.62,
+      "fg": 1.18,
+      "s": "Staples",
+      "v": 1000000,
+      "earn": false
+    },
+    "B": {
+      "r": 127.42,
+      "fg": 1.86,
+      "s": "Materials",
+      "v": 1000000,
+      "earn": false
+    },
+    "BX": {
+      "r": 126.28,
+      "fg": 3.06,
+      "s": "Financials",
+      "v": 1000000,
+      "earn": false
+    },
+    "AVGO": {
+      "r": 163.78,
+      "fg": 4,
+      "s": "Technology",
+      "v": 1000000,
+      "earn": false
+    },
+    "CMG": {
+      "r": 105.28,
+      "fg": 95,
+      "s": "Discretionary",
+      "v": 1000000,
+      "earn": false
+    },
+    "JPM": {
+      "r": 100.37,
+      "fg": 8,
+      "s": "Financials",
+      "v": 1000000,
+      "earn": false
+    },
+    "KT": {
+      "r": 104.75,
+      "fg": 46,
+      "s": "Communication",
+      "v": 1547014,
+      "earn": false
+    },
+    "MFG": {
+      "r": 104.69,
+      "fg": 0.46,
+      "s": "Financials",
+      "v": 1000000,
+      "earn": false
+    },
+    "CP": {
+      "r": 103.78,
+      "fg": 9,
+      "s": "Industrials",
+      "v": 1000000,
+      "earn": false
+    },
+    "DD": {
+      "r": 100.87,
+      "fg": 9,
+      "s": "Materials",
+      "v": 1000000,
+      "earn": false
+    },
+    "NSC": {
+      "r": 99.4,
+      "fg": 58,
+      "s": "Industrials",
+      "v": 1364886,
+      "earn": false
+    },
+    "FOXA": {
+      "r": 93.44,
+      "fg": 39,
+      "s": "Communication",
+      "v": 1000000,
+      "earn": false
+    },
+    "SHW": {
+      "r": 89.78,
+      "fg": 9,
+      "s": "Materials",
+      "v": 1000000,
+      "earn": false
+    },
+    "COF": {
+      "r": 91.83,
+      "fg": 157,
+      "s": "Financials",
+      "v": 1000000,
+      "earn": false
+    },
+    "PCAR": {
+      "r": 81.14,
+      "fg": 9,
+      "s": "Industrials",
+      "v": 1000000,
+      "earn": false
+    },
+    "GOOGL": {
+      "r": 101.06,
+      "fg": 126,
+      "s": "Communication",
+      "v": 1000000,
+      "earn": false
+    },
+    "DOV": {
+      "r": 82.93,
+      "fg": 9,
+      "s": "Industrials",
+      "v": 1000000,
+      "earn": false
+    },
+    "GM": {
+      "r": 84.32,
+      "fg": 9,
+      "s": "Discretionary",
+      "v": 1000000,
+      "earn": false
+    },
+    "SCHW": {
+      "r": 90.13,
+      "fg": 2,
+      "s": "Financials",
+      "v": 1000000,
+      "earn": false
+    },
+    "SMFG": {
+      "r": 83.4,
+      "fg": 9,
+      "s": "Financials",
+      "v": 1000000,
+      "earn": false
+    },
+    "LSCC": {
+      "r": 77.6,
+      "fg": 9,
+      "s": "Technology",
+      "v": 1000000,
+      "earn": false
+    },
+    "BNS": {
+      "r": 83.04,
+      "fg": 53,
+      "s": "Financials",
+      "v": 2363015,
+      "earn": false
+    },
+    "XYZ": {
+      "r": 83.2,
+      "fg": 2.75,
+      "s": "Technology",
+      "v": 1000000,
+      "earn": false
+    },
+    "FWONK": {
+      "r": 79.33,
+      "fg": 9,
+      "s": "Communication",
+      "v": 1000000,
+      "earn": false
+    },
+    "AXP": {
+      "r": 81.48,
+      "fg": 64,
+      "s": "Financials",
+      "v": 1000000,
+      "earn": false
+    },
+    "BK": {
+      "r": 79.48,
+      "fg": 63,
+      "s": "Financials",
+      "v": 3496582,
+      "earn": false
+    },
+    "F": {
+      "r": 74.09,
+      "fg": 4.52,
+      "s": "Discretionary",
+      "v": 1000000,
+      "earn": false
+    },
+    "APH": {
+      "r": 73.96,
+      "fg": 9,
+      "s": "Technology",
+      "v": 1000000,
+      "earn": false
+    },
+    "LHX": {
+      "r": 70.12,
+      "fg": 10,
+      "s": "Industrials",
+      "v": 1000000,
+      "earn": false
+    },
+    "CCL": {
+      "r": 71.7,
+      "fg": 45,
+      "s": "Discretionary",
+      "v": 1000000,
+      "earn": false
+    },
+    "RPM": {
+      "r": 65.46,
+      "fg": 9,
+      "s": "Materials",
+      "v": 1000000,
+      "earn": false
+    },
+    "NFLX": {
+      "r": 74.49,
+      "fg": 66,
+      "s": "Communication",
+      "v": 37527950,
+      "earn": false
+    },
+    "RTX": {
+      "r": 60.83,
+      "fg": 9,
+      "s": "Industrials",
+      "v": 1000000,
+      "earn": false
+    },
+    "MUFG": {
+      "r": 70.46,
+      "fg": 154,
+      "s": "Financials",
+      "v": 1000000,
+      "earn": false
+    },
+    "FOX": {
+      "r": 66.29,
+      "fg": 40,
+      "s": "Communication",
+      "v": 1000000,
+      "earn": false
+    },
+    "XYL": {
+      "r": 62.18,
+      "fg": 0.63,
+      "s": "Industrials",
+      "v": 1000000,
+      "earn": false
+    },
+    "TKC": {
+      "r": 62,
+      "fg": 31,
+      "s": "Communication",
+      "v": 1000000,
+      "earn": false
+    },
+    "ORLY": {
+      "r": 58.48,
+      "fg": 9,
+      "s": "Discretionary",
+      "v": 1000000,
+      "earn": false
+    },
+    "ACGL": {
+      "r": 58.79,
+      "fg": 132,
+      "s": "Financials",
+      "v": 1000000,
+      "earn": false
+    },
+    "TXN": {
+      "r": 56.7,
+      "fg": 1,
+      "s": "Technology",
+      "v": 1000000,
+      "earn": false
+    },
+    "BEN": {
+      "r": 57.68,
+      "fg": 76,
+      "s": "Financials",
+      "v": 1000000,
+      "earn": false
+    },
+    "CUK": {
+      "r": 55.99,
+      "fg": 70,
+      "s": "Discretionary",
+      "v": 1000000,
+      "earn": false
+    },
+    "BBD": {
+      "r": 53.41,
+      "fg": 49,
+      "s": "Financials",
+      "v": 1000000,
+      "earn": false
+    },
+    "RIO": {
+      "r": 50.25,
+      "fg": 8,
+      "s": "Materials",
+      "v": 1000000,
+      "earn": false
+    },
+    "HBAN": {
+      "r": 51.59,
+      "fg": 48,
+      "s": "Financials",
+      "v": 1000000,
+      "earn": false
+    },
+    "AFRM": {
+      "r": 65.43,
+      "fg": 6.81,
+      "s": "Technology",
+      "v": 1000000,
+      "earn": false
+    },
+    "BUD": {
+      "r": 47.18,
+      "fg": 9,
+      "s": "Staples",
+      "v": 1000000,
+      "earn": false
+    },
+    "HIG": {
+      "r": 46.14,
+      "fg": 9,
+      "s": "Financials",
+      "v": 1000000,
+      "earn": false
+    },
+    "AMZN": {
+      "r": 43.09,
+      "fg": 3.81,
+      "s": "Discretionary",
+      "v": 1000000,
+      "earn": false
+    },
+    "MAS": {
+      "r": 41.97,
+      "fg": 0.93,
+      "s": "Industrials",
+      "v": 1000000,
+      "earn": false
+    },
+    "BSBR": {
+      "r": 40.93,
+      "fg": 50,
+      "s": "Financials",
+      "v": 1000000,
+      "earn": false
+    },
+    "TXT": {
+      "r": 39.74,
+      "fg": 9,
+      "s": "Industrials",
+      "v": 1000000,
+      "earn": false
+    },
+    "DIS": {
+      "r": 37.45,
+      "fg": 0.44,
+      "s": "Communication",
+      "v": 1000000,
+      "earn": false
+    },
+    "LOW": {
+      "r": 36.06,
+      "fg": 0.55,
+      "s": "Discretionary",
+      "v": 1000000,
+      "earn": false
+    },
+    "MCHP": {
+      "r": 34.22,
+      "fg": 9,
+      "s": "Technology",
+      "v": 1000000,
+      "earn": false
+    },
+    "GGG": {
+      "r": 29.88,
+      "fg": 9,
+      "s": "Industrials",
+      "v": 1000000,
+      "earn": false
+    },
+    "IR": {
+      "r": 28.96,
+      "fg": 0.72,
+      "s": "Industrials",
+      "v": 1000000,
+      "earn": false
+    },
+    "RF": {
+      "r": 26.77,
+      "fg": 0.36,
+      "s": "Financials",
+      "v": 1000000,
+      "earn": false
+    },
+    "BA": {
+      "r": 24.08,
+      "fg": 0.73,
+      "s": "Industrials",
+      "v": 1000000,
+      "earn": false
+    },
+    "MET": {
+      "r": 26.6,
+      "fg": 2,
+      "s": "Financials",
+      "v": 1000000,
+      "earn": false
+    },
+    "NTRS": {
+      "r": 21.46,
+      "fg": 1.19,
+      "s": "Financials",
+      "v": 1000000,
+      "earn": false
+    },
+    "BKNG": {
+      "r": 28.55,
+      "fg": 2.52,
+      "s": "Discretionary",
+      "v": 1000000,
+      "earn": false
+    },
+    "KEY": {
+      "r": 15.48,
+      "fg": 52,
+      "s": "Financials",
+      "v": 15746112,
+      "earn": false
+    },
+    "NU": {
+      "r": 15.89,
+      "fg": 2.68,
+      "s": "Financials",
+      "v": 1000000,
+      "earn": false
+    },
+    "AIG": {
+      "r": 13.44,
+      "fg": 9,
+      "s": "Financials",
+      "v": 1000000,
+      "earn": false
+    },
+    "SGI": {
+      "r": 13.51,
+      "fg": 2.45,
+      "s": "Discretionary",
+      "v": 1000000,
+      "earn": false
+    },
+    "CPNG": {
+      "r": 16.95,
+      "fg": 3,
+      "s": "Discretionary",
+      "v": 1000000,
+      "earn": false
+    },
+    "LVS": {
+      "r": 10.97,
+      "fg": 1.24,
+      "s": "Discretionary",
+      "v": 1000000,
+      "earn": false
+    },
+    "TROW": {
+      "r": 8.58,
+      "fg": 1.56,
+      "s": "Financials",
+      "v": 1000000,
+      "earn": false
+    },
+    "PNC": {
+      "r": 7.67,
+      "fg": 52,
+      "s": "Financials",
+      "v": 2532211,
+      "earn": false
+    },
+    "AFL": {
+      "r": 7.31,
+      "fg": 9,
+      "s": "Financials",
+      "v": 1000000,
+      "earn": false
+    },
+    "TRV": {
+      "r": 2.36,
+      "fg": 60,
+      "s": "Financials",
+      "v": 1353551,
+      "earn": false
+    },
+    "ALL": {
+      "r": 2.37,
+      "fg": 9,
+      "s": "Financials",
+      "v": 1000000,
+      "earn": false
+    },
+    "AAPL": {
+      "r": 0.97,
+      "fg": 9,
+      "s": "Technology",
+      "v": 1000000,
+      "earn": false
+    },
+    "MSTR": {
+      "r": 2097.22,
+      "fg": 4.46,
+      "s": "Technology",
+      "v": 1000000,
+      "earn": false
+    },
+    "HOOD": {
+      "r": 799.53,
+      "fg": 9,
+      "s": "Financials",
+      "v": 1000000,
+      "earn": false
+    },
+    "IONQ": {
+      "r": 368.02,
+      "fg": 9,
+      "s": "Technology",
+      "v": 1000000,
+      "earn": false
+    },
+    "AJG": {
+      "r": 173.37,
+      "fg": 148,
+      "s": "Financials",
+      "v": 1000000,
+      "earn": false
+    },
+    "SNPS": {
+      "r": 138.33,
+      "fg": 46,
+      "s": "Technology",
+      "v": 1831098,
+      "earn": false
+    },
+    "APO": {
+      "r": 131.27,
+      "fg": 47,
+      "s": "Financials",
+      "v": 5420031,
+      "earn": false
+    },
+    "SPOT": {
+      "r": 128.32,
+      "fg": 44,
+      "s": "Communication",
+      "v": 1772715,
+      "earn": false
+    },
+    "KGC": {
+      "r": 127.2,
+      "fg": 9,
+      "s": "Materials",
+      "v": 1000000,
+      "earn": false
+    },
+    "DASH": {
+      "r": 122.71,
+      "fg": 44,
+      "s": "Communication",
+      "v": 4075760,
+      "earn": false
+    },
+    "MSFT": {
+      "r": 120.47,
+      "fg": 4.61,
+      "s": "Technology",
+      "v": 1000000,
+      "earn": false
+    },
+    "UBER": {
+      "r": 115.63,
+      "fg": 45,
+      "s": "Industrials",
+      "v": 15974258,
+      "earn": false
+    },
+    "EMR": {
+      "r": 101.97,
+      "fg": 9,
+      "s": "Industrials",
+      "v": 1000000,
+      "earn": false
+    },
+    "ARES": {
+      "r": 87.49,
+      "fg": 5.92,
+      "s": "Financials",
+      "v": 1000000,
+      "earn": false
+    },
+    "CDNS": {
+      "r": 85.04,
+      "fg": 4.01,
+      "s": "Technology",
+      "v": 1000000,
+      "earn": false
+    },
+    "TTWO": {
+      "r": 62.69,
+      "fg": 4.41,
+      "s": "Communication",
+      "v": 1000000,
+      "earn": false
+    },
+    "VIV": {
+      "r": 55.39,
+      "fg": 59,
+      "s": "Communication",
+      "v": 1005142,
+      "earn": false
+    },
+    "FISV": {
+      "r": 53.87,
+      "fg": 42,
+      "s": "Technology",
+      "v": 6336398,
+      "earn": false
+    },
+    "GME": {
+      "r": 3442.14,
+      "fg": 3.16,
+      "s": "Discretionary",
+      "v": 1000000,
+      "earn": false
+    },
+    "IAG": {
+      "r": 160.19,
+      "fg": 9,
+      "s": "Materials",
+      "v": 1000000,
+      "earn": false
+    },
+    "MP": {
+      "r": 111.84,
+      "fg": 3.77,
+      "s": "Materials",
+      "v": 1000000,
+      "earn": false
+    },
+    "IVZ": {
+      "r": 109.72,
+      "fg": 9,
+      "s": "Financials",
+      "v": 1000000,
+      "earn": false
+    },
+    "SF": {
+      "r": 90.82,
+      "fg": 148,
+      "s": "Financials",
+      "v": 1000000,
+      "earn": false
+    },
+    "IRM": {
+      "r": 290.82,
+      "fg": 9,
+      "s": "Real Estate",
+      "v": 1000000,
+      "earn": false
+    },
+    "VTR": {
+      "r": 109.54,
+      "fg": 9,
+      "s": "Real Estate",
+      "v": 1000000,
+      "earn": false
+    },
+    "PLD": {
+      "r": 103.27,
+      "fg": 1,
+      "s": "Real Estate",
+      "v": 1000000,
+      "earn": false
+    },
+    "SPG": {
+      "r": 80.45,
+      "fg": 9,
+      "s": "Real Estate",
+      "v": 1000000,
+      "earn": false
+    },
+    "CBRE": {
+      "r": 59.47,
+      "fg": 28,
+      "s": "Real Estate",
+      "v": 1000000,
+      "earn": false
+    },
+    "STX": {
+      "r": 568.51,
+      "fg": 87,
+      "s": "Technology",
+      "v": 3553747,
+      "earn": false
+    },
+    "LRCX": {
+      "r": 406.51,
+      "fg": 51,
+      "s": "Technology",
+      "v": 2156789,
+      "earn": false
+    },
+    "ASX": {
+      "r": 237.8,
+      "fg": 79,
+      "s": "Technology",
+      "v": 6759578,
+      "earn": false
+    },
+    "MS": {
+      "r": 201.6,
+      "fg": 72,
+      "s": "Financials",
+      "v": 6953507,
+      "earn": false
+    },
+    "ASML": {
+      "r": 175.59,
+      "fg": 9,
+      "s": "Technology",
+      "v": 1000000,
+      "earn": false
+    },
+    "TD": {
+      "r": 108.2,
+      "fg": 78,
+      "s": "Financials",
+      "v": 2504582,
+      "earn": false
+    },
+    "FLEX": {
+      "r": 105.89,
+      "fg": 81,
+      "s": "Technology",
+      "v": 3313985,
+      "earn": false
+    },
+    "C": {
+      "r": 95.52,
+      "fg": 82,
+      "s": "Financials",
+      "v": 14543652,
+      "earn": false
+    },
+    "BAC": {
+      "r": 68.38,
+      "fg": 70,
+      "s": "Financials",
+      "v": 40208317,
+      "earn": false
+    },
+    "NOK": {
+      "r": 59.3,
+      "fg": 9,
+      "s": "Technology",
+      "v": 1000000,
+      "earn": false
+    },
+    "EXR": {
+      "r": 38.2,
+      "fg": 48,
+      "s": "Real Estate",
+      "v": 1185051,
+      "earn": false
+    },
+    "AMX": {
+      "r": 27.97,
+      "fg": 77,
+      "s": "Communication",
+      "v": 1610676,
+      "earn": false
+    },
+    "MAR": {
+      "r": 27.22,
+      "fg": 80,
+      "s": "Discretionary",
+      "v": 1483350,
+      "earn": false
+    },
+    "ABNB": {
+      "r": 15.43,
+      "fg": 74,
+      "s": "Discretionary",
+      "v": 3550806,
+      "earn": false
+    },
+    "USB": {
+      "r": 14.39,
+      "fg": 50,
+      "s": "Financials",
+      "v": 1000000,
+      "earn": false
+    },
+    "OXLC": {
+      "r": 11.8,
+      "fg": 74,
+      "s": "Financials",
+      "v": 1583181,
+      "earn": false
+    },
+    "LYV": {
+      "r": 8.28,
+      "fg": 71,
+      "s": "Communication",
+      "v": 3054264,
+      "earn": false
+    },
+    "PSA": {
+      "r": 7.43,
+      "fg": 56,
+      "s": "Real Estate",
+      "v": 1270406,
+      "earn": false
+    },
+    "XLNX": {
+      "r": 11.8,
+      "fg": 52,
+      "s": "Technology",
+      "v": 198234,
+      "earn": false
+    }
+  },
+  "importedAt": "Apr 16, 2026, 11:41 AM"
+}
