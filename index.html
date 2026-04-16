@@ -309,7 +309,6 @@ tr:hover td{background:#171b22;cursor:pointer}
           <th onclick="scrSort('fg')" style="cursor:pointer;user-select:none" title="Sort by Fear &amp; Greed">F&amp;G <span id="sort-fg"></span></th>
           <th>Sector</th>
           <th>Spread</th>
-          <th>OI</th>
           <th>Earnings</th>
           <th onclick="scrSort('dte')" style="cursor:pointer;user-select:none" title="Sort by DTE">DTE <span id="sort-dte"></span></th>
           <th onclick="scrSort('gt')" style="cursor:pointer;user-select:none" title="Sort by GT Score">GT Score <span id="sort-gt"></span></th>
@@ -1150,7 +1149,7 @@ async function fetchTQQQSignal() {
         '<div style="height:8px;background:rgba(0,214,143,.12);border-radius:4px;overflow:hidden">' +
         '<div style="height:100%;border-radius:4px;background:#00d68f;width:'+Math.round(turboWeek/12*100)+'%;transition:width .4s"></div></div>'
       ) +
-      '<div style="font-size:10px;color:#333a4a;margin-top:6px">'+(turboState==='normal'?'Arms after 8 consecutive weeks below 200MA, fires on reclaim for 12 weeks':turboState==='arming'?'Needs '+(8-weeksBelow)+' more weeks below to arm':turboState==='armed'?'Primed — reclaim 200MA starts the 12-week window':'Turbo active — elevated conviction window')+'</div>' +
+      '<div style="font-size:10px;color:#333a4a;margin-top:6px">'+(turboState==='normal'?'Arms after 8 consecutive weeks below 200MA, fires on reclaim above 200MA for 12 weeks':turboState==='arming'?'Needs '+(8-weeksBelow)+' more weeks below to arm':turboState==='armed'?'Primed — reclaim 200MA starts the 12-week window':'Turbo active — elevated conviction window')+'</div>' +
       '</div>'
 
     if(body) body.innerHTML = html
@@ -1703,7 +1702,6 @@ function runFilter() {
       '<td style="font-family:\'SF Mono\',monospace;color:' + fgc + '">' + s.d.fg.toFixed(0) + '</td>' +
       '<td class="dim" style="font-size:11px">' + s.d.s + '</td>' +
       '<td>' + spLbl + '</td>' +
-      '<td id="oi-' + s.t + '" style="font-family:\'SF Mono\',monospace;font-size:11px;color:#555c6e">' + (LIVE_PRICES[s.t]&&LIVE_PRICES[s.t].oi?(LIVE_PRICES[s.t].oi>1e6?(LIVE_PRICES[s.t].oi/1e6).toFixed(1)+'M':Math.round(LIVE_PRICES[s.t].oi/1000)+'K'):'--') + '</td>' +
       '<td>' + eLbl + '</td>' +
       '<td id="gt-' + s.t + '" style="font-family:\'SF Mono\',monospace;font-size:11px;min-width:52px">' +
         (GT_SCORES[s.t] ? '<span style="color:' + (GT_SCORES[s.t].score>=8?'#00d68f':GT_SCORES[s.t].score>=6?'#f0c040':GT_SCORES[s.t].score>=4?'#ff8c42':'#ff4560') + ';font-weight:700">' + GT_SCORES[s.t].score + '</span><div style="font-size:9px;color:#555c6e">T:'+GT_SCORES[s.t].trend+' M:'+GT_SCORES[s.t].mom+' RS:'+GT_SCORES[s.t].rs+'</div>' : '--') + '</td>' +
@@ -1922,7 +1920,7 @@ async function runGTScores() {
   const tickers = []
   rows.forEach(r => {
     const td = r.querySelector('td:nth-child(2)')
-    if(td) tickers.push(td.textContent.split('\n')[0].trim())
+    if(td) { const t = td.firstChild ? td.firstChild.textContent.trim() : td.textContent.split('\n')[0].trim(); if(t && t.length <= 7) tickers.push(t) }
   })
 
   if(!tickers.length) {
