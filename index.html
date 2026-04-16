@@ -284,6 +284,8 @@ tr:hover td{background:#171b22;cursor:pointer}
     </div>
   </div>
 
+</div><!-- end #market -->
+
 <!-- &#9552;&#9552;&#9552; SCREENER &#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552; -->
 <div id="screener" class="page">
   <!-- OVTLYR Data Refresh Panel -->
@@ -340,8 +342,8 @@ tr:hover td{background:#171b22;cursor:pointer}
     <div class="card-body">
       <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:9px">
         <div class="field" style="margin:0"><label>Min signal %</label><input type="number" id="f-sig" value="0"></div>
-        <div class="field" style="margin:0"><label>F&G min</label><input type="number" id="f-fg-min" value="15"></div>
-        <div class="field" style="margin:0"><label>F&G max</label><input type="number" id="f-fg-max" value="65"></div>
+        <div class="field" style="margin:0"><label>F&G min</label><input type="number" id="f-fg-min" value="0"></div>
+        <div class="field" style="margin:0"><label>F&G max</label><input type="number" id="f-fg-max" value="100"></div>
         <div class="field" style="margin:0">
   <label style="display:flex;align-items:center;gap:4px">
     Max spread
@@ -802,7 +804,7 @@ const OV = {
 const LIVE_PRICES = {}
 const GT_SCORES = {}  // cache: ticker -> {score, trend, mom, rs, vol, atr, ext, ts}
 let SCR_SORT = { col: 'score', dir: -1 }  // col: score|sig|fg|gt, dir: -1=desc 1=asc
-const WIDE_SPREADS = new Set(['AMAT','ATI','CAT','DE','GS','COHR','TT','CLS','MOD','WSM'])
+const WIDE_SPREADS = new Set(['AMAT','ATI','CAT','DE','GS','COHR','TT','MOD','WSM'])
 const BULL_SECTORS = new Set(['Financials','Materials','Real Estate','Industrials'])
 
 const SECTORS = [
@@ -1480,8 +1482,20 @@ const BOOKMARKLET_CODE = `javascript:(function(){
       if(!ticker||ticker.length>7||ticker==='SYMBOL')return;
       var sig=parseFloat((cells[4].innerText||'').replace(/[^0-9.-]/g,''))||0;
       if(!sig)return;
-      var fgRaw=parseFloat((cells[12].innerText||'0').replace(/[^0-9.-]/g,''))||0;
-      var fg=(fgRaw>0&&fgRaw<2)?+(fgRaw*100).toFixed(1):fgRaw;
+      // F&G: OVTLYR stores as decimal (0.0-1.0 range maps to 0-100)
+      // Try cells 10-14, pick the one that makes most sense as F&G
+      var fgCandidates = [10,11,12,13,14].map(function(i){
+        return parseFloat((cells[i]?.innerText||'0').replace(/[^0-9.-]/g,''))||0;
+      });
+      // F&G raw from OVTLYR is in 0-1 decimal range. Multiply by 100.
+      // Pick candidate that when multiplied by 100 falls in 0-100 range
+      var fgRaw = fgCandidates[2]; // default cells[12]
+      for(var ci=0;ci<fgCandidates.length;ci++){
+        var v=fgCandidates[ci];
+        if(v>0 && v<=1.0){fgRaw=v;break;} // found clean 0-1 decimal
+      }
+      // Convert: if <=1.0 it's a decimal fraction (0.35 = 35), if >1 already a number
+      var fg = fgRaw > 0 && fgRaw <= 1.0 ? Math.round(fgRaw*100) : (fgRaw > 100 ? Math.round(fgRaw/100) : Math.round(fgRaw));
       var vol=parseInt((cells[11].innerText||'0').replace(/,/g,''))||0;
       var sec=(cells[6].innerText||'').split('/')[0].trim();
       var nine=(cells[15].innerText||'').trim();
@@ -1541,14 +1555,15 @@ function importOVData() {
         // Update existing
         OV[ticker].r  = +d.r  || OV[ticker].r
         var rawFg = +d.fg || OV[ticker].fg
-        OV[ticker].fg = (rawFg > 0 && rawFg < 2) ? +(rawFg * 100).toFixed(1) : rawFg
+        // Normalize F&G: OVTLYR returns 0-1 decimal, we store as 0-100
+        OV[ticker].fg = rawFg > 100 ? Math.round(rawFg / 100) : rawFg <= 1.0 ? Math.round(rawFg * 100) : Math.round(rawFg)
         if(d.v) OV[ticker].v = +d.v
         updated++
       } else {
         // Add new ticker
         OV[ticker] = {
           r:    +d.r  || 0,
-          fg:   ((+d.fg > 0 && +d.fg < 2) ? +(+d.fg * 100).toFixed(1) : +d.fg) || 50,
+          fg:   (+d.fg > 100 ? Math.round(+d.fg/100) : +d.fg <= 1.0 ? Math.round(+d.fg*100) : Math.round(+d.fg)) || 50,
           s:    d.s   || 'Unknown',
           v:    +d.v  || 1000000,
           earn: false
@@ -1747,7 +1762,7 @@ function runFilter() {
     if(noEarn && !earnOk) return null
     if(bullOnly && !BULL_SECTORS.has(d.s)) return null
     if(noWide && !spreadOk) return null
-    const score = Math.min(40, d.r/20) + (d.fg>=15&&d.fg<=65?20:5) + (earnOk?20:0) + (spreadOk?10:0) + (d.v>3e6?10:5)
+    const score = Math.min(40, d.r * 0.4) + (d.fg>=15&&d.fg<=65?20:5) + (earnOk?20:0) + (spreadOk?10:0) + (d.v>3e6?10:5)
     return {t, d, spreadOk, earnOk, score}
   }).filter(Boolean).sort((a,b) => {
     if(typeof SCR_SORT === 'undefined' || !SCR_SORT) return b.score - a.score
@@ -1767,24 +1782,27 @@ function runFilter() {
   }
 
   tbody.innerHTML = scored.map((s, i) => {
-    // F&G: 15-65 is Golden Ticket sweet spot
-    // <15 = extreme fear (avoid), 15-35 = fear (good entry), 36-65 = neutral/mild greed (ideal), >65 = extended (avoid)
-    const fgc = s.d.fg < 15 ? '#ff4560'       // extreme fear -- avoid
-              : s.d.fg <= 35 ? '#4da6ff'       // fear zone -- good entry  
-              : s.d.fg <= 65 ? '#00d68f'       // sweet spot -- ideal
-              : s.d.fg <= 80 ? '#ff8c42'       // greed -- extended
-              : '#ff4560'                      // extreme greed -- avoid
+    // F&G color: 15-65 is Golden Ticket sweet spot
+    // Suspicious values (<=5 or >100) shown in grey
+    const fgSuspect = s.d.fg <= 5 || s.d.fg > 100
+    const fgc = fgSuspect ? '#333a4a'
+              : s.d.fg < 15 ? '#ff4560'
+              : s.d.fg <= 35 ? '#4da6ff'
+              : s.d.fg <= 65 ? '#00d68f'
+              : s.d.fg <= 80 ? '#ff8c42'
+              : '#ff4560'
     const spLbl = s.spreadOk ? '<span class="g">&#10003;</span>' : '<span class="r">&#10007;</span>'
     // DTE = days until May-15 expiry (from sizer) or next monthly expiry
     const eLbl  = s.earnOk   ? '<span class="g">&#10003;</span>' : '<span class="o">&#9888;</span>'
-    const bw = Math.min(100, s.d.r / 8)
+    // Signal bar: r is now a percentage value (0-200+). Scale so 100%=full bar, cap at 100
+    const bw = s.d.r > 100 ? 100 : Math.max(2, s.d.r)
     const scoreBar = Math.round(s.score)
     return '<tr onclick="goSize(\'' + s.t + '\')">' +
       '<td class="dim" style="width:28px">' + (i+1) + '</td>' +
       '<td style="font-family:\'SF Mono\',monospace;font-weight:600">' + s.t + '<div style="font-size:10px;color:#555c6e">' + s.d.s + '</div></td>' +
       '<td id="price-' + s.t + '" style="font-family:\'SF Mono\',monospace;color:#555c6e;font-size:11px">--</td>' +
       '<td><div style="display:flex;align-items:center;gap:5px"><div style="width:48px;height:3px;background:#1e2330;border-radius:2px;overflow:hidden"><div style="width:' + bw + '%;height:100%;background:#f0c040;border-radius:2px"></div></div><span class="gold" style="font-family:\'SF Mono\',monospace;font-size:12px">' + s.d.r + '%</span></div></td>' +
-      '<td style="font-family:\'SF Mono\',monospace;color:' + fgc + '">' + s.d.fg.toFixed(0) + '</td>' +
+      '<td style="font-family:\'SF Mono\',monospace;color:' + fgc + ';font-size:11px">' + (fgSuspect ? '<span style="color:#333a4a">?</span>' : s.d.fg.toFixed(0)) + '</td>' +
       '<td class="dim" style="font-size:11px">' + s.d.s + '</td>' +
       '<td>' + spLbl + '</td>' +
       '<td>' + eLbl + '</td>' +
@@ -2167,8 +2185,8 @@ function toggleSpreadType() {
 
 function resetFilters() {
   document.getElementById('f-sig').value = 0
-  document.getElementById('f-fg-min').value = 15
-  document.getElementById('f-fg-max').value = 65
+  document.getElementById('f-fg-min').value = 0
+  document.getElementById('f-fg-max').value = 100
   document.getElementById('f-spread').value = 0.50
   document.getElementById('f-oi').value = 0
   document.getElementById('f-vol').value = 0
