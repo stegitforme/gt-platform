@@ -213,6 +213,7 @@ tr:hover td{background:#171b22;cursor:pointer}
   <button onclick="show('sizer',this)">Position Sizer</button>
   <button onclick="show('trades',this)">Trade Manager</button>
   <button onclick="show('tenx',this)">10-Bagger</button>
+  <button onclick="show('backtest',this)">Backtest</button>
   <button onclick="show('portfolio',this)">Portfolio</button>
 </div>
 
@@ -734,6 +735,59 @@ tr:hover td{background:#171b22;cursor:pointer}
   </div>
   <div id="tenx-list" style="min-height:60px"></div>
 
+</div>
+
+
+<!-- ═══ BACKTEST ═══════════════════════════════════════════════════════════════ -->
+<div id="backtest" class="page">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+    <div>
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#555c6e;margin-bottom:3px">TQQQ Vol-Targeting Backtest</div>
+      <div style="font-size:11px;color:#555c6e">Vol(35%)+200MA weekly signal · TQQQ vs QQQ vs SPY benchmarks</div>
+    </div>
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+      <div style="display:flex;gap:3px">
+        <button class="btn btn-ghost" style="font-size:11px;padding:4px 11px" data-btperiod="1" onclick="btSetPeriod(1)">1Y</button>
+        <button class="btn btn-ghost" style="font-size:11px;padding:4px 11px" data-btperiod="3" onclick="btSetPeriod(3)">3Y</button>
+        <button class="btn btn-gold" style="font-size:11px;padding:4px 11px" data-btperiod="5" onclick="btSetPeriod(5)">5Y</button>
+        <button class="btn btn-ghost" style="font-size:11px;padding:4px 11px" data-btperiod="10" onclick="btSetPeriod(10)">10Y</button>
+        <button class="btn btn-ghost" style="font-size:11px;padding:4px 11px" data-btperiod="13" onclick="btSetPeriod(13)">All (2011)</button>
+      </div>
+      <button class="btn btn-gold" id="bt-run-btn" onclick="btRun()" style="padding:6px 16px">&#9654; Run</button>
+      <span id="bt-status" style="font-size:11px;color:#555c6e;min-width:180px"></span>
+    </div>
+  </div>
+  <div id="bt-metrics" style="display:none;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;margin-bottom:16px"></div>
+  <div id="bt-chart-wrap" style="display:none;background:#111318;border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:14px;margin-bottom:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#555c6e">Equity Curve &mdash; $10,000 invested</div>
+      <div id="bt-legend" style="display:flex;gap:14px;font-size:10px;color:#555c6e"></div>
+    </div>
+    <canvas id="bt-canvas" style="width:100%;height:280px;display:block"></canvas>
+  </div>
+  <div id="bt-table-wrap" style="display:none;margin-bottom:16px">
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#555c6e;margin-bottom:8px">Performance Summary</div>
+    <div style="overflow-x:auto;background:#111318;border:1px solid rgba(255,255,255,.07);border-radius:8px">
+      <table id="bt-perf-table" style="width:100%;border-collapse:collapse;font-size:12px"></table>
+    </div>
+  </div>
+  <div id="bt-annual-wrap" style="display:none;margin-bottom:16px">
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#555c6e;margin-bottom:8px">Annual Returns</div>
+    <div style="overflow-x:auto;background:#111318;border:1px solid rgba(255,255,255,.07);border-radius:8px">
+      <table id="bt-annual-table" style="width:100%;border-collapse:collapse;font-size:12px"></table>
+    </div>
+  </div>
+  <div id="bt-signal-wrap" style="display:none;margin-bottom:16px">
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#555c6e;margin-bottom:8px">Recent Signal Changes</div>
+    <div style="overflow-x:auto;background:#111318;border:1px solid rgba(255,255,255,.07);border-radius:8px">
+      <table id="bt-signal-table" style="width:100%;border-collapse:collapse;font-size:11px"></table>
+    </div>
+  </div>
+  <div id="bt-empty" style="text-align:center;padding:60px 20px;color:#555c6e">
+    <div style="font-size:32px;margin-bottom:12px">&#128202;</div>
+    <div style="font-size:14px;color:#8b91a0;margin-bottom:6px">Select a period and click Run</div>
+    <div style="font-size:11px">Data fetched live via Cloudflare proxy &middot; Vol(35%)+200MA &middot; Weekly signal</div>
+  </div>
 </div>
 
 <!-- &#9552;&#9552;&#9552; PORTFOLIO &#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552; -->
@@ -3386,6 +3440,311 @@ function tenxEdit(ticker) {
 
 // Init render on page load
 setTimeout(tenxRender, 1200)
+
+
+// ── BACKTEST ENGINE ────────────────────────────────────────────────────────────
+const BT_PROXY = 'https://yahoo-proxy.sgoglanian.workers.dev'
+let BT_PERIOD = 5
+
+function btSetPeriod(y) {
+  BT_PERIOD = y
+  document.querySelectorAll('[data-btperiod]').forEach(b => {
+    const active = +b.dataset.btperiod === y
+    b.className = active ? 'btn btn-gold' : 'btn btn-ghost'
+    b.style.fontSize = '11px'; b.style.padding = '4px 11px'
+  })
+}
+
+async function btFetch(ticker, fromMs) {
+  const p1 = Math.floor(fromMs/1000)
+  const p2 = Math.floor(Date.now()/1000)
+  const url = BT_PROXY + '/?ticker=' + ticker + '&period1=' + p1 + '&period2=' + p2
+  const r = await fetch(url)
+  if(!r.ok) throw new Error(ticker + ' fetch failed: ' + r.status)
+  const d = await r.json()
+  const res = d.chart?.result?.[0]
+  if(!res) throw new Error('No data for ' + ticker)
+  const ts = res.timestamp
+  const closes = res.indicators.adjclose[0].adjclose
+  const bars = []
+  for(let i=0;i<ts.length;i++) {
+    if(closes[i]!=null) bars.push({date:new Date(ts[i]*1000), close:closes[i]})
+  }
+  return bars
+}
+
+function btStatus(msg) {
+  const el = document.getElementById('bt-status')
+  if(el) el.textContent = msg
+}
+
+async function btRun() {
+  const btn = document.getElementById('bt-run-btn')
+  btn.disabled = true; btn.textContent = '...'
+  document.getElementById('bt-empty').style.display = 'block'
+  ;['bt-metrics','bt-chart-wrap','bt-table-wrap','bt-annual-wrap','bt-signal-wrap'].forEach(id => {
+    const el = document.getElementById(id); if(el) el.style.display = 'none'
+  })
+
+  try {
+    const endDate = new Date()
+    const startDate = new Date(endDate)
+    if(BT_PERIOD===13) { startDate.setFullYear(2011);startDate.setMonth(0);startDate.setDate(1) }
+    else startDate.setFullYear(endDate.getFullYear()-BT_PERIOD)
+    const fetchFrom = new Date(startDate)
+    fetchFrom.setMonth(fetchFrom.getMonth()-12)
+
+    btStatus('Fetching TQQQ...')
+    const tqqq = await btFetch('TQQQ', fetchFrom.getTime())
+    btStatus('Fetching QQQ...')
+    const qqq  = await btFetch('QQQ',  fetchFrom.getTime())
+    btStatus('Fetching SPY...')
+    const spy  = await btFetch('SPY',  fetchFrom.getTime())
+    btStatus('Fetching SGOV...')
+    let sgov = []
+    try { sgov = await btFetch('SGOV', fetchFrom.getTime()) } catch(e) {}
+
+    btStatus('Running simulation...')
+    const result = btSimulate(tqqq, qqq, spy, sgov, startDate)
+    btStatus('Done · ' + new Date().toLocaleTimeString())
+    btRender(result)
+    document.getElementById('bt-empty').style.display = 'none'
+  } catch(e) {
+    btStatus('Error: ' + e.message)
+    console.error('backtest error', e)
+  }
+  btn.disabled = false; btn.textContent = '\u25b6 Run'
+}
+
+function btSimulate(tqqqBars, qqqBars, spyBars, sgovBars, startDate) {
+  const ds = d => d.toISOString().split('T')[0]
+  const tqqqM={}, qqqM={}, spyM={}, sgovM={}
+  tqqqBars.forEach(b=>tqqqM[ds(b.date)]=b.close)
+  qqqBars.forEach(b=>qqqM[ds(b.date)]=b.close)
+  spyBars.forEach(b=>spyM[ds(b.date)]=b.close)
+  sgovBars.forEach(b=>sgovM[ds(b.date)]=b.close)
+
+  const allDates = qqqBars.map(b=>b.date).filter(d=>d>=new Date('2010-06-01'))
+  const si = allDates.findIndex(d=>d>=startDate)
+  if(si<0) throw new Error('Not enough history')
+
+  function calcVol(dates,idx) {
+    if(idx<21) return 0
+    const rets=[]
+    for(let i=idx-20;i<=idx;i++) {
+      const p0=qqqM[ds(dates[i-1])], p1=qqqM[ds(dates[i])]
+      if(p0&&p1) rets.push(Math.log(p1/p0))
+    }
+    if(rets.length<10) return 0
+    const mean=rets.reduce((a,b)=>a+b,0)/rets.length
+    const v=rets.reduce((s,r)=>s+(r-mean)**2,0)/rets.length
+    return Math.sqrt(v*252)
+  }
+  function calcMA(dates,idx) {
+    const win=Math.min(200,idx); let s=0,c=0
+    for(let i=idx-win+1;i<=idx;i++){const p=qqqM[ds(dates[i])];if(p){s+=p;c++}}
+    return c>0?s/c:0
+  }
+  function isWeekEnd(dates,idx) {
+    if(idx===dates.length-1) return true
+    const diff=(dates[idx+1]-dates[idx])/(864e5)
+    return diff>=2||dates[idx].getDay()===5
+  }
+
+  const RISK_FREE=0.045
+  let sv=10000,tv=10000,qv=10000,spv=10000
+  const sEq=[10000],tEq=[10000],qEq=[10000],spEq=[10000],cDates=[allDates[si]]
+  const signals=[]
+  let alloc='SGOV'
+
+  for(let i=si;i<allDates.length;i++) {
+    const d=allDates[i], dstr=ds(d), prev=ds(allDates[i>0?i-1:i])
+    const tP=tqqqM[dstr], qP=qqqM[dstr], spP=spyM[dstr]
+    if(!tP||!qP||!spP) continue
+    const tR=tP/(tqqqM[prev]||tP)-1, qR=qP/(qqqM[prev]||qP)-1, spR=spP/(spyM[prev]||spP)-1
+    let sgR=RISK_FREE/252
+    if(sgovM[dstr]&&sgovM[prev]) sgR=sgovM[dstr]/(sgovM[prev]||sgovM[dstr])-1
+
+    if(isWeekEnd(allDates,i)) {
+      const vol=calcVol(allDates,i), ma=calcMA(allDates,i), above=qP>ma
+      let newAlloc = !above?'SGOV':vol>=0.35?'HALF':'TQQQ'
+      if(newAlloc!==alloc) {
+        signals.push({date:d,vol,ma,qqqPrice:qP,aboveMa:above,action:newAlloc})
+        alloc=newAlloc
+      }
+      cDates.push(d)
+      sEq.push(sv); tEq.push(tv); qEq.push(qv); spEq.push(spv)
+    }
+
+    const sR = alloc==='TQQQ'?tR:alloc==='HALF'?(0.5*tR+0.5*sgR):sgR
+    sv*=(1+sR); tv*=(1+tR); qv*=(1+qR); spv*=(1+spR)
+  }
+
+  function metrics(eq,dates) {
+    const n=eq.length, yr=(dates[n-1]-dates[0])/(864e5*365.25)
+    const cagr=Math.pow(eq[n-1]/10000,1/yr)-1
+    const tot=eq[n-1]/10000-1
+    let peak=0,maxDD=0
+    for(let i=0;i<n;i++){if(eq[i]>peak)peak=eq[i];const dd=(eq[i]-peak)/peak;if(dd<maxDD)maxDD=dd}
+    let uw=0; let pk2=0
+    for(let i=0;i<n;i++){if(eq[i]>pk2)pk2=eq[i];if(eq[i]<pk2)uw++}
+    const tuw=uw/n
+    const wkR=[];for(let i=1;i<n;i++)wkR.push(eq[i]/eq[i-1]-1)
+    const avg=wkR.reduce((a,b)=>a+b,0)/wkR.length
+    const std=Math.sqrt(wkR.reduce((s,r)=>s+(r-avg)**2,0)/wkR.length)
+    const sharpe=std>0?(avg-RISK_FREE/52)/std*Math.sqrt(52):0
+    const ann={}
+    let py=dates[0].getFullYear(), pe=10000
+    for(let i=1;i<n;i++){
+      const y=dates[i].getFullYear()
+      if(y!==py||i===n-1){ann[py]=eq[i-1]/pe-1;pe=eq[i-1];py=y}
+    }
+    return{cagr,tot,maxDD,tuw,sharpe,final:eq[n-1],ann}
+  }
+
+  const allocC=signals.reduce((m,s)=>{m[s.action]=(m[s.action]||0)+1;return m},{})
+  return {
+    stratM:metrics(sEq,cDates), tqqqM:metrics(tEq,cDates),
+    qqqM:metrics(qEq,cDates), spyM:metrics(spEq,cDates),
+    cDates, sEq, tEq, qEq, spEq, signals, allocC, total:signals.length
+  }
+}
+
+function btRender(r) {
+  const pct=(n,d=1)=>n==null?'--':(n>=0?'+':'')+( n*100).toFixed(d)+'%'
+  const col=(n)=>n>0?'#00d68f':n<0?'#ff4560':'#e8eaf0'
+
+  // Metrics
+  const sm=r.stratM, tm=r.tqqqM
+  const inTqqq=((r.allocC.TQQQ||0)/Math.max(1,r.total)*100).toFixed(0)
+  const inHalf=((r.allocC.HALF||0)/Math.max(1,r.total)*100).toFixed(0)
+  const inSgov=((r.allocC.SGOV||0)/Math.max(1,r.total)*100).toFixed(0)
+  const mEl=document.getElementById('bt-metrics')
+  mEl.style.display='grid'
+  mEl.innerHTML=[
+    {l:'Strategy CAGR',  v:pct(sm.cagr),        c:col(sm.cagr),    s:'vs QQQ '+pct(r.qqqM.cagr)},
+    {l:'Max Drawdown',   v:pct(sm.maxDD),        c:sm.maxDD<-.3?'#ff4560':'#ff8c42', s:'TQQQ BH: '+pct(tm.maxDD)},
+    {l:'Time Underwater',v:(sm.tuw*100).toFixed(1)+'%',c:'#e8eaf0', s:'TQQQ BH: '+(tm.tuw*100).toFixed(1)+'%'},
+    {l:'Sharpe Ratio',   v:sm.sharpe.toFixed(2), c:sm.sharpe>1?'#00d68f':'#f0c040', s:'TQQQ BH: '+tm.sharpe.toFixed(2)},
+    {l:'Final Value',    v:'$'+Math.round(sm.final).toLocaleString(), c:'#f0c040', s:'$10K invested at start'},
+    {l:'% Weeks in TQQQ',v:inTqqq+'%',           c:'#4da6ff', s:'Half: '+inHalf+'% | SGOV: '+inSgov+'%'},
+  ].map(m=>'<div style="background:#111318;border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:12px 14px">'
+    +'<div style="font-size:10px;color:#555c6e;text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">'+m.l+'</div>'
+    +'<div style="font-size:20px;font-weight:700;color:'+m.c+'">'+m.v+'</div>'
+    +'<div style="font-size:10px;color:#555c6e;margin-top:2px">'+m.s+'</div>'
+    +'</div>').join('')
+
+  // Perf table
+  const rows=[
+    {n:'Vol(35%)+200MA',m:r.stratM,bold:true},
+    {n:'TQQQ Buy & Hold',m:r.tqqqM},
+    {n:'QQQ Buy & Hold', m:r.qqqM},
+    {n:'SPY Buy & Hold', m:r.spyM},
+  ]
+  const th='<th style="background:#0e1318;padding:8px 12px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e;white-space:nowrap;border-bottom:1px solid rgba(255,255,255,.08)">'
+  const thL=th.replace('right','left')
+  document.getElementById('bt-perf-table').innerHTML=
+    '<thead><tr>'+thL+'Strategy</th>'+th+'CAGR</th>'+th+'Total Return</th>'+th+'Max Drawdown</th>'+th+'Time UW</th>'+th+'Sharpe</th>'+th+'$10K Today</th></tr></thead>'
+    +'<tbody>'+rows.map(({n,m,bold})=>{
+      const fw=bold?'font-weight:600':''; const tc=bold?'color:#f0c040':''
+      const td=(v,c)=>'<td style="padding:9px 12px;text-align:right;border-bottom:1px solid rgba(255,255,255,.04);color:'+c+';'+fw+'">'+v+'</td>'
+      return '<tr><td style="padding:9px 12px;border-bottom:1px solid rgba(255,255,255,.04);'+fw+';'+tc+'">'+n+'</td>'
+        +td(pct(m.cagr),col(m.cagr))+td(pct(m.tot),col(m.tot))
+        +td(pct(m.maxDD),col(m.maxDD))+td((m.tuw*100).toFixed(1)+'%','#e8eaf0')
+        +td(m.sharpe.toFixed(2),m.sharpe>1?'#00d68f':m.sharpe>0.5?'#e8eaf0':'#ff4560')
+        +td('$'+Math.round(m.final).toLocaleString(),col(m.final-10000))+'</tr>'
+    }).join('')+'</tbody>'
+  document.getElementById('bt-table-wrap').style.display='block'
+
+  // Annual table
+  const yrs=[...new Set([...Object.keys(r.stratM.ann),...Object.keys(r.qqqM.ann)])].sort()
+  document.getElementById('bt-annual-table').innerHTML=
+    '<thead><tr>'+thL+'Year</th>'+th+'Strategy</th>'+th+'TQQQ BH</th>'+th+'QQQ BH</th>'+th+'SPY BH</th></tr></thead>'
+    +'<tbody>'+yrs.map(y=>{
+      const td=(v,c)=>'<td style="padding:7px 12px;text-align:right;border-bottom:1px solid rgba(255,255,255,.04);color:'+c+'">'+v+'</td>'
+      return '<tr><td style="padding:7px 12px;border-bottom:1px solid rgba(255,255,255,.04);color:#555c6e">'+y+'</td>'
+        +td(pct(r.stratM.ann[y]),col(r.stratM.ann[y]))+td(pct(r.tqqqM.ann[y]),col(r.tqqqM.ann[y]))
+        +td(pct(r.qqqM.ann[y]),col(r.qqqM.ann[y]))+td(pct(r.spyM.ann[y]),col(r.spyM.ann[y]))+'</tr>'
+    }).join('')+'</tbody>'
+  document.getElementById('bt-annual-wrap').style.display='block'
+
+  // Signal log
+  const sig=r.signals.slice(-15).reverse()
+  const aMap={TQQQ:'100% TQQQ',HALF:'50/50 TQQQ/SGOV',SGOV:'100% SGOV'}
+  const aCol={TQQQ:'#00d68f',HALF:'#f0c040',SGOV:'#555c6e'}
+  document.getElementById('bt-signal-table').innerHTML=
+    '<thead><tr>'+thL+'Date</th>'+th+'QQQ Price</th>'+th+'200MA</th>'+th+'Realized Vol</th>'+th+'Signal</th></tr></thead>'
+    +'<tbody>'+sig.map(s=>{
+      const td=(v,c)=>'<td style="padding:7px 12px;text-align:right;border-bottom:1px solid rgba(255,255,255,.04);color:'+c+'">'+v+'</td>'
+      return '<tr><td style="padding:7px 12px;border-bottom:1px solid rgba(255,255,255,.04);color:#555c6e">'
+        +s.date.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+'</td>'
+        +td('$'+s.qqqPrice.toFixed(2),'#e8eaf0')+td('$'+s.ma.toFixed(2),'#555c6e')
+        +td((s.vol*100).toFixed(1)+'%',s.vol>=0.35?'#ff4560':'#00d68f')
+        +'<td style="padding:7px 12px;text-align:right;border-bottom:1px solid rgba(255,255,255,.04);color:'
+        +aCol[s.action]+';font-weight:600">'+aMap[s.action]+'</td></tr>'
+    }).join('')+'</tbody>'
+  document.getElementById('bt-signal-wrap').style.display='block'
+
+  // Chart
+  btDrawChart(r)
+}
+
+function btDrawChart(r) {
+  const canvas=document.getElementById('bt-canvas')
+  const dpr=window.devicePixelRatio||1
+  const W=canvas.offsetWidth||800, H=280
+  canvas.width=W*dpr; canvas.height=H*dpr
+  const ctx=canvas.getContext('2d'); ctx.scale(dpr,dpr)
+  const PAD={top:8,right:16,bottom:32,left:60}
+  const pW=W-PAD.left-PAD.right, pH=H-PAD.top-PAD.bottom
+
+  const series=[
+    {eq:r.sEq, color:'#f0c040', label:'Strategy',  w:2.5},
+    {eq:r.tEq, color:'#ff4560', label:'TQQQ BH',   w:1.5},
+    {eq:r.qEq, color:'#4da6ff', label:'QQQ BH',    w:1.5},
+    {eq:r.spEq,color:'#555c6e', label:'SPY BH',    w:1},
+  ]
+  const allV=series.flatMap(s=>s.eq).filter(v=>v>0)
+  const yMin=Math.min(...allV)*0.95, yMax=Math.max(...allV)*1.05, yR=yMax-yMin
+  const xS=i=>PAD.left+(i/(r.cDates.length-1))*pW
+  const yS=v=>PAD.top+pH-((v-yMin)/yR)*pH
+
+  ctx.fillStyle='#111318'; ctx.fillRect(0,0,W,H)
+  ctx.strokeStyle='rgba(255,255,255,.05)'; ctx.lineWidth=1
+  for(let i=0;i<=4;i++){
+    const v=yMin+(yR*i/4), y=yS(v)
+    ctx.beginPath();ctx.moveTo(PAD.left,y);ctx.lineTo(W-PAD.right,y);ctx.stroke()
+    ctx.fillStyle='#555c6e';ctx.font='10px monospace';ctx.textAlign='right'
+    ctx.fillText('$'+Math.round(v).toLocaleString(),PAD.left-4,y+3)
+  }
+  let lastY=-1
+  r.cDates.forEach((d,i)=>{
+    const y=d.getFullYear()
+    if(y!==lastY){lastY=y;const x=xS(i)
+      ctx.strokeStyle='rgba(255,255,255,.06)';ctx.lineWidth=1
+      ctx.beginPath();ctx.moveTo(x,PAD.top);ctx.lineTo(x,H-PAD.bottom);ctx.stroke()
+      ctx.fillStyle='#555c6e';ctx.font='10px monospace';ctx.textAlign='center'
+      ctx.fillText(y,x,H-PAD.bottom+12)}
+  })
+  // Strategy fill
+  ctx.beginPath()
+  r.sEq.forEach((v,i)=>{const x=xS(i),y=yS(v);i===0?ctx.moveTo(x,y):ctx.lineTo(x,y)})
+  ctx.lineTo(xS(r.sEq.length-1),H-PAD.bottom);ctx.lineTo(xS(0),H-PAD.bottom);ctx.closePath()
+  const g=ctx.createLinearGradient(0,PAD.top,0,H-PAD.bottom)
+  g.addColorStop(0,'rgba(240,192,64,.15)');g.addColorStop(1,'rgba(240,192,64,.01)')
+  ctx.fillStyle=g;ctx.fill()
+  // Lines
+  series.forEach(s=>{
+    ctx.beginPath();ctx.strokeStyle=s.color;ctx.lineWidth=s.w;ctx.lineJoin='round'
+    s.eq.forEach((v,i)=>{const x=xS(i),y=yS(v);i===0?ctx.moveTo(x,y):ctx.lineTo(x,y)})
+    ctx.stroke()
+  })
+  // Legend
+  document.getElementById('bt-legend').innerHTML=series.map(s=>
+    '<div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:3px;border-radius:1px;background:'+s.color+'"></div>'+s.label+'</div>'
+  ).join('')
+  document.getElementById('bt-chart-wrap').style.display='block'
+}
 
 
 function calc() {
