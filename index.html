@@ -3560,7 +3560,7 @@ function btSimulate(tqqqBars, qqqBars, spyBars, sgovBars, startDate) {
   // Daily tracking for accurate drawdown (weekly snapshots miss intra-week drops)
   const sEqD=[10000],tEqD=[10000]
   const signals=[]
-  let alloc='SGOV'
+  let alloc='SGOV', pendingAlloc=null
 
   for(let i=si;i<allDates.length;i++) {
     const d=allDates[i], dstr=ds(d), prev=ds(allDates[i>0?i-1:i])
@@ -3582,11 +3582,19 @@ function btSimulate(tqqqBars, qqqBars, spyBars, sgovBars, startDate) {
       // Check signal at Friday close, take effect NEXT Monday (realistic execution)
       const vol=calcVol(allDates,i), ma=calcMA(allDates,i), above=qP>ma
       let newAlloc = !above?'SGOV':vol>=0.35?'HALF':'TQQQ'
-      // Always track for debug; only push changes to signals log
+      // Prevent whipsaw: require signal to persist 2 consecutive weeks before switching
       if(newAlloc!==alloc) {
-        signals.push({date:d,vol,ma,qqqPrice:qP,aboveMa:above,action:newAlloc})
+        if(pendingAlloc===newAlloc) {
+          // Second consecutive week with same signal - commit
+          signals.push({date:d,vol,ma,qqqPrice:qP,aboveMa:above,action:newAlloc})
+          alloc=newAlloc
+          pendingAlloc=null
+        } else {
+          pendingAlloc=newAlloc  // First week - set pending
+        }
+      } else {
+        pendingAlloc=null  // Back to current alloc, cancel pending
       }
-      alloc=newAlloc
       cDates.push(d)
       sEq.push(sv); tEq.push(tv); qEq.push(qv); spEq.push(spv)
     }
