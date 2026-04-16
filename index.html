@@ -683,8 +683,6 @@ const OV = {
   RBA:{r:110,fg:22.0,s:'Industrials',v:1178345,earn:false},
 }
 
-const LIVE_PRICES = {}
-let SCR_SORT = { col: 'score', dir: -1 }
 const WIDE_SPREADS = new Set() // Spread filtering uses live Polygon data
 const BULL_SECTORS = new Set(['Financials','Materials','Real Estate','Industrials','Technology','Tech','Communication','Discretionary','Staples','Consumer Staples','Energy'])
 
@@ -941,10 +939,9 @@ async function fetchTQQQSignal() {
     const dailyVol = Math.sqrt(variance)
     const annualVol = +(dailyVol * Math.sqrt(252) * 100).toFixed(1)
 
-
     // -- TURBO MODE --
-    var wSt=5,wkCl=[];for(var wi=wSt;wi<n;wi+=wSt)wkCl.push(closes[wi]);var wkBl=0;for(var wi2=wkCl.length-1;wi2>=0;wi2--){var slE=wi2*wSt,slS=Math.max(0,slE-200),maT=closes.slice(slS,slE).reduce(function(a,b){return a+b},0)/(slE-slS||1);if(wkCl[wi2]<maT)wkBl++;else break}var tSt='normal',tWk=0,tBr=0;try{var ts=JSON.parse(localStorage.getItem('gt_turbo_state')||'{}')
-;tSt=ts.state||'normal';tWk=ts.week||0;tBr=ts.startBar||0}catch(e){}if(aboveMa){if(tSt==='armed'){tSt='active';tWk=1;tBr=n}else if(tSt==='active'){tWk=Math.min(12,Math.round((n-tBr)/wSt)+1);if(tWk>=12){tSt='normal';tWk=0;tBr=0}}else if(tSt==='arming'){tSt='normal';tWk=0}}else{if(tSt==='active'){tSt='normal';tWk=0;tBr=0}else{tSt=wkBl>=8?'armed':'arming'}}localStorage.setItem('gt_turbo_state',JSON.stringify({state:tSt,week:tWk,startBar:tBr}));var tLbl='',tBdg='',tCol='#555c6e';if(tSt==='arming'){tLbl='| Arming '+wkBl+'/8wks';tBdg='Arming '+wkBl+'/8wks';tCol='#ff8c42'}else if(tSt==='armed'){tLbl='| TURBO ARMED';tBdg='TURBO ARMED';tCol='#f0c040'}else if(tSt==='active'){tLbl='| TURBO Wk'+tWk+'/12';tBdg='TURBO Wk'+tWk+'/12';tCol='#00d68f'}
+    var wSt=5,wkCl=[];for(var wi=wSt;wi<n;wi+=wSt)wkCl.push(closes[wi]);var wkBl=0;for(var wi2=wkCl.length-1;wi2>=0;wi2--){var slE=wi2*wSt,slS=Math.max(0,slE-200),maT=closes.slice(slS,slE).reduce(function(a,b){return a+b},0)/(slE-slS||1);if(wkCl[wi2]<maT)wkBl++;else break}var tSt='normal',tWk=0,tBr=0;try{var tss=JSON.parse(localStorage.getItem('gt_turbo_state')||'{}')
+;tSt=tss.state||'normal';tWk=tss.week||0;tBr=tss.startBar||0}catch(e){}if(aboveMa){if(tSt==='armed'){tSt='active';tWk=1;tBr=n}else if(tSt==='active'){tWk=Math.min(12,Math.round((n-tBr)/wSt)+1);if(tWk>=12){tSt='normal';tWk=0;tBr=0}}else if(tSt==='arming'){tSt='normal';tWk=0}}else{if(tSt==='active'){tSt='normal';tWk=0;tBr=0}else{tSt=wkBl>=8?'armed':'arming'}}localStorage.setItem('gt_turbo_state',JSON.stringify({state:tSt,week:tWk,startBar:tBr}));var tLbl='',tBdg='',tCol='#555c6e';if(tSt==='arming'){tLbl='| Arming '+wkBl+'/8wks';tBdg='Arming '+wkBl+'/8wks';tCol='#ff8c42'}else if(tSt==='armed'){tLbl='| TURBO ARMED';tBdg='TURBO ARMED';tCol='#f0c040'}else if(tSt==='active'){tLbl='| TURBO Wk'+tWk+'/12';tBdg='TURBO Wk'+tWk+'/12';tCol='#00d68f'}
     // -- END TURBO MODE --
 
     // Vol(35%) + 200MA signal
@@ -1291,7 +1288,7 @@ function runFilter() {
     if(noWide && !spreadOk) return null
     const score = Math.min(40, d.r/20) + (d.fg>=15&&d.fg<=65?20:5) + (earnOk?20:0) + (spreadOk?10:0) + (d.v>3e6?10:5)
     return {t, d, spreadOk, earnOk, score}
-  }).filter(Boolean).sort((a,b) => { var col=SCR_SORT.col,dir=SCR_SORT.dir; if(col==='sig') return dir*(b.d.r-a.d.r); if(col==='fg') return dir*(b.d.fg-a.d.fg); if(col==='dte') return dir*((a.dte||999)-(b.dte||999)); return dir*(b.score-a.score) })
+  }).filter(Boolean).sort((a,b)=>{ var col=SCR_SORT.col,dir=SCR_SORT.dir; if(col==='sig')return dir*(b.d.r-a.d.r); if(col==='fg')return dir*(b.d.fg-a.d.fg); if(col==='dte')return dir*((a.dte||999)-(b.dte||999)); return dir*(b.score-a.score) })
 
   document.getElementById('scr-count').textContent = scored.length + ' tickers'
   const tbody = document.getElementById('scr-body')
