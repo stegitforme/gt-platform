@@ -1390,7 +1390,8 @@ const BOOKMARKLET_CODE = `javascript:(function(){
       if(!ticker||ticker.length>7||ticker==='SYMBOL')return;
       var sig=parseFloat((cells[4].innerText||'').replace(/[^0-9.-]/g,''))||0;
       if(!sig)return;
-      var fg=parseFloat((cells[12].innerText||'0').replace(/[^0-9.-]/g,''))||0;
+      var fgRaw=parseFloat((cells[12].innerText||'0').replace(/[^0-9.-]/g,''))||0;
+      var fg=(fgRaw>0&&fgRaw<2)?+(fgRaw*100).toFixed(1):fgRaw;
       var vol=parseInt((cells[11].innerText||'0').replace(/,/g,''))||0;
       var sec=(cells[6].innerText||'').split('/')[0].trim();
       var nine=(cells[15].innerText||'').trim();
@@ -1443,14 +1444,15 @@ function importOVData() {
       if(OV[ticker]) {
         // Update existing
         OV[ticker].r  = +d.r  || OV[ticker].r
-        OV[ticker].fg = +d.fg || OV[ticker].fg
+        var rawFg = +d.fg || OV[ticker].fg
+        OV[ticker].fg = (rawFg > 0 && rawFg < 2) ? +(rawFg * 100).toFixed(1) : rawFg
         if(d.v) OV[ticker].v = +d.v
         updated++
       } else {
         // Add new ticker
         OV[ticker] = {
           r:    +d.r  || 0,
-          fg:   +d.fg || 50,
+          fg:   ((+d.fg > 0 && +d.fg < 2) ? +(+d.fg * 100).toFixed(1) : +d.fg) || 50,
           s:    d.s   || 'Unknown',
           v:    +d.v  || 1000000,
           earn: false
@@ -1641,7 +1643,7 @@ function runFilter() {
       spreadOk = spreadType === '%' ? pctSpread <= maxSp : dollarSpread <= maxSp
     }
     const earnOk   = !hasEarnings(t)
-    if(d.r < minSig) return null
+    if(minSig > 0 && d.r < minSig) return null
     if(d.fg < fgMin || d.fg > fgMax) return null
     if(d.v < minVol) return null
     if(minOI > 0 && (!d.oi || d.oi < minOI)) return null
