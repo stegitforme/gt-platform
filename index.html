@@ -269,7 +269,7 @@ tr:hover td{background:#171b22;cursor:pointer}
     </div>
     <div class="card-body">
       <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:9px">
-        <div class="field" style="margin:0"><label>Min signal %</label><input type="number" id="f-sig" value="100"></div>
+        <div class="field" style="margin:0"><label>Min signal %</label><input type="number" id="f-sig" value="0"></div>
         <div class="field" style="margin:0"><label>F&G min</label><input type="number" id="f-fg-min" value="0"></div>
         <div class="field" style="margin:0"><label>F&G max</label><input type="number" id="f-fg-max" value="100"></div>
         <div class="field" style="margin:0">
@@ -279,8 +279,8 @@ tr:hover td{background:#171b22;cursor:pointer}
   </label>
   <input type="number" id="f-spread" value="0.50" step="0.05">
 </div>
-        <div class="field" style="margin:0"><label>Min OI</label><input type="number" id="f-oi" value="250"></div>
-        <div class="field" style="margin:0"><label>Min 30D vol</label><input type="number" id="f-vol" value="1000000"></div>
+        <div class="field" style="margin:0"><label>Min OI</label><input type="number" id="f-oi" value="0"></div>
+        <div class="field" style="margin:0"><label>Min 30D vol</label><input type="number" id="f-vol" value="0"></div>
       </div>
       <div style="display:flex;gap:16px;margin-top:10px;padding-top:9px;border-top:1px solid rgba(255,255,255,.06)">
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;text-transform:none;font-size:12px;color:#8b91a0;margin:0"><input type="checkbox" id="f-earn" checked style="accent-color:#f0c040;width:13px;height:13px;margin:0"> No earnings <=21d</label>
@@ -1644,6 +1644,7 @@ function runFilter() {
     if(d.r < minSig) return null
     if(d.fg < fgMin || d.fg > fgMax) return null
     if(d.v < minVol) return null
+    if(minOI > 0 && (!d.oi || d.oi < minOI)) return null
     if(noEarn && !earnOk) return null
     if(bullOnly && !BULL_SECTORS.has(d.s)) return null
     if(noWide && !spreadOk) return null
