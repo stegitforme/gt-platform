@@ -299,7 +299,6 @@ tr:hover td{background:#171b22;cursor:pointer}
       </div>
     </div>
   </div>
-</div>
 
   <!-- TQQQ VOL-TARGETING SIGNAL -->
   <div class="card" style="margin-top:14px">
@@ -593,6 +592,7 @@ tr:hover td{background:#171b22;cursor:pointer}
       <span id="trade-count" style="font-size:12px;color:#555c6e">0 open</span>
       <span id="total-pnl-display" style="font-size:12px;color:#555c6e"></span>
       <button id="pnl-refresh-btn" class="btn btn-ghost" style="font-size:11px;padding:4px 10px" onclick="refreshAllPnL()">Refresh P&amp;L</button>
+      <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px;color:#4da6ff;border-color:rgba(77,166,255,.3)" onclick="fetchStockPricesForTrades()" title="Fetch live stock prices for all open trades">⟳ Stock Prices</button>
       <select id="tm-sort" onchange="renderTrades()" style="background:#0a0c0f;border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:3px 8px;font-size:11px;color:#8b91a0;outline:none;cursor:pointer;position:relative;z-index:10">
         <option value="date-desc">Newest first</option>
         <option value="date-asc">Oldest first</option>
@@ -2952,53 +2952,96 @@ async function fetchStockPricesForTrades() {
   const openTrades = TRADES.filter(t => t.status === 'open')
   if(!openTrades.length) return
 
-  // Get unique tickers (strip display suffix like " $180 Call")
+  // Build unique ticker → trade ids map
   const tickerMap = {}
   openTrades.forEach(t => {
-    const baseTicker = t.occ && t.occ.match(/^([A-Z]+)\d/) ? t.occ.match(/^([A-Z]+)/)[1] : t.ticker.split(' ')[0]
-    if(!tickerMap[baseTicker]) tickerMap[baseTicker] = []
-    tickerMap[baseTicker].push(t.id)
+    const base = t.occ && t.occ.match(/^([A-Z]+)\d/) ? t.occ.match(/^([A-Z]+)/)[1] : t.ticker.split(' ')[0]
+    if(!tickerMap[base]) tickerMap[base] = []
+    tickerMap[base].push(t.id)
   })
-
   const tickers = Object.keys(tickerMap)
-  let updated = 0
-  const delay = ms => new Promise(r => setTimeout(r, ms))
+  if(!tickers.length) return
 
-  for(let ti = 0; ti < tickers.length; ti++) {
-    const ticker = tickers[ti]
-    setApi('Fetching price ' + (ti+1) + '/' + tickers.length + ': ' + ticker, 'loading')
-    let data = null
-    // Try up to 3 times with backoff on rate limit
-    for(let attempt = 0; attempt < 3; attempt++) {
-      try {
-        data = await apiGet('/v2/aggs/ticker/' + ticker + '/prev?adjusted=true', true) // skipCache=true for fresh prices
-        if(data) break
-      } catch(e) {}
-      if(attempt < 2) await delay(13000) // Polygon rate limit: 5 req/min = 12s gap
+  setApi('Fetching stock prices...', 'loading')
+
+  // Use Polygon snapshot endpoint — ALL tickers in ONE call (no rate limit issue)
+  try {
+    const snap = await apiGet('/v2/snapshot/locale/us/markets/stocks/tickers?tickers=' + tickers.join(','))
+    const prices = {}
+    if(snap && snap.tickers) {
+      snap.tickers.forEach(t => {
+        if(t.day?.c) prices[t.ticker] = t.day.c
+        else if(t.prevDay?.c) prices[t.ticker] = t.prevDay.c
+      })
     }
-    if(data && data.results && data.results[0]) {
-      const price = data.results[0].c
-      tickerMap[ticker].forEach(id => {
+
+    // Fallback: fetch any missing tickers individually (prev day)
+    const missing = tickers.filter(t => !prices[t])
+    for(const ticker of missing) {
+      try {
+        const d = await apiGet('/v2/aggs/ticker/'+ticker+'/prev?adjusted=true')
+        if(d?.results?.[0]?.c) prices[ticker] = d.results[0].c
+      } catch(e) {}
+    }
+
+    // Update trades
+    let updated = 0
+    Object.entries(prices).forEach(([ticker, price]) => {
+      ;(tickerMap[ticker] || []).forEach(id => {
         const trade = TRADES.find(t => t.id === id)
-        if(trade && (!trade.entry || trade.entry === 0 || trade.entry === trade.cost)) {
-          trade.entry = price
+        if(trade) {
           trade.stockPrice = price
+          // Only update entry if it's 0 (not yet set)
+          if(!trade.entry || trade.entry === 0) trade.entry = price
           updated++
         }
       })
-      // Save after each successful fetch so partial results persist
-      if(updated > 0) { saveTrades(); renderTrades(); renderPortfolioRisk() }
-    }
-    // 13s between calls = 4-5 req/min, safely under the 5/min Polygon free limit
-    if(ti < tickers.length - 1) await delay(13000)
-  }
+    })
 
-  if(updated > 0) {
-    setApi('Stock prices updated for ' + updated + ' trades ✓', 'ok')
-  } else {
-    setApi('Ready', 'ok')
+    if(updated > 0) { saveTrades(); renderTrades(); renderPortfolioRisk() }
+    setApi('Live prices updated for ' + Object.keys(prices).length + ' stocks ✓', 'ok')
+
+    // Store prices globally for the live ticker
+    window._livePrices = prices
+    window._livePricesAt = new Date()
+    updateLivePriceTickers()
+
+  } catch(e) {
+    setApi('Price fetch error: ' + e.message, 'err')
   }
 }
+
+// Update the live price display on all open trade cards
+function updateLivePriceTickers() {
+  const prices = window._livePrices || {}
+  const at = window._livePricesAt
+  const timeStr = at ? at.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}) : ''
+  TRADES.filter(t=>t.status==='open').forEach(t => {
+    const base = t.occ && t.occ.match(/^([A-Z]+)\d/) ? t.occ.match(/^([A-Z]+)/)[1] : t.ticker.split(' ')[0]
+    const px = prices[base] || t.stockPrice || t.entry
+    const el = document.getElementById('live-px-' + t.id)
+    if(el && px) {
+      el.innerHTML = '<span style="font-size:10px;color:#555c6e">' + base + '</span> ' +
+        '<span style="font-family:SF Mono,monospace;font-weight:600;color:#4da6ff">$' + px.toFixed(2) + '</span>' +
+        (timeStr ? '<span style="font-size:9px;color:#333a4a;margin-left:4px">' + timeStr + '</span>' : '')
+    }
+  })
+}
+
+// Auto-refresh stock prices every 5 minutes during market hours
+function startLivePriceRefresh() {
+  const isMarketOpen = () => {
+    const et = new Date(new Date().toLocaleString('en-US',{timeZone:'America/New_York'}))
+    const h=et.getHours(), m=et.getMinutes(), d=et.getDay()
+    return d>=1&&d<=5 && (h>9||(h===9&&m>=30)) && h<16
+  }
+  setInterval(() => {
+    if(isMarketOpen() && TRADES.filter(t=>t.status==='open').length) {
+      fetchStockPricesForTrades()
+    }
+  }, 5 * 60 * 1000)  // every 5 minutes
+}
+
 
 
 // ── PORTFOLIO RISK SORT ───────────────────────────────────────────────────────
@@ -4733,6 +4776,10 @@ function renderTrades() {
           '<span class="dim" style="font-size:11px">' + qtyLabel + '</span>' +
           '<span class="dim" style="font-size:10px">' + (t.date||'') + '</span>' +
           statusBadge +
+          // Live stock price — auto-refreshes every 5 min during market hours
+          '<span id="live-px-' + t.id + '" style="font-size:11px;padding:2px 7px;background:rgba(77,166,255,.06);border:1px solid rgba(77,166,255,.12);border-radius:4px;white-space:nowrap">' +
+          (t.stockPrice||t.entry ? '<span style="font-size:10px;color:#555c6e">'+(t.ticker.split(' ')[0])+'</span> <span style="font-family:SF Mono,monospace;font-weight:600;color:#4da6ff">$'+((t.stockPrice||t.entry)||0).toFixed(2)+'</span>' : '<span style="font-size:10px;color:#555c6e">loading...</span>') +
+          '</span>' +
           // Current option price from Fidelity
           (t.lastPx ? '<span style="font-family:\'SF Mono\',monospace;font-size:12px;color:#4da6ff;background:rgba(77,166,255,.08);border:1px solid rgba(77,166,255,.2);padding:2px 7px;border-radius:4px">$' + (+t.lastPx).toFixed(2) + '</span>' : '') +
           // Total P&L
@@ -4789,6 +4836,8 @@ function renderTrades() {
   if(open.length)   html += '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#00d68f;margin-bottom:8px">Open (' + open.length + ')</div>' + open.map(renderOne).join('')
   if(closed.length) html += '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e;margin:14px 0 8px">Closed (' + closed.length + ')</div>' + closed.map(renderOne).join('')
   document.getElementById('trades-list').innerHTML = html
+  // Update live stock price displays if we already have prices
+  if(window._livePrices) setTimeout(updateLivePriceTickers, 50)
 }
 
 // -- PORTFOLIO (static -- your current positions) ===
@@ -5367,6 +5416,8 @@ function initPlatform() {
     setTimeout(function() {
       try { loadMarketData() } catch(e) { console.error('loadMarketData error:', e) }
     }, 200)
+    // Start live stock price auto-refresh (every 5 min during market hours)
+    setTimeout(startLivePriceRefresh, 1000)
     // Safety net at 800ms - force re-render if still blank
     setTimeout(function() {
       const body = document.getElementById('chk-body')
