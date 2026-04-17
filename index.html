@@ -223,6 +223,7 @@ tr:hover td{background:#171b22;cursor:pointer}
   <button onclick="show('trades',this)">Trade Manager</button>
   <button onclick="show('tenx',this)">10-Bagger</button>
   <button onclick="show('backtest',this)">Backtest</button>
+  <button onclick="show('analytics',this)">Analytics</button>
   <button onclick="show('portfolio',this)">Portfolio</button>
 </div>
 
@@ -311,6 +312,20 @@ tr:hover td{background:#171b22;cursor:pointer}
     </div>
     <div class="card-body" id="tqqq-body">
       <div style="font-size:12px;color:#555c6e;text-align:center;padding:8px">Click Calculate to run the Vol(35%)+200MA weekly signal</div>
+    </div>
+  </div>
+
+  <!-- LEAPS ENTRY TRACKER -->
+  <div class="card" style="margin-top:14px;border-color:rgba(179,126,255,.2)">
+    <div class="card-head" style="border-color:rgba(179,126,255,.15)">
+      <span class="card-title" style="color:#b37eff">LEAPS Entry Tracker</span>
+      <div style="display:flex;gap:6px;align-items:center">
+        <span id="leaps-updated" style="font-size:10px;color:#555c6e"></span>
+        <button class="btn btn-ghost" style="font-size:11px;padding:3px 9px;color:#b37eff;border-color:rgba(179,126,255,.3)" onclick="fetchLeapsData()">⟳ Refresh</button>
+      </div>
+    </div>
+    <div class="card-body" id="leaps-body">
+      <div style="font-size:12px;color:#555c6e;text-align:center;padding:8px">Click Refresh to load LEAPS entry analysis for ASTS + IREN</div>
     </div>
   </div>
 
@@ -851,7 +866,36 @@ tr:hover td{background:#171b22;cursor:pointer}
   </div>
 </div>
 
-<!-- &#9552;&#9552;&#9552; PORTFOLIO &#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552; -->
+<!-- ═══ ANALYTICS ════════════════════════════════════════════════════════════ -->
+<div id="analytics" class="page">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+    <div>
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#555c6e;margin-bottom:3px">Trade Performance Analytics</div>
+      <div style="font-size:11px;color:#555c6e">Based on closed trades · auto-calculated</div>
+    </div>
+    <select id="an-period" onchange="renderAnalytics()" style="background:#0a0c0f;border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:4px 8px;font-size:11px;color:#8b91a0;outline:none">
+      <option value="all">All time</option>
+      <option value="1y">Last 12 months</option>
+      <option value="6m">Last 6 months</option>
+      <option value="3m">Last 3 months</option>
+    </select>
+  </div>
+  <div id="an-summary" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:16px"></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+    <div class="card"><div class="card-head"><span class="card-title">P&amp;L by Ticker</span></div><div class="card-body" id="an-ticker-chart" style="padding:12px 14px"></div></div>
+    <div class="card"><div class="card-head"><span class="card-title">Monthly P&amp;L</span></div><div class="card-body" id="an-month-chart" style="padding:12px 14px"></div></div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+    <div class="card"><div class="card-head"><span class="card-title">Win / Loss Breakdown</span></div><div class="card-body" id="an-winloss" style="padding:12px 14px"></div></div>
+    <div class="card"><div class="card-head"><span class="card-title">Best &amp; Worst Trades</span></div><div class="card-body" id="an-extremes" style="padding:12px 14px"></div></div>
+  </div>
+  <div class="card">
+    <div class="card-head"><span class="card-title">All Closed Trades</span><span id="an-table-count" style="font-size:11px;color:#555c6e"></span></div>
+    <div style="overflow-x:auto"><table id="an-table" style="width:100%;border-collapse:collapse;font-size:11px"></table></div>
+  </div>
+</div>
+
+<!-- ════════════════ PORTFOLIO ═══════════════════════════════════════════════ -->
 <div id="portfolio" class="page">
   <!-- SUMMARY METRICS -->
   <div class="grid4" style="margin-bottom:14px">
@@ -993,6 +1037,7 @@ function show(id, btn) {
   if(btn) btn.classList.add('active')
   if(id === 'screener') runFilter()
   if(id === 'trades') renderTrades()
+  if(id === 'analytics') renderAnalytics()
 }
 
 // -- CLOCK ========================================
@@ -4740,22 +4785,31 @@ function renderTrades() {
     const lF = t.atr * 2 * 0.80 * 100 * t.cts
     const pct= n => +((n-t.entry)/t.entry*100).toFixed(1)
     const isOpen = t.status === 'open'
-    // DTE calculation for expiry warnings
-    let dteWarning = ''
-    if(isOpen && t.desc) {
+    // DTE — live days to expiry shown on every open trade card
+    let dte = null, dteDisplay = '', dteWarning = ''
+    if(t.desc) {
       try {
-        const expDate = new Date(t.desc.replace(/-/g, ' '))
-        const dte = Math.round((expDate - new Date()) / 864e5)
+        const expDate = new Date(t.desc.replace(/-/g,' '))
+        dte = Math.round((expDate - new Date()) / 864e5)
         if(!isNaN(dte)) {
-          if(dte <= 0) dteWarning = '<span style="background:#ff4560;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;margin-left:4px">EXPIRED</span>'
-          else if(dte <= 3) dteWarning = '<span style="background:#ff4560;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;margin-left:4px">⚠ '+dte+'d</span>'
-          else if(dte <= 7) dteWarning = '<span style="background:#ff8c42;color:#0a0c0f;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;margin-left:4px">'+dte+'d</span>'
-          else if(dte <= 14) dteWarning = '<span style="background:rgba(255,140,66,.2);color:#ff8c42;font-size:9px;font-weight:600;padding:2px 5px;border-radius:4px;margin-left:4px">'+dte+'d</span>'
+          if(dte <= 0) {
+            dteDisplay = '<span style="background:#ff4560;color:#fff;font-size:9px;font-weight:700;padding:2px 7px;border-radius:4px">EXPIRED</span>'
+          } else if(dte <= 3) {
+            dteDisplay = '<span style="background:#ff4560;color:#fff;font-size:9px;font-weight:700;padding:2px 7px;border-radius:4px">'+dte+'d ⚠</span>'
+          } else if(dte <= 7) {
+            dteDisplay = '<span style="background:rgba(255,69,96,.15);color:#ff4560;font-size:9px;font-weight:700;padding:2px 7px;border-radius:4px;border:1px solid rgba(255,69,96,.3)">'+dte+'d</span>'
+          } else if(dte <= 14) {
+            dteDisplay = '<span style="background:rgba(255,140,66,.12);color:#ff8c42;font-size:9px;font-weight:600;padding:2px 7px;border-radius:4px;border:1px solid rgba(255,140,66,.25)">'+dte+'d</span>'
+          } else if(dte <= 21) {
+            dteDisplay = '<span style="background:rgba(255,255,255,.05);color:#8b91a0;font-size:9px;padding:2px 7px;border-radius:4px;border:1px solid rgba(255,255,255,.1)">'+dte+'d</span>'
+          } else {
+            dteDisplay = '<span style="font-size:9px;color:#555c6e;padding:2px 5px">'+dte+'d</span>'
+          }
         }
       } catch(e) {}
     }
     const statusBadge = isOpen
-      ? '<span class="badge bg-g g" style="font-size:9px">OPEN</span>' + dteWarning
+      ? '<span class="badge bg-g g" style="font-size:9px">OPEN</span>' + dteDisplay
       : '<span class="badge bg-r r" style="font-size:9px">CLOSED</span>'
     const pnlStr = t.pnl !== undefined
       ? (t.pnl>=0?'<span class="g">+$':'<span class="r">-$') + Math.abs(Math.round(t.pnl)).toLocaleString() + '</span>'
@@ -4877,32 +4931,34 @@ async function refreshAllPnL() {
       }
 
       // Try options snapshot — t.desc holds expiry like "May-15-2026"
-      const expRaw = t.expiry || t.desc || ''
-      const strikeVal = t.strike || 0
-      // Convert "May-15-2026" → "2026-05-15"
-      let expISO = ''
-      try {
-        const d = new Date(expRaw.replace(/-/g, ' '))
-        if(!isNaN(d)) expISO = d.toISOString().split('T')[0]
-      } catch(e) {}
-      // Get base ticker from full ticker string like "NVDA $180 Call"
+      // Try OCC symbol first (most direct)
       const baseTicker = t.ticker ? t.ticker.split(' ')[0].replace(/[^A-Z]/g,'') : ''
-      if(expISO && strikeVal && baseTicker) {
+      const strikeVal  = t.strike || 0
+      const expRaw     = t.desc || t.expiry || ''
+      let expISO = ''
+      try { const d=new Date(expRaw.replace(/-/g,' ')); if(!isNaN(d)) expISO=d.toISOString().split('T')[0] } catch(e){}
+
+      if(t.occ) {
+        // Direct OCC snapshot — most accurate
+        const snapD = await apiGet('/v3/snapshot/options/'+baseTicker+'?ticker=O:'+t.occ, false, true)
+        if(snapD?.results?.[0]) {
+          const r = snapD.results[0]
+          if(r.day?.close) price = r.day.close
+          else if(r.last_quote?.ask) price = (r.last_quote.bid + r.last_quote.ask)/2
+        }
+      }
+      // Fallback: search by expiry + strike
+      if(!price && expISO && strikeVal && baseTicker) {
+        const cpType = (t.type||'Call').toLowerCase().includes('put') ? 'put' : 'call'
         const snapData = await apiGet(
           '/v3/snapshot/options/'+baseTicker+
-          '?expiration_date='+expISO+
-          '&contract_type=call'+
-          '&strike_price.gte='+(strikeVal-0.5)+
-          '&strike_price.lte='+(strikeVal+0.5)+
-          '&limit=10',
-          false, true  // silent=true
-        )
-        if(snapData && snapData.results && snapData.results.length) {
-          const best = snapData.results.find(r => Math.abs((r.details?.strike_price||0) - strikeVal) < 0.1)
-                    || snapData.results[0]
-          if(best && best.day?.close) price = best.day.close
-          // Also try last_quote if day close is stale
-          if(!price && best?.last_quote?.ask) price = (best.last_quote.bid + best.last_quote.ask) / 2
+          '?expiration_date='+expISO+'&contract_type='+cpType+
+          '&strike_price.gte='+(strikeVal-0.5)+'&strike_price.lte='+(strikeVal+0.5)+'&limit=5',
+          false, true)
+        if(snapData?.results?.length) {
+          const best = snapData.results.find(r=>Math.abs((r.details?.strike_price||0)-strikeVal)<0.1) || snapData.results[0]
+          if(best?.day?.close) price = best.day.close
+          else if(best?.last_quote?.ask) price = (best.last_quote.bid+best.last_quote.ask)/2
         }
       }
 
@@ -5526,6 +5582,279 @@ async function deployToGitHub() {
   }
 }
 
+// ── LEAPS ENTRY TRACKER ──────────────────────────────────────────────────────
+const LEAPS_TICKERS = ['ASTS', 'IREN']
+const LEAPS_VIX_LOW = 18, LEAPS_VIX_HIGH = 22
+
+function leapsSize(ticker) {
+  document.getElementById('tkr').value = ticker
+  show('sizer', document.querySelectorAll('.nav button')[2])
+  fetchTicker(ticker)
+}
+
+async function fetchLeapsData() {
+  const body = document.getElementById('leaps-body')
+  const upd  = document.getElementById('leaps-updated')
+  if(body) body.innerHTML = '<div style="font-size:12px;color:#555c6e;text-align:center;padding:8px">Fetching data...</div>'
+
+  const to   = new Date().toISOString().split('T')[0]
+  const from = new Date(Date.now()-200*864e5).toISOString().split('T')[0]
+  const results = []
+
+  // Fetch VIX (from VIXY)
+  let vixEst = null
+  try {
+    const vd = await apiGet('/v2/aggs/ticker/VIXY/range/1/day/'+to+'/'+to+'?adjusted=true&sort=desc&limit=1')
+    if(vd?.results?.[0]) vixEst = +(vd.results[0].c * 0.63).toFixed(2)
+  } catch(e) {}
+
+  // Fetch each ticker
+  for(const ticker of LEAPS_TICKERS) {
+    try {
+      const d = await apiGet('/v2/aggs/ticker/'+ticker+'/range/1/day/'+from+'/'+to+'?adjusted=true&sort=asc&limit=120')
+      if(!d?.results?.length) continue
+      const bars   = d.results
+      const closes = bars.map(b=>b.c)
+      const n      = closes.length
+      const last   = closes[n-1]
+      const prev   = closes[n-2]||last
+      const chg    = (last-prev)/prev*100
+      // 200MA
+      const ma200  = closes.slice(Math.max(0,n-200)).reduce((a,b)=>a+b,0)/Math.min(n,200)
+      const aboveMa = last > ma200
+      const distMa = (last-ma200)/ma200*100
+      // ATR(14)
+      const trs = []
+      for(let i=1;i<bars.length;i++){const h=bars[i].h,l=bars[i].l,pc=bars[i-1].c;trs.push(Math.max(h-l,Math.abs(h-pc),Math.abs(l-pc)))}
+      const atr = +(trs.slice(-14).reduce((a,b)=>a+b,0)/14).toFixed(2)
+      // 52wk range
+      const wk52 = closes.slice(Math.max(0,n-252))
+      const hi52 = Math.max(...wk52), lo52 = Math.min(...wk52)
+      const pctFromHi = (last-hi52)/hi52*100
+      // Suggested LEAPS strike: ~20% below current (targeting 70-80 delta ITM)
+      const suggestedStrike = Math.round(last * 0.82 / 5) * 5  // round to nearest $5
+      results.push({ticker, last, chg, atr, aboveMa, distMa, ma200, hi52, lo52, pctFromHi, suggestedStrike})
+    } catch(e) {}
+  }
+
+  // VIX zone logic
+  const vixInZone  = vixEst && vixEst >= LEAPS_VIX_LOW && vixEst <= LEAPS_VIX_HIGH
+  const vixBelow   = vixEst && vixEst < LEAPS_VIX_LOW
+  const vixAbove   = vixEst && vixEst > LEAPS_VIX_HIGH
+  const vixColor   = vixInZone ? '#00d68f' : vixBelow ? '#4da6ff' : '#ff8c42'
+  const vixLabel   = vixInZone ? 'IN ZONE ✓' : vixBelow ? 'below zone' : 'above zone — wait'
+
+  // Render
+  const html =
+    // VIX banner
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">' +
+    '<div style="background:'+(vixInZone?'rgba(0,214,143,.1)':'rgba(255,255,255,.04)')+';border:1px solid '+(vixInZone?'rgba(0,214,143,.3)':'rgba(255,255,255,.08)')+';border-radius:6px;padding:12px;text-align:center">' +
+      '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e;margin-bottom:4px">VIX Level</div>' +
+      '<div style="font-size:26px;font-weight:700;color:'+vixColor+'">'+(vixEst||'--')+'</div>' +
+      '<div style="font-size:11px;color:'+vixColor+';margin-top:2px">'+vixLabel+'</div>' +
+    '</div>' +
+    '<div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:6px;padding:12px;text-align:center">' +
+      '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e;margin-bottom:4px">Entry Zone</div>' +
+      '<div style="font-size:18px;font-weight:700;color:#b37eff">'+LEAPS_VIX_LOW+' – '+LEAPS_VIX_HIGH+'</div>' +
+      '<div style="font-size:11px;color:#555c6e;margin-top:2px">VIX target range</div>' +
+    '</div>' +
+    '<div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:6px;padding:12px;text-align:center">' +
+      '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e;margin-bottom:4px">Go / No-Go</div>' +
+      '<div style="font-size:18px;font-weight:700;color:'+(vixInZone?'#00d68f':'#ff8c42')+'">'+(vixInZone?'ENTER':'WAIT')+'</div>' +
+      '<div style="font-size:11px;color:#555c6e;margin-top:2px">'+(vixInZone?'conditions met':'wait for VIX 18-22')+'</div>' +
+    '</div>' +
+    '</div>' +
+    // Ticker cards
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
+    results.map(r => {
+      const checks = [
+        {l:'VIX in 18–22 zone',  ok:vixInZone},
+        {l:'Above 200MA',         ok:r.aboveMa},
+        {l:'Not extended (>20%)', ok:Math.abs(r.distMa)<20},
+        {l:'ATR > $1.00',         ok:r.atr>1},
+      ]
+      const passing = checks.filter(c=>c.ok).length
+      const allGo = passing === checks.length
+      const goColor = allGo ? '#00d68f' : passing>=3 ? '#f0c040' : '#ff8c42'
+      return '<div style="background:#111318;border:1px solid '+(allGo?'rgba(0,214,143,.25)':'rgba(255,255,255,.07)')+';border-radius:8px;padding:14px">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">' +
+          '<span style="font-family:SF Mono,monospace;font-weight:700;font-size:18px;color:#f0c040">'+r.ticker+'</span>' +
+          '<span style="font-size:11px;font-weight:600;padding:3px 10px;border-radius:4px;background:'+(allGo?'rgba(0,214,143,.15)':'rgba(255,140,66,.12)')+';color:'+goColor+'">'+(allGo?'ENTER':'WAIT')+' '+passing+'/4</span>' +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px;font-size:12px">' +
+          '<div style="color:#555c6e">Price: <span style="color:#e8eaf0;font-family:SF Mono,monospace">$'+r.last.toFixed(2)+'</span> <span style="color:'+(r.chg>=0?'#00d68f':'#ff4560');+'font-size:10px">'+(r.chg>=0?'+':'')+r.chg.toFixed(1)+'%</span></div>' +
+          '<div style="color:#555c6e">ATR: <span style="color:#e8eaf0;font-family:SF Mono,monospace">$'+r.atr+'</span></div>' +
+          '<div style="color:#555c6e">200MA: <span style="color:'+(r.aboveMa?'#00d68f':'#ff4560')+';font-family:SF Mono,monospace">'+(r.distMa>=0?'+':'')+r.distMa.toFixed(1)+'%</span></div>' +
+          '<div style="color:#555c6e">52wk hi: <span style="color:#555c6e;font-family:SF Mono,monospace">'+r.pctFromHi.toFixed(1)+'%</span></div>' +
+        '</div>' +
+        '<div style="background:#0a0c0f;border-radius:6px;padding:10px;margin-bottom:10px">' +
+          '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#555c6e;margin-bottom:6px">Suggested LEAPS Entry</div>' +
+          '<div style="font-size:12px;color:#8b91a0;line-height:1.8">' +
+            'Strike: <span style="color:#b37eff;font-family:SF Mono,monospace;font-weight:600">$'+r.suggestedStrike+'</span> (~70–80 delta ITM)<br>' +
+            'Expiry: <span style="color:#b37eff;font-family:SF Mono,monospace">12–15 months out</span><br>' +
+            'Sizing: <span style="color:#b37eff;font-family:SF Mono,monospace">6% risk budget = $21K</span>' +
+          '</div>' +
+        '</div>' +
+        checks.map(c=>'<div style="display:flex;align-items:center;gap:6px;font-size:11px;padding:2px 0"><span style="color:'+(c.ok?'#00d68f':'#ff4560')+'">'+(c.ok?'✓':'✗')+'</span><span style="color:'+(c.ok?'#8b91a0':'#555c6e')+'">'+c.l+'</span></div>').join('') +
+        '<button class="btn btn-ghost" style="width:100%;margin-top:10px;font-size:11px;color:#b37eff;border-color:rgba(179,126,255,.3)" onclick="leapsSize(\''+r.ticker+'\')">→ Size this trade</button>' +
+      '</div>'
+    }).join('') +
+    '</div>'
+
+  if(body) body.innerHTML = html
+  if(upd) upd.textContent = 'Updated '+new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})
+  setApi('LEAPS data loaded: ASTS + IREN', 'ok')
+}
+
+// ── TRADE ANALYTICS ──────────────────────────────────────────────────────────
+function renderAnalytics() {
+  if(!CLOSED_TRADES.length) return
+  const period = document.getElementById('an-period')?.value || 'all'
+  const now = new Date()
+  let fromDate = null
+  if(period==='1y') { fromDate=new Date(now); fromDate.setFullYear(fromDate.getFullYear()-1) }
+  else if(period==='6m') { fromDate=new Date(now); fromDate.setMonth(fromDate.getMonth()-6) }
+  else if(period==='3m') { fromDate=new Date(now); fromDate.setMonth(fromDate.getMonth()-3) }
+
+  const ct = CLOSED_TRADES.filter(t => {
+    if(!fromDate) return true
+    const d = new Date((t.dateSold||t.dateAcq||'').replace(/-/g,' '))
+    return !isNaN(d) && d >= fromDate
+  })
+  if(!ct.length) { document.getElementById('an-summary').innerHTML='<div style="color:#555c6e;font-size:12px">No trades in this period</div>'; return }
+
+  const wins = ct.filter(t=>t.pnl>0), losses = ct.filter(t=>t.pnl<=0)
+  const totalPnl = ct.reduce((s,t)=>s+t.pnl,0)
+  const avgWin  = wins.length   ? wins.reduce((s,t)=>s+t.pnl,0)/wins.length : 0
+  const avgLoss = losses.length ? losses.reduce((s,t)=>s+t.pnl,0)/losses.length : 0
+  const winRate = ct.length ? (wins.length/ct.length*100).toFixed(0) : 0
+  const expectancy = wins.length && losses.length
+    ? ((wins.length/ct.length)*avgWin + (losses.length/ct.length)*avgLoss).toFixed(0) : 0
+  const holdTimes = ct.filter(t=>t.dateAcq&&t.dateSold).map(t=>{
+    const a=new Date(t.dateAcq.replace(/-/g,' ')), b=new Date(t.dateSold.replace(/-/g,' '))
+    return Math.round((b-a)/864e5)
+  }).filter(d=>d>=0)
+  const avgHold = holdTimes.length ? Math.round(holdTimes.reduce((s,d)=>s+d,0)/holdTimes.length) : 0
+  const profitFactor = losses.length && avgLoss<0 ? Math.abs(avgWin/avgLoss).toFixed(2) : '∞'
+
+  // ── Summary cards ─────────────────────────────────────────────────────────
+  const mc = (l,v,c,s='') => '<div style="background:#171b22;border:1px solid rgba(255,255,255,.07);border-radius:6px;padding:11px 13px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e;margin-bottom:3px">'+l+'</div><div style="font-size:18px;font-weight:700;color:'+c+';font-family:SF Mono,monospace">'+v+'</div>'+(s?'<div style="font-size:10px;color:#555c6e;margin-top:2px">'+s+'</div>':'')+'</div>'
+  document.getElementById('an-summary').innerHTML = [
+    mc('Total P&L', (totalPnl>=0?'+$':'-$')+Math.abs(Math.round(totalPnl)).toLocaleString(), totalPnl>=0?'#00d68f':'#ff4560', ct.length+' trades'),
+    mc('Win Rate', winRate+'%', +winRate>=55?'#00d68f':+winRate>=45?'#f0c040':'#ff4560', wins.length+'W · '+losses.length+'L'),
+    mc('Avg Win', '+$'+Math.round(avgWin).toLocaleString(), '#00d68f', 'per winning trade'),
+    mc('Avg Loss', '-$'+Math.abs(Math.round(avgLoss)).toLocaleString(), '#ff4560', 'per losing trade'),
+    mc('Profit Factor', profitFactor, +profitFactor>=2?'#00d68f':+profitFactor>=1?'#f0c040':'#ff4560', 'win÷loss ratio'),
+    mc('Expectancy', (expectancy>=0?'+$':'-$')+Math.abs(expectancy).toLocaleString(), +expectancy>=0?'#00d68f':'#ff4560', 'per trade avg'),
+    mc('Avg Hold', avgHold+'d', '#4da6ff', 'days in trade'),
+  ].join('')
+
+  // ── P&L by ticker bar chart ───────────────────────────────────────────────
+  const byTicker = {}
+  ct.forEach(t=>{
+    const tk=t.ticker||'?'
+    if(!byTicker[tk]) byTicker[tk]={pnl:0,count:0,wins:0}
+    byTicker[tk].pnl+=t.pnl; byTicker[tk].count++; if(t.pnl>0) byTicker[tk].wins++
+  })
+  const tickerData = Object.entries(byTicker).sort((a,b)=>b[1].pnl-a[1].pnl)
+  const maxPnl = Math.max(...tickerData.map(([,d])=>Math.abs(d.pnl)), 1)
+  document.getElementById('an-ticker-chart').innerHTML = tickerData.map(([ticker,d])=>{
+    const pct = Math.abs(d.pnl)/maxPnl*100
+    const col = d.pnl>=0 ? '#00d68f' : '#ff4560'
+    const wr = d.count ? (d.wins/d.count*100).toFixed(0)+'%' : '--'
+    return '<div style="display:grid;grid-template-columns:55px 1fr 70px 35px;gap:6px;align-items:center;margin-bottom:5px">' +
+      '<div style="font-family:SF Mono,monospace;font-size:11px;font-weight:600;color:#f0c040;text-overflow:ellipsis;overflow:hidden;white-space:nowrap">'+ticker+'</div>' +
+      '<div style="background:rgba(255,255,255,.05);border-radius:2px;height:14px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+col+';border-radius:2px;transition:width .3s"></div></div>' +
+      '<div style="font-family:SF Mono,monospace;font-size:11px;color:'+col+';text-align:right">'+(d.pnl>=0?'+$':'-$')+Math.abs(Math.round(d.pnl)).toLocaleString()+'</div>' +
+      '<div style="font-size:10px;color:#555c6e;text-align:right">'+wr+'</div>' +
+    '</div>'
+  }).join('')
+
+  // ── Monthly P&L bar chart ─────────────────────────────────────────────────
+  const byMonth = {}
+  ct.forEach(t=>{
+    const raw=t.dateSold||t.dateAcq||''
+    const m=raw.match(/^(\w{3})-\d+-(\d{4})/)
+    const key=m?m[2]+'-'+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].indexOf(m[1]).toString().padStart(2,'0'):(raw.slice(0,7)||'?')
+    const label=m?m[1]+' '+m[2]:raw.slice(0,7)
+    if(!byMonth[key]) byMonth[key]={pnl:0,count:0,wins:0,label}
+    byMonth[key].pnl+=t.pnl; byMonth[key].count++; if(t.pnl>0) byMonth[key].wins++
+  })
+  const monthData = Object.entries(byMonth).sort((a,b)=>a[0].localeCompare(b[0]))
+  const maxMPnl = Math.max(...monthData.map(([,d])=>Math.abs(d.pnl)), 1)
+  document.getElementById('an-month-chart').innerHTML = monthData.map(([,d])=>{
+    const pct=Math.abs(d.pnl)/maxMPnl*100
+    const col=d.pnl>=0?'#00d68f':'#ff4560'
+    return '<div style="display:grid;grid-template-columns:60px 1fr 75px;gap:6px;align-items:center;margin-bottom:5px">' +
+      '<div style="font-size:11px;color:#8b91a0;white-space:nowrap">'+d.label+'</div>' +
+      '<div style="background:rgba(255,255,255,.05);border-radius:2px;height:14px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+col+';border-radius:2px"></div></div>' +
+      '<div style="font-family:SF Mono,monospace;font-size:11px;color:'+col+';text-align:right">'+(d.pnl>=0?'+$':'-$')+Math.abs(Math.round(d.pnl)).toLocaleString()+'</div>' +
+    '</div>'
+  }).join('')
+
+  // ── Win/Loss breakdown ────────────────────────────────────────────────────
+  const biggestWin  = [...wins].sort((a,b)=>b.pnl-a.pnl)[0]
+  const biggestLoss = [...losses].sort((a,b)=>a.pnl-b.pnl)[0]
+  const streak = (() => {
+    let cur=0,max=0,type=''
+    ct.slice().reverse().forEach(t=>{ if(t.pnl>0){if(type==='W')cur++;else{cur=1;type='W'}}else{if(type==='L')cur++;else{cur=1;type='L'}} if(cur>max)max=cur })
+    return max
+  })()
+  const wr100 = ct.filter(t=>t.pnl>100).length
+  const lr100 = ct.filter(t=>t.pnl<-100).length
+  document.getElementById('an-winloss').innerHTML =
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">' +
+    '<div style="background:rgba(0,214,143,.08);border:1px solid rgba(0,214,143,.2);border-radius:6px;padding:10px 12px;text-align:center">' +
+      '<div style="font-size:22px;font-weight:700;color:#00d68f">'+wins.length+'</div>' +
+      '<div style="font-size:10px;color:#555c6e;text-transform:uppercase;letter-spacing:.06em">Wins</div>' +
+      '<div style="font-size:11px;color:#00d68f;margin-top:4px">+$'+Math.round(avgWin).toLocaleString()+' avg</div>' +
+    '</div>' +
+    '<div style="background:rgba(255,69,96,.08);border:1px solid rgba(255,69,96,.2);border-radius:6px;padding:10px 12px;text-align:center">' +
+      '<div style="font-size:22px;font-weight:700;color:#ff4560">'+losses.length+'</div>' +
+      '<div style="font-size:10px;color:#555c6e;text-transform:uppercase;letter-spacing:.06em">Losses</div>' +
+      '<div style="font-size:11px;color:#ff4560;margin-top:4px">-$'+Math.abs(Math.round(avgLoss)).toLocaleString()+' avg</div>' +
+    '</div></div>' +
+    '<div style="font-size:11px;color:#555c6e;line-height:2">' +
+      'Wins &gt; $100: <span style="color:#00d68f">'+wr100+'</span> &nbsp;·&nbsp; Losses &gt; $100: <span style="color:#ff4560">'+lr100+'</span><br>' +
+      'Longest streak: <span style="color:#f0c040">'+streak+'</span> &nbsp;·&nbsp; Avg hold: <span style="color:#4da6ff">'+avgHold+'d</span>' +
+    '</div>'
+
+  // ── Best & Worst ──────────────────────────────────────────────────────────
+  const top5 = [...wins].sort((a,b)=>b.pnl-a.pnl).slice(0,5)
+  const bot5 = [...losses].sort((a,b)=>a.pnl-b.pnl).slice(0,5)
+  const tradeRow = (t,col) => '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.04)">' +
+    '<div style="font-size:11px;color:#e8eaf0;font-family:SF Mono,monospace;font-weight:600">'+( t.ticker||t.display||'?')+'</div>' +
+    '<div style="font-size:10px;color:#555c6e">'+( t.dateSold||t.dateAcq||'')+'</div>' +
+    '<div style="font-size:12px;font-weight:700;color:'+col+'">'+(t.pnl>=0?'+$':'-$')+Math.abs(Math.round(t.pnl)).toLocaleString()+'</div>' +
+  '</div>'
+  document.getElementById('an-extremes').innerHTML =
+    '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#00d68f;margin-bottom:6px">Top 5 Wins</div>' +
+    top5.map(t=>tradeRow(t,'#00d68f')).join('') +
+    '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#ff4560;margin-top:12px;margin-bottom:6px">Top 5 Losses</div>' +
+    bot5.map(t=>tradeRow(t,'#ff4560')).join('')
+
+  // ── Full trade table ──────────────────────────────────────────────────────
+  const sorted = [...ct].sort((a,b)=>new Date(b.dateSold||b.dateAcq||0)-new Date(a.dateSold||a.dateAcq||0))
+  document.getElementById('an-table-count').textContent = ct.length + ' trades'
+  const th = s => '<th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#555c6e;border-bottom:1px solid rgba(255,255,255,.08)">'+s+'</th>'
+  const td = (s,c) => '<td style="padding:6px 10px;border-bottom:1px solid rgba(255,255,255,.04);color:'+(c||'#e8eaf0')+'">'+s+'</td>'
+  document.getElementById('an-table').innerHTML =
+    '<thead><tr>'+th('Trade')+th('Closed')+th('Qty')+th('Cost/ct')+th('P&L')+th('P&L %')+th('Hold')+'</tr></thead>' +
+    '<tbody>' + sorted.map(t=>{
+      const hold = t.dateAcq&&t.dateSold ? Math.round((new Date(t.dateSold.replace(/-/g,' '))-new Date(t.dateAcq.replace(/-/g,' ')))/864e5)+'d' : '--'
+      const col = t.pnl>=0?'#00d68f':'#ff4560'
+      return '<tr>'+
+        td('<span style="font-family:SF Mono,monospace;font-weight:600;color:#f0c040">'+(t.ticker||t.display||'?')+'</span>')+
+        td(t.dateSold||t.dateAcq||'--','#555c6e')+
+        td((t.cts||1)+' ct','#555c6e')+
+        td('$'+(t.cost||0).toFixed(2),'#555c6e')+
+        td((t.pnl>=0?'+$':'-$')+Math.abs(Math.round(t.pnl)).toLocaleString(),col)+
+        td((t.pnlPct>=0?'+':'')+t.pnlPct.toFixed(1)+'%',col)+
+        td(hold,'#555c6e')+
+      '</tr>'
+    }).join('') + '</tbody>'
+}
+
 // ── PORTFOLIO LIVE PRICE REFRESH ─────────────────────────────────────────────
 async function refreshPortfolioPrices() {
   const btn = document.getElementById('port-refresh-btn')
@@ -5562,12 +5891,11 @@ async function refreshPortfolioPrices() {
 
   // Update POSITIONS with refreshed prices
   let updated = 0
-  POSITIONS.forEach(p => {
+  for(const p of POSITIONS) {
     const base = p.raw ? p.raw.replace(/^-/,'').match(/^([A-Z]+)/)?.[1] : p.t?.split(' ')[0]
     if(!base || !prices[base]) return
     const px = prices[base]
     if(p.type === 'stock') {
-      // For stocks: recalculate value + P&L directly
       const costPerShare = p.cost || 0
       const shares = p.c || 0
       p.curPx    = +px.close.toFixed(2)
@@ -5578,12 +5906,29 @@ async function refreshPortfolioPrices() {
       p.todayPct = +px.chg.toFixed(2)
       updated++
     } else {
-      // For options: update underlying price display, keep option value from Fidelity
-      p.underlyingPx = +px.close.toFixed(2)
+      // Options: update underlying + try live option snapshot via OCC
+      p.underlyingPx  = +px.close.toFixed(2)
       p.underlyingChg = +px.chg.toFixed(2)
+      const rawOcc = p.raw ? p.raw.replace(/^-/,'') : ''
+      if(rawOcc && /^[A-Z]+\d{6}[CP]/.test(rawOcc)) {
+        try {
+          const optSnap = await apiGet('/v3/snapshot/options/'+base+'?ticker=O:'+rawOcc, false, true)
+          if(optSnap?.results?.[0]) {
+            const r = optSnap.results[0]
+            const optPx = r.day?.close || ((r.last_quote?.bid||0)+(r.last_quote?.ask||0))/2
+            if(optPx > 0) {
+              const cts = p.c || 1
+              p.val   = Math.round(optPx * 100 * cts)
+              p.today = r.day?.change ? Math.round(r.day.change * 100 * cts) : p.today
+              p.pnl   = p.costTotal ? Math.round(p.val - p.costTotal) : p.pnl
+              p.pct   = p.costTotal ? +((p.val-p.costTotal)/p.costTotal*100).toFixed(2) : p.pct
+            }
+          }
+        } catch(e) {}
+      }
       updated++
     }
-  })
+  }
 
   // Save refreshed data + re-render
   savePortfolioData(POSITIONS, {refreshedAt: new Date().toLocaleTimeString()})
