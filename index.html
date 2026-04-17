@@ -184,7 +184,7 @@ tr:hover td{background:#171b22;cursor:pointer}
     <div class="logo-mark">GT</div>
     <div>
       <div class="logo-name">GOGO</div>
-      <div class="logo-sub">Trading Platform v1.2</div>
+      <div class="logo-sub">Trading Platform v1.3</div>
     </div>
   </div>
   <div style="display:flex;align-items:center;gap:12px">
@@ -205,6 +205,15 @@ tr:hover td{background:#171b22;cursor:pointer}
 <div id="api-bar">
   <span style="margin-left:auto;font-size:10px;color:#333a4a;cursor:pointer" onclick="localStorage.removeItem('gt_api_key');location.reload()" title="Reset API key">key</span><div id="api-dot"></div>
   <span id="api-msg">Ready -- enter a ticker to fetch live data</span>
+  <span style="margin-left:auto;display:flex;align-items:center;gap:6px">
+    <span id="deploy-status" style="font-size:10px;color:#333a4a"></span>
+    <button id="deploy-btn" onclick="deployToGitHub()" title="Push this page to GitHub (requires token in Screener settings)"
+      style="padding:2px 9px;background:transparent;border:1px solid rgba(255,255,255,.1);border-radius:4px;color:#555c6e;font-size:10px;cursor:pointer;font-family:inherit;transition:color .15s"
+      onmouseover="this.style.color='#f0c040';this.style.borderColor='rgba(240,192,64,.4)'"
+      onmouseout="this.style.color='#555c6e';this.style.borderColor='rgba(255,255,255,.1)'">
+      ⬆ Deploy
+    </button>
+  </span>
 </div>
 
 <div class="nav">
@@ -306,6 +315,36 @@ tr:hover td{background:#171b22;cursor:pointer}
     </div>
   </div>
 
+  <!-- CHANGELOG v1.3 -->
+  <div class="card" style="margin-top:14px;border-color:rgba(240,192,64,.15)">
+    <div class="card-head" style="border-color:rgba(240,192,64,.1)">
+      <span class="card-title" style="color:#f0c040">What's New — v1.3</span>
+      <span style="font-size:10px;color:#333a4a">Apr 2026</span>
+    </div>
+    <div class="card-body" style="padding:12px 16px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:11px">
+        <div>
+          <div style="color:#00d68f;font-weight:600;margin-bottom:5px">✓ New Features</div>
+          <div style="color:#8b91a0;line-height:1.9">
+            ⚡ Vol Acceleration Guard in TQQQ signal + backtest<br>
+            ⬆ One-click GitHub deploy button<br>
+            ⚠ Expiry DTE warnings on trade cards (≤14d)<br>
+            📊 Guard fires shown in backtest annual + signal tables<br>
+            🔧 Trade P&L refresh — improved option price lookup
+          </div>
+        </div>
+        <div>
+          <div style="color:#00d68f;font-weight:600;margin-bottom:5px">✓ Bug Fixes</div>
+          <div style="color:#8b91a0;line-height:1.9">
+            Fixed account showing $3M (Firebase cap + auto-clear)<br>
+            Fixed TQQQ signal bar showing on all tabs<br>
+            Fixed 10 trades with entry price = $0 (retry + 13s gap)<br>
+            weekly_report.py v6 with guard deployed to GitHub Actions
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 </div><!-- end #market -->
 
 <!-- &#9552;&#9552;&#9552; SCREENER &#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552; -->
@@ -3643,10 +3682,12 @@ function btSimulate(tqqqBars, qqqBars, spyBars, sgovBars, startDate) {
           newWeight = Math.min(newWeight, 0.50)  // cap at 50% when guard fires
         }
       }
-      if(Math.abs(newWeight-weight) >= 0.04) {
-        signals.push({date:d,vol,ma,qqqPrice:qP,aboveMa:above,
+      // Check if guard fired this week
+      const guardFiredBT = above && vol5d > 0 && vol > vol5d * 1.30 && vol > 0.45
+      if(Math.abs(newWeight-weight) >= 0.04 || guardFiredBT) {
+        signals.push({date:d,vol,vol5d,ma,qqqPrice:qP,aboveMa:above,
           action:newWeight===0?'SGOV':newWeight>=1?'TQQQ':'HALF',
-          weight:newWeight})
+          weight:newWeight, guardFired:guardFiredBT})
       }
       weeklyWeights.push(newWeight)
       weight = newWeight
@@ -3728,30 +3769,42 @@ function btRender(r) {
 
   // Annual table
   const yrs=[...new Set([...Object.keys(r.stratM.ann),...Object.keys(r.qqqM.ann)])].sort()
+  // Count guard fires per year for annual table
+  const guardByYear = {}
+  ;(r.signals||[]).forEach(s => { if(s.guardFired) { const y=s.date.getFullYear(); guardByYear[y]=(guardByYear[y]||0)+1 } })
   document.getElementById('bt-annual-table').innerHTML=
-    '<thead><tr>'+thL+'Year</th>'+th+'Strategy</th>'+th+'TQQQ BH</th>'+th+'QQQ BH</th>'+th+'SPY BH</th></tr></thead>'
+    '<thead><tr>'+thL+'Year</th>'+th+'Strategy</th>'+th+'TQQQ BH</th>'+th+'QQQ BH</th>'+th+'SPY BH</th>'+th+'⚡ Guard</th></tr></thead>'
     +'<tbody>'+yrs.map(y=>{
       const td=(v,c)=>'<td style="padding:7px 12px;text-align:right;border-bottom:1px solid rgba(255,255,255,.04);color:'+c+'">'+v+'</td>'
+      const guardN = guardByYear[y] || 0
+      const guardCell = guardN > 0
+        ? '<td style="padding:7px 12px;text-align:right;border-bottom:1px solid rgba(255,255,255,.04);color:#f0c040;font-weight:600">⚡ '+guardN+'x</td>'
+        : '<td style="padding:7px 12px;text-align:right;border-bottom:1px solid rgba(255,255,255,.04);color:#333a4a">—</td>'
       return '<tr><td style="padding:7px 12px;border-bottom:1px solid rgba(255,255,255,.04);color:#555c6e">'+y+'</td>'
         +td(pct(r.stratM.ann[y]),col(r.stratM.ann[y]))+td(pct(r.tqqqM.ann[y]),col(r.tqqqM.ann[y]))
-        +td(pct(r.qqqM.ann[y]),col(r.qqqM.ann[y]))+td(pct(r.spyM.ann[y]),col(r.spyM.ann[y]))+'</tr>'
+        +td(pct(r.qqqM.ann[y]),col(r.qqqM.ann[y]))+td(pct(r.spyM.ann[y]),col(r.spyM.ann[y]))+guardCell+'</tr>'
     }).join('')+'</tbody>'
   document.getElementById('bt-annual-wrap').style.display='block'
 
-  // Signal log
-  const sig=r.signals.slice(-15).reverse()
+  // Signal log — show all guard-fired weeks + last 15 signal changes
+  const guardFires = (r.signals||[]).filter(s=>s.guardFired)
+  const sigChanges = (r.signals||[]).filter(s=>!s.guardFired)
+  const sig = [...guardFires, ...sigChanges].sort((a,b)=>b.date-a.date).slice(0,20)
   const aMap={TQQQ:'100% TQQQ',HALF:'50/50 TQQQ/SGOV',SGOV:'100% SGOV'}
   const aCol={TQQQ:'#00d68f',HALF:'#f0c040',SGOV:'#555c6e'}
   document.getElementById('bt-signal-table').innerHTML=
-    '<thead><tr>'+thL+'Date</th>'+th+'QQQ Price</th>'+th+'200MA</th>'+th+'Realized Vol</th>'+th+'Signal</th></tr></thead>'
+    '<thead><tr>'+thL+'Date</th>'+th+'QQQ Price</th>'+th+'200MA</th>'+th+'Realized Vol</th>'+th+'Signal</th>'+th+'Guard</th></tr></thead>'
     +'<tbody>'+sig.map(s=>{
       const td=(v,c)=>'<td style="padding:7px 12px;text-align:right;border-bottom:1px solid rgba(255,255,255,.04);color:'+c+'">'+v+'</td>'
-      return '<tr><td style="padding:7px 12px;border-bottom:1px solid rgba(255,255,255,.04);color:#555c6e">'
+      const guardCell = s.guardFired
+        ? '<td style="padding:7px 12px;text-align:right;border-bottom:1px solid rgba(255,255,255,.04);color:#f0c040;font-weight:700">⚡ FIRED</td>'
+        : '<td style="padding:7px 12px;text-align:right;border-bottom:1px solid rgba(255,255,255,.04);color:#333a4a">—</td>'
+      return '<tr style="'+(s.guardFired?'background:rgba(240,192,64,.04)':'')+'"><td style="padding:7px 12px;border-bottom:1px solid rgba(255,255,255,.04);color:#555c6e">'
         +s.date.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+'</td>'
         +td('$'+s.qqqPrice.toFixed(2),'#e8eaf0')+td('$'+s.ma.toFixed(2),'#555c6e')
         +td((s.vol*100).toFixed(1)+'%',s.vol>=0.35?'#ff4560':'#00d68f')
         +'<td style="padding:7px 12px;text-align:right;border-bottom:1px solid rgba(255,255,255,.04);color:'
-        +aCol[s.action]+';font-weight:600">'+aMap[s.action]+'</td></tr>'
+        +aCol[s.action]+';font-weight:600">'+aMap[s.action]+'</td>'+guardCell+'</tr>'
     }).join('')+'</tbody>'
   document.getElementById('bt-signal-wrap').style.display='block'
 
@@ -4371,8 +4424,22 @@ function renderTrades() {
     const lF = t.atr * 2 * 0.80 * 100 * t.cts
     const pct= n => +((n-t.entry)/t.entry*100).toFixed(1)
     const isOpen = t.status === 'open'
+    // DTE calculation for expiry warnings
+    let dteWarning = ''
+    if(isOpen && t.desc) {
+      try {
+        const expDate = new Date(t.desc.replace(/-/g, ' '))
+        const dte = Math.round((expDate - new Date()) / 864e5)
+        if(!isNaN(dte)) {
+          if(dte <= 0) dteWarning = '<span style="background:#ff4560;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;margin-left:4px">EXPIRED</span>'
+          else if(dte <= 3) dteWarning = '<span style="background:#ff4560;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;margin-left:4px">⚠ '+dte+'d</span>'
+          else if(dte <= 7) dteWarning = '<span style="background:#ff8c42;color:#0a0c0f;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;margin-left:4px">'+dte+'d</span>'
+          else if(dte <= 14) dteWarning = '<span style="background:rgba(255,140,66,.2);color:#ff8c42;font-size:9px;font-weight:600;padding:2px 5px;border-radius:4px;margin-left:4px">'+dte+'d</span>'
+        }
+      } catch(e) {}
+    }
     const statusBadge = isOpen
-      ? '<span class="badge bg-g g" style="font-size:9px">OPEN</span>'
+      ? '<span class="badge bg-g g" style="font-size:9px">OPEN</span>' + dteWarning
       : '<span class="badge bg-r r" style="font-size:9px">CLOSED</span>'
     const pnlStr = t.pnl !== undefined
       ? (t.pnl>=0?'<span class="g">+$':'<span class="r">-$') + Math.abs(Math.round(t.pnl)).toLocaleString() + '</span>'
@@ -4481,20 +4548,33 @@ async function refreshAllPnL() {
         if(spEl) spEl.textContent = '$' + stockPrice.toFixed(2)
       }
 
-      // Try options snapshot for the specific expiry/strike
-      if(t.expiry && t.strike) {
-        const expISO = t.expiry  // already ISO format e.g. 2026-05-15
+      // Try options snapshot — t.desc holds expiry like "May-15-2026"
+      const expRaw = t.expiry || t.desc || ''
+      const strikeVal = t.strike || 0
+      // Convert "May-15-2026" → "2026-05-15"
+      let expISO = ''
+      try {
+        const d = new Date(expRaw.replace(/-/g, ' '))
+        if(!isNaN(d)) expISO = d.toISOString().split('T')[0]
+      } catch(e) {}
+      // Get base ticker from full ticker string like "NVDA $180 Call"
+      const baseTicker = t.ticker ? t.ticker.split(' ')[0].replace(/[^A-Z]/g,'') : ''
+      if(expISO && strikeVal && baseTicker) {
         const snapData = await apiGet(
-          '/v3/snapshot/options/'+t.ticker+
+          '/v3/snapshot/options/'+baseTicker+
           '?expiration_date='+expISO+
           '&contract_type=call'+
-          '&strike_price.gte='+(t.strike-0.5)+
-          '&strike_price.lte='+(t.strike+0.5)+
-          '&limit=5'
+          '&strike_price.gte='+(strikeVal-0.5)+
+          '&strike_price.lte='+(strikeVal+0.5)+
+          '&limit=10',
+          false, true  // silent=true
         )
         if(snapData && snapData.results && snapData.results.length) {
-          const best = snapData.results.find(r => r.details.strike_price === t.strike) || snapData.results[0]
-          if(best && best.day && best.day.close) price = best.day.close
+          const best = snapData.results.find(r => Math.abs((r.details?.strike_price||0) - strikeVal) < 0.1)
+                    || snapData.results[0]
+          if(best && best.day?.close) price = best.day.close
+          // Also try last_quote if day close is stale
+          if(!price && best?.last_quote?.ask) price = (best.last_quote.bid + best.last_quote.ask) / 2
         }
       }
 
@@ -5023,6 +5103,94 @@ function initPlatform() {
     // Force checklist render even if something failed
     try { renderChecklist()
   setTimeout(function(){rebCalc()},200) } catch(e2) {}
+  }
+}
+
+// ── GITHUB AUTO-DEPLOY ────────────────────────────────────────────────────────
+async function deployToGitHub() {
+  const token = localStorage.getItem('gt_github_token')
+  if(!token) {
+    const t = prompt('Enter your GitHub token (stored locally, never sent anywhere else):\n\nNeeds repo scope. Generate at github.com/settings/tokens')
+    if(!t) return
+    localStorage.setItem('gt_github_token', t)
+    const inp = document.getElementById('gh-token-input')
+    if(inp) inp.value = t
+  }
+  const tok = localStorage.getItem('gt_github_token')
+  if(!tok) return
+
+  const btn = document.getElementById('deploy-btn')
+  const status = document.getElementById('deploy-status')
+  btn.textContent = '⟳ Deploying...'
+  btn.disabled = true
+  status.style.color = '#ff8c42'
+  status.textContent = 'fetching SHA...'
+
+  try {
+    const REPO = 'stegitforme/gt-platform'
+    const PATH = 'index.html'
+    const API  = 'https://api.github.com/repos/' + REPO + '/contents/' + PATH
+
+    // Get current SHA
+    status.textContent = 'getting SHA...'
+    const shaR = await fetch(API, { headers: { 'Authorization': 'token '+tok } })
+    if(!shaR.ok) throw new Error('SHA fetch failed: ' + shaR.status + (shaR.status===401?' — check token':''))
+    const shaD = await shaR.json()
+    const sha  = shaD.sha
+
+    // Encode current page HTML
+    status.textContent = 'encoding...'
+    const html  = document.documentElement.outerHTML
+    // Add DOCTYPE back
+    const full  = '<!DOCTYPE html>\n' + html
+    const bytes = new TextEncoder().encode(full)
+    let bin = ''
+    for(let i = 0; i < bytes.length; i += 8192) bin += String.fromCharCode(...bytes.subarray(i, i+8192))
+    const b64 = btoa(bin)
+
+    // Push to GitHub
+    status.textContent = 'pushing ' + Math.round(full.length/1024) + 'KB...'
+    const pushR = await fetch(API, {
+      method: 'PUT',
+      headers: { 'Authorization': 'token '+tok, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: 'Deploy from GOGO v1.3 — ' + new Date().toLocaleString(),
+        content: b64,
+        sha: sha
+      })
+    })
+    if(!pushR.ok) {
+      const err = await pushR.json()
+      throw new Error(pushR.status + ': ' + (err.message||'push failed'))
+    }
+    const pushD = await pushR.json()
+    const shortSha = pushD.content?.sha?.slice(0,8) || 'ok'
+    btn.textContent = '✓ Deployed'
+    btn.style.color = '#00d68f'
+    btn.style.borderColor = 'rgba(0,214,143,.3)'
+    status.style.color = '#00d68f'
+    status.textContent = shortSha
+    setApi('Deployed to GitHub ✓ ' + shortSha, 'ok')
+    // Reset button after 5s
+    setTimeout(() => {
+      btn.textContent = '⬆ Deploy'; btn.disabled = false
+      btn.style.color = ''; btn.style.borderColor = ''
+      status.textContent = ''
+    }, 5000)
+  } catch(e) {
+    btn.textContent = '⬆ Deploy'; btn.disabled = false
+    status.style.color = '#ff4560'
+    status.textContent = 'failed'
+    setApi('Deploy failed: ' + e.message, 'err')
+    console.error('deployToGitHub:', e)
+    // Clear bad token if auth error
+    if(e.message.includes('401') || e.message.includes('token')) {
+      if(confirm('Auth error. Clear saved token and try again?')) {
+        localStorage.removeItem('gt_github_token')
+        const inp = document.getElementById('gh-token-input')
+        if(inp) inp.value = ''
+      }
+    }
   }
 }
 
