@@ -184,7 +184,7 @@ tr:hover td{background:#171b22;cursor:pointer}
     <div class="logo-mark">GT</div>
     <div>
       <div class="logo-name">GOGO</div>
-      <div class="logo-sub">Trading Platform v1.3</div>
+      <div class="logo-sub">Trading Platform v1.4</div>
     </div>
   </div>
   <div style="display:flex;align-items:center;gap:12px">
@@ -329,10 +329,10 @@ tr:hover td{background:#171b22;cursor:pointer}
     </div>
   </div>
 
-  <!-- CHANGELOG v1.3 -->
+  <!-- CHANGELOG v1.4 -->
   <div class="card" style="margin-top:14px;border-color:rgba(240,192,64,.15)">
     <div class="card-head" style="border-color:rgba(240,192,64,.1)">
-      <span class="card-title" style="color:#f0c040">What's New — v1.3</span>
+      <span class="card-title" style="color:#f0c040">What's New — v1.4</span>
       <span style="font-size:10px;color:#333a4a">Apr 2026</span>
     </div>
     <div class="card-body" style="padding:12px 16px">
@@ -340,20 +340,25 @@ tr:hover td{background:#171b22;cursor:pointer}
         <div>
           <div style="color:#00d68f;font-weight:600;margin-bottom:5px">✓ New Features</div>
           <div style="color:#8b91a0;line-height:1.9">
-            ⚡ Vol Acceleration Guard in TQQQ signal + backtest<br>
-            ⬆ One-click GitHub deploy button<br>
-            ⚠ Expiry DTE warnings on trade cards (≤14d)<br>
-            📊 Guard fires shown in backtest annual + signal tables<br>
-            🔧 Trade P&L refresh — improved option price lookup
+            📊 Analytics tab — full trade performance<br>
+            🔭 LEAPS Entry Tracker (ASTS + IREN + VIX zone)<br>
+            ⭐ Screener Watchlist — star + research tickers<br>
+            📅 Live DTE countdown on all trade cards<br>
+            ⟳ Live stock prices on trade cards (auto 5min)<br>
+            🔄 Portfolio + option live price refresh<br>
+            📈 Hold time histogram + P&L by duration<br>
+            🔗 Rebalancer auto-syncs from TQQQ signal
           </div>
         </div>
         <div>
           <div style="color:#00d68f;font-weight:600;margin-bottom:5px">✓ Bug Fixes</div>
           <div style="color:#8b91a0;line-height:1.9">
-            Fixed account showing $3M (Firebase cap + auto-clear)<br>
-            Fixed TQQQ signal bar showing on all tabs<br>
-            Fixed 10 trades with entry price = $0 (retry + 13s gap)<br>
-            weekly_report.py v6 with guard deployed to GitHub Actions
+            Fixed vol5d scope bug in backtest engine<br>
+            Fixed TQQQ signal bleeding to all tabs<br>
+            Replaced 13s-per-ticker loop with snapshot API<br>
+            Closed trade re-import updates existing records<br>
+            Portfolio risk table — sortable columns<br>
+            weekly_report.py v6 + Vol Accel Guard live
           </div>
         </div>
       </div>
@@ -450,6 +455,7 @@ tr:hover td{background:#171b22;cursor:pointer}
     <div style="overflow-x:auto">
       <table>
         <thead><tr>
+          <th style="width:28px;text-align:center" title="Star to add to watchlist">⭐</th>
           <th style="width:32px">#</th>
           <th>Ticker</th>
           <th>Live Price</th>
@@ -466,6 +472,22 @@ tr:hover td{background:#171b22;cursor:pointer}
       </table>
     </div>
   </div>
+
+  <!-- SCREENER WATCHLIST -->
+  <div class="card" style="margin-top:14px">
+    <div class="card-head">
+      <span class="card-title">⭐ Watchlist</span>
+      <div style="display:flex;gap:7px;align-items:center">
+        <span id="scr-watch-count" style="font-size:11px;color:#555c6e">0 tickers</span>
+        <button class="btn btn-ghost" style="font-size:10px;padding:3px 9px" onclick="scrWatchFetchAll()">⟳ Refresh</button>
+        <button class="btn btn-ghost" style="font-size:10px;padding:3px 9px;color:#ff4560;border-color:rgba(255,69,96,.3)" onclick="if(confirm('Clear watchlist?')){SCR_WATCHLIST=[];saveScrWatchlist();renderScrWatchlist()}">Clear</button>
+      </div>
+    </div>
+    <div class="card-body" id="scr-watchlist-body" style="padding:12px 14px">
+      <div style="font-size:12px;color:#555c6e;text-align:center;padding:16px">Star tickers in the screener above to add them here</div>
+    </div>
+  </div>
+
 </div>
 
 <!-- &#9552;&#9552;&#9552; POSITION SIZER &#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552; -->
@@ -889,6 +911,10 @@ tr:hover td{background:#171b22;cursor:pointer}
     <div class="card"><div class="card-head"><span class="card-title">Win / Loss Breakdown</span></div><div class="card-body" id="an-winloss" style="padding:12px 14px"></div></div>
     <div class="card"><div class="card-head"><span class="card-title">Best &amp; Worst Trades</span></div><div class="card-body" id="an-extremes" style="padding:12px 14px"></div></div>
   </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+    <div class="card"><div class="card-head"><span class="card-title">Hold Time Distribution</span></div><div class="card-body" id="an-hold-hist" style="padding:12px 14px"></div></div>
+    <div class="card"><div class="card-head"><span class="card-title">P&amp;L by Hold Duration</span></div><div class="card-body" id="an-hold-pnl" style="padding:12px 14px"></div></div>
+  </div>
   <div class="card">
     <div class="card-head"><span class="card-title">All Closed Trades</span><span id="an-table-count" style="font-size:11px;color:#555c6e"></span></div>
     <div style="overflow-x:auto"><table id="an-table" style="width:100%;border-collapse:collapse;font-size:11px"></table></div>
@@ -1035,9 +1061,10 @@ function show(id, btn) {
   document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'))
   document.getElementById(id).classList.add('active')
   if(btn) btn.classList.add('active')
-  if(id === 'screener') runFilter()
+  if(id === 'screener') { runFilter(); renderScrWatchlist() }
   if(id === 'trades') renderTrades()
   if(id === 'analytics') renderAnalytics()
+  if(id === 'sizer') setTimeout(rebSyncSignal, 200)
 }
 
 // -- CLOCK ========================================
@@ -1768,6 +1795,22 @@ function saveRebAccounts() {
   fbAutoSave(3000)  // sync after 3s of inactivity
 }
 
+function rebSyncSignal() {
+  // Auto-populate rebalancer target from live TQQQ signal if available
+  const sigEl = document.getElementById('tqqq-body')
+  if(!sigEl) return
+  // Extract allocation from signal card if already calculated
+  const allocMatch = sigEl.innerHTML.match(/(\d+)%\s*TQQQ/)
+  if(allocMatch) {
+    const alloc = +allocMatch[1]
+    const el = document.getElementById('reb-tqqq-pct')
+    if(el && +el.value !== alloc) {
+      el.value = alloc
+      rebCalc()
+    }
+  }
+}
+
 function rebCalc() {
   saveRebAccounts()
   var tpctEl = document.getElementById('reb-tqqq-pct')
@@ -1864,6 +1907,143 @@ async function rebFetchPrices() {
     if(el) el.textContent = 'fetch error'
   }
   if(btn) { btn.textContent = '⟳ Prices'; btn.disabled = false }
+}
+
+// ── SCREENER WATCHLIST ────────────────────────────────────────────────────────
+var SCR_WATCHLIST = JSON.parse(localStorage.getItem('gt_scr_watchlist') || '[]')
+
+function saveScrWatchlist() {
+  localStorage.setItem('gt_scr_watchlist', JSON.stringify(SCR_WATCHLIST))
+}
+
+function scrToggleWatch(ticker) {
+  const idx = SCR_WATCHLIST.indexOf(ticker)
+  if(idx >= 0) {
+    SCR_WATCHLIST.splice(idx, 1)
+  } else {
+    SCR_WATCHLIST.push(ticker)
+  }
+  saveScrWatchlist()
+  runFilter()         // re-render screener rows (updates star color)
+  renderScrWatchlist()
+}
+
+function renderScrWatchlist() {
+  const el = document.getElementById('scr-watchlist-body')
+  const cnt = document.getElementById('scr-watch-count')
+  if(!el) return
+  if(cnt) cnt.textContent = SCR_WATCHLIST.length + ' ticker' + (SCR_WATCHLIST.length!==1?'s':'')
+  if(!SCR_WATCHLIST.length) {
+    el.innerHTML = '<div style="font-size:12px;color:#555c6e;text-align:center;padding:16px">Star tickers above to add them here</div>'
+    return
+  }
+  el.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px">' +
+    SCR_WATCHLIST.map(ticker => {
+      const ov = OV[ticker] || {}
+      const lp = LIVE_PRICES[ticker] || {}
+      const price = lp.price || lp.last || 0
+      const atr   = lp.atr || 0
+      const chg   = lp.chgPct || 0
+      const sig   = ov.r || 0
+      const fg    = ov.fg || 0
+      return '<div style="background:#111318;border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:12px">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
+          '<span style="font-family:SF Mono,monospace;font-weight:700;font-size:15px;color:#f0c040">'+ticker+'</span>' +
+          '<div style="display:flex;gap:5px">' +
+            '<button class="btn btn-ghost" style="font-size:10px;padding:2px 8px;color:#b37eff;border-color:rgba(179,126,255,.3)" onclick="scrWatchChain(\'' + ticker + '\')" title="View option chain">Chain</button>' +
+            '<button class="btn btn-ghost" style="font-size:10px;padding:2px 8px" onclick="leapsSize(\'' + ticker + '\')">Size</button>' +
+            '<span onclick="scrToggleWatch(\'' + ticker + '\')" style="cursor:pointer;color:#f0c040;font-size:14px;padding:2px 4px" title="Remove">★</span>' +
+          '</div>' +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:11px">' +
+          '<div style="color:#555c6e">Price: <span style="color:#e8eaf0;font-family:SF Mono,monospace">'+(price?'$'+price.toFixed(2):'--')+'</span>'+(chg?'<span style="color:'+(chg>=0?'#00d68f':'#ff4560')+';font-size:10px;margin-left:3px">'+(chg>=0?'+':'')+chg.toFixed(1)+'%</span>':'')+'</div>' +
+          '<div style="color:#555c6e">ATR: <span style="color:#e8eaf0;font-family:SF Mono,monospace">'+(atr?'$'+atr.toFixed(2):'--')+'</span></div>' +
+          '<div style="color:#555c6e">Signal: <span style="color:#f0c040;font-family:SF Mono,monospace">'+(sig?sig+'%':'--')+'</span></div>' +
+          '<div style="color:#555c6e">F&G: <span style="color:#8b91a0;font-family:SF Mono,monospace">'+(fg||'--')+'</span></div>' +
+        '</div>' +
+        (lp.chain ? '<div id="chain-'+ticker+'" style="margin-top:10px;font-size:10px">'+lp.chain+'</div>' : '<div id="chain-'+ticker+'"></div>') +
+      '</div>'
+    }).join('') +
+  '</div>'
+}
+
+async function scrWatchFetchAll() {
+  if(!SCR_WATCHLIST.length) return
+  setApi('Fetching watchlist prices...', 'loading')
+  const to = new Date().toISOString().split('T')[0]
+  const from = new Date(Date.now()-4*864e5).toISOString().split('T')[0]
+  try {
+    const snap = await apiGet('/v2/snapshot/locale/us/markets/stocks/tickers?tickers='+SCR_WATCHLIST.join(','))
+    if(snap?.tickers) {
+      snap.tickers.forEach(t => {
+        const px = t.day?.c || t.prevDay?.c
+        const chgPct = t.day?.c && t.prevDay?.c ? ((t.day.c-t.prevDay.c)/t.prevDay.c*100) : 0
+        if(px) {
+          if(!LIVE_PRICES[t.ticker]) LIVE_PRICES[t.ticker] = {}
+          LIVE_PRICES[t.ticker].price = px
+          LIVE_PRICES[t.ticker].last  = px
+          LIVE_PRICES[t.ticker].chgPct = +chgPct.toFixed(2)
+        }
+      })
+    }
+    // Fetch ATR for each
+    const fromAtr = new Date(Date.now()-60*864e5).toISOString().split('T')[0]
+    for(const ticker of SCR_WATCHLIST.slice(0,5)) {  // limit to 5 to save quota
+      try {
+        const d = await apiGet('/v2/aggs/ticker/'+ticker+'/range/1/day/'+fromAtr+'/'+to+'?adjusted=true&sort=asc&limit=20')
+        if(d?.results?.length >= 2) {
+          const bars = d.results
+          const trs = []
+          for(let i=1;i<bars.length;i++){const h=bars[i].h,l=bars[i].l,pc=bars[i-1].c;trs.push(Math.max(h-l,Math.abs(h-pc),Math.abs(l-pc)))}
+          const atr = +(trs.slice(-14).reduce((a,b)=>a+b,0)/Math.min(trs.length,14)).toFixed(2)
+          if(!LIVE_PRICES[ticker]) LIVE_PRICES[ticker] = {}
+          LIVE_PRICES[ticker].atr = atr
+        }
+      } catch(e) {}
+    }
+    renderScrWatchlist()
+    setApi('Watchlist refreshed ✓', 'ok')
+  } catch(e) {
+    setApi('Watchlist fetch error', 'err')
+  }
+}
+
+async function scrWatchChain(ticker) {
+  // Fetch the nearest monthly expiry option chain snapshot
+  const chainEl = document.getElementById('chain-'+ticker)
+  if(!chainEl) return
+  chainEl.innerHTML = '<span style="color:#555c6e">Loading chain...</span>'
+  try {
+    const snap = await apiGet('/v3/snapshot/options/'+ticker+'?limit=10&contract_type=call&sort=expiration_date', false, true)
+    if(snap?.results?.length) {
+      const r = snap.results
+      const byExp = {}
+      r.forEach(o => {
+        const exp = o.details?.expiration_date || ''
+        if(!byExp[exp]) byExp[exp] = []
+        byExp[exp].push(o)
+      })
+      const nearExp = Object.keys(byExp).sort()[0]
+      const calls = byExp[nearExp] || []
+      chainEl.innerHTML = '<div style="font-size:10px;color:#555c6e;margin-bottom:4px">'+nearExp+' calls (nearest expiry)</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:2px;font-size:10px;color:#555c6e;margin-bottom:3px">' +
+          '<div>Strike</div><div>Bid</div><div>Ask</div><div>OI</div>' +
+        '</div>' +
+        calls.slice(0,6).map(o=>{
+          const d = o.details||{}, q = o.last_quote||{}
+          return '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:2px;font-size:10px;padding:2px 0;border-bottom:1px solid rgba(255,255,255,.04)">' +
+            '<div style="color:#f0c040">$'+d.strike_price+'</div>' +
+            '<div style="color:#e8eaf0">'+( q.bid?'$'+q.bid.toFixed(2):'--')+'</div>' +
+            '<div style="color:#e8eaf0">'+( q.ask?'$'+q.ask.toFixed(2):'--')+'</div>' +
+            '<div style="color:#555c6e">'+(o.open_interest||'--')+'</div>' +
+          '</div>'
+        }).join('')
+    } else {
+      chainEl.innerHTML = '<span style="color:#555c6e;font-size:10px">No chain data</span>'
+    }
+  } catch(e) {
+    chainEl.innerHTML = '<span style="color:#555c6e;font-size:10px">Chain fetch error</span>'
+  }
 }
 
 // ── END REBALANCER ────────────────────────────────────────────────────────
@@ -2397,7 +2577,11 @@ function runFilter() {
     // Signal bar: r is now a percentage value (0-200+). Scale so 100%=full bar, cap at 100
     const bw = s.d.r > 100 ? 100 : Math.max(2, s.d.r)
     const scoreBar = Math.round(s.score)
+    const isWatched = (typeof SCR_WATCHLIST !== 'undefined') && SCR_WATCHLIST.includes(s.t)
     return '<tr onclick="goSize(\'' + s.t + '\')">' +
+      '<td style="width:24px;text-align:center" onclick="event.stopPropagation();scrToggleWatch(\'' + s.t + '\')">' +
+        '<span style="cursor:pointer;font-size:14px;line-height:1;color:'+(isWatched?'#f0c040':'#333a4a')+';transition:color .15s" title="'+(isWatched?'Remove from watchlist':'Add to watchlist')+'">'+(isWatched?'★':'☆')+'</span>' +
+      '</td>' +
       '<td class="dim" style="width:28px">' + (i+1) + '</td>' +
       '<td style="font-family:\'SF Mono\',monospace;font-weight:600">' + s.t + '<div style="font-size:10px;color:#555c6e">' + s.d.s + '</div></td>' +
       '<td id="price-' + s.t + '" style="font-family:\'SF Mono\',monospace;color:#555c6e;font-size:11px">--</td>' +
@@ -5542,7 +5726,7 @@ async function deployToGitHub() {
       method: 'PUT',
       headers: { 'Authorization': 'token '+tok, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        message: 'Deploy from GOGO v1.3 — ' + new Date().toLocaleString(),
+        message: 'Deploy from GOGO v1.4 — ' + new Date().toLocaleString(),
         content: b64,
         sha: sha
       })
@@ -5832,6 +6016,67 @@ function renderAnalytics() {
     top5.map(t=>tradeRow(t,'#00d68f')).join('') +
     '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#ff4560;margin-top:12px;margin-bottom:6px">Top 5 Losses</div>' +
     bot5.map(t=>tradeRow(t,'#ff4560')).join('')
+
+  // ── Hold time histogram ──────────────────────────────────────────────────
+  const holdEl = document.getElementById('an-hold-hist')
+  const holdPnlEl = document.getElementById('an-hold-pnl')
+  if(holdEl) {
+    const buckets = [{l:'0–3d',min:0,max:3},{l:'4–7d',min:4,max:7},{l:'8–14d',min:8,max:14},
+      {l:'15–21d',min:15,max:21},{l:'22–30d',min:22,max:30},{l:'31–60d',min:31,max:60},{l:'61d+',min:61,max:999}]
+    const bData = buckets.map(b => {
+      const trades = ct.filter(t=>{
+        if(!t.dateAcq||!t.dateSold) return false
+        const d = Math.round((new Date((t.dateSold||'').replace(/-/g,' '))-new Date((t.dateAcq||'').replace(/-/g,' ')))/864e5)
+        return !isNaN(d) && d>=b.min && d<=b.max
+      })
+      const pnl = trades.reduce((s,t)=>s+t.pnl,0)
+      const w = trades.filter(t=>t.pnl>0).length
+      return {...b, count:trades.length, pnl, wins:w}
+    })
+    const maxCount = Math.max(...bData.map(b=>b.count), 1)
+    holdEl.innerHTML = bData.map(b=>{
+      const pct = b.count/maxCount*100
+      const wr = b.count ? Math.round(b.wins/b.count*100) : 0
+      const col = wr>=60?'#00d68f':wr>=40?'#f0c040':'#ff4560'
+      return '<div style="display:grid;grid-template-columns:50px 1fr 30px 35px;gap:6px;align-items:center;margin-bottom:6px">' +
+        '<div style="font-size:11px;color:#8b91a0">'+b.l+'</div>' +
+        '<div style="background:rgba(255,255,255,.05);border-radius:2px;height:18px;overflow:hidden;position:relative">' +
+          '<div style="height:100%;width:'+pct+'%;background:rgba(77,166,255,.35);border-radius:2px"></div>' +
+          '<div style="position:absolute;top:50%;left:6px;transform:translateY(-50%);font-size:10px;color:#e8eaf0">'+b.count+' trades</div>' +
+        '</div>' +
+        '<div style="font-size:10px;color:'+col+';text-align:right">'+wr+'%</div>' +
+        '<div style="font-size:10px;color:'+(b.pnl>=0?'#00d68f':'#ff4560')+';text-align:right">'+(b.pnl>=0?'+':'')+Math.round(b.pnl/1000)+'k</div>' +
+      '</div>'
+    }).join('')
+  }
+  if(holdPnlEl) {
+    // Scatter-style: for each trade, show hold vs P&L as a mini table
+    const buckets2 = [{l:'Quick\n≤7d',min:0,max:7},{l:'Medium\n8–21d',min:8,max:21},{l:'Long\n22d+',min:22,max:999}]
+    const b2 = buckets2.map(b=>{
+      const trades = ct.filter(t=>{
+        if(!t.dateAcq||!t.dateSold) return false
+        const d = Math.round((new Date((t.dateSold||'').replace(/-/g,' '))-new Date((t.dateAcq||'').replace(/-/g,' ')))/864e5)
+        return !isNaN(d) && d>=b.min && d<=b.max
+      })
+      const pnl = trades.reduce((s,t)=>s+t.pnl,0)
+      const w = trades.filter(t=>t.pnl>0).length
+      const avgP = trades.length ? pnl/trades.length : 0
+      return {...b, count:trades.length, pnl, wins:w, avgP}
+    })
+    holdPnlEl.innerHTML = '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">' +
+      b2.map(b=>{
+        const wr = b.count ? Math.round(b.wins/b.count*100) : 0
+        const col = wr>=60?'#00d68f':wr>=40?'#f0c040':'#ff4560'
+        return '<div style="background:#0a0c0f;border-radius:6px;padding:10px;text-align:center">' +
+          '<div style="font-size:10px;color:#555c6e;margin-bottom:6px;white-space:pre">'+b.l+'</div>' +
+          '<div style="font-size:18px;font-weight:700;color:#4da6ff">'+b.count+'</div>' +
+          '<div style="font-size:10px;color:#555c6e;margin:2px 0">trades</div>' +
+          '<div style="font-size:12px;font-weight:600;color:'+col+';margin-top:6px">'+wr+'% WR</div>' +
+          '<div style="font-size:11px;color:'+(b.avgP>=0?'#00d68f':'#ff4560')+';margin-top:2px">'+(b.avgP>=0?'+$':'-$')+Math.abs(Math.round(b.avgP))+'/trade</div>' +
+        '</div>'
+      }).join('') +
+    '</div>'
+  }
 
   // ── Full trade table ──────────────────────────────────────────────────────
   const sorted = [...ct].sort((a,b)=>new Date(b.dateSold||b.dateAcq||0)-new Date(a.dateSold||a.dateAcq||0))
