@@ -1745,7 +1745,7 @@ async function fetchEarningsCalendar() {
     const d = await apiGet('/vX/reference/earnings?ticker.any_of=' + tickers +
       '&period_of_report_date.gte=' + today +
       '&period_of_report_date.lte=' + future +
-      '&limit=50', true)  // silent=true: /vX/ needs Business plan, fail quietly
+      '&limit=50', false, true)  // skipCache=false, silent=true: /vX/ needs Business plan
     if(d && d.results && d.results.length) {
       d.results.forEach(e => {
         if(e.tickers) e.tickers.forEach(t => { LIVE_EARNINGS[t] = true })
@@ -2488,7 +2488,7 @@ async function loadFromFirebase() {
 
     // Risk settings
     if(data.risk) {
-      if(data.risk.acct) { localStorage.setItem('gt_acct', data.risk.acct); const el = document.getElementById('acct'); if(el) el.value = data.risk.acct }
+      if(data.risk.acct) { const v=+data.risk.acct; if(v>0&&v<=2000000) { localStorage.setItem('gt_acct', data.risk.acct); const el = document.getElementById('acct'); if(el) el.value = data.risk.acct } }
       if(data.risk.riskpct) { localStorage.setItem('gt_riskpct', data.risk.riskpct); const el = document.getElementById('riskpct'); if(el) el.value = data.risk.riskpct }
     }
 
