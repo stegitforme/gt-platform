@@ -2732,30 +2732,41 @@ async function fetchStockPricesForTrades() {
 
   const tickers = Object.keys(tickerMap)
   let updated = 0
+  const delay = ms => new Promise(r => setTimeout(r, ms))
 
-  for(const ticker of tickers) {
-    try {
-      const data = await apiGet('/v2/aggs/ticker/' + ticker + '/prev?adjusted=true')
-      if(data && data.results && data.results[0]) {
-        const price = data.results[0].c
-        tickerMap[ticker].forEach(id => {
-          const trade = TRADES.find(t => t.id === id)
-          if(trade && (!trade.entry || trade.entry === 0 || trade.entry === trade.cost)) {
-            trade.entry = price
-            trade.stockPrice = price
-            updated++
-          }
-        })
-      }
-    } catch(e) { /* skip */ }
-    await new Promise(r => setTimeout(r, 120))
+  for(let ti = 0; ti < tickers.length; ti++) {
+    const ticker = tickers[ti]
+    setApi('Fetching price ' + (ti+1) + '/' + tickers.length + ': ' + ticker, 'loading')
+    let data = null
+    // Try up to 3 times with backoff on rate limit
+    for(let attempt = 0; attempt < 3; attempt++) {
+      try {
+        data = await apiGet('/v2/aggs/ticker/' + ticker + '/prev?adjusted=true', true) // skipCache=true for fresh prices
+        if(data) break
+      } catch(e) {}
+      if(attempt < 2) await delay(13000) // Polygon rate limit: 5 req/min = 12s gap
+    }
+    if(data && data.results && data.results[0]) {
+      const price = data.results[0].c
+      tickerMap[ticker].forEach(id => {
+        const trade = TRADES.find(t => t.id === id)
+        if(trade && (!trade.entry || trade.entry === 0 || trade.entry === trade.cost)) {
+          trade.entry = price
+          trade.stockPrice = price
+          updated++
+        }
+      })
+      // Save after each successful fetch so partial results persist
+      if(updated > 0) { saveTrades(); renderTrades(); renderPortfolioRisk() }
+    }
+    // 13s between calls = 4-5 req/min, safely under the 5/min Polygon free limit
+    if(ti < tickers.length - 1) await delay(13000)
   }
 
   if(updated > 0) {
-    saveTrades()
-    renderTrades()
-    renderPortfolioRisk()
     setApi('Stock prices updated for ' + updated + ' trades ✓', 'ok')
+  } else {
+    setApi('Ready', 'ok')
   }
 }
 
@@ -4956,10 +4967,19 @@ function initPlatform() {
     const savedAcct = localStorage.getItem('gt_acct')
     const savedRisk = localStorage.getItem('gt_riskpct')
     const savedDelta = localStorage.getItem('gt_delta')
-    // Restore account settings — default to 350000 if never set
+    // Restore account settings — default to 350000, reject bad values > 2M
     const acctEl = document.getElementById('acct')
-    if(acctEl) acctEl.value = savedAcct || '350000'
-    if(!savedAcct) localStorage.setItem('gt_acct', '350000')
+    const acctNum = parseFloat(savedAcct)
+    const acctValid = acctNum > 0 && acctNum <= 2000000
+    if(acctEl) acctEl.value = acctValid ? savedAcct : '350000'
+    if(!acctValid) {
+      localStorage.setItem('gt_acct', '350000')
+      if(window.FBUID && window.FBSet && window.FBRef && window.FBDB) {
+        // Clear the bad Firebase value so it stops overwriting
+        window.FBSet(window.FBRef(window.FBDB, 'users/'+window.FBUID+'/platform/risk/acct'), '350000')
+          .catch(()=>{})
+      }
+    }
     if(savedRisk) { const el=document.getElementById('riskpct'); if(el) el.value=savedRisk }
     if(savedDelta) { const el=document.getElementById('delta'); if(el) el.value=savedDelta }
     if(!KEY) {
