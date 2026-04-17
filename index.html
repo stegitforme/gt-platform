@@ -1344,6 +1344,30 @@ async function fetchTQQQSignal() {
     const dailyVol = Math.sqrt(variance)
     const annualVol = +(dailyVol * Math.sqrt(252) * 100).toFixed(1)
 
+    // Vol 5 trading days ago (for Vol Acceleration Guard)
+    const vol5dAgoWindow = Math.min(20, n-6)
+    const returns5d = []
+    for(let i = n-5-vol5dAgoWindow; i < n-5; i++) {
+      if(i > 0) returns5d.push(Math.log(closes[i]/closes[i-1]))
+    }
+    let annualVol5dAgo = annualVol  // fallback = current
+    if(returns5d.length >= 3) {
+      const mean5d = returns5d.reduce((a,b) => a+b, 0) / returns5d.length
+      const var5d  = returns5d.reduce((a,b) => a + Math.pow(b-mean5d,2), 0) / (returns5d.length-1)
+      annualVol5dAgo = +(Math.sqrt(var5d) * Math.sqrt(252) * 100).toFixed(1)
+    }
+
+    // Vol Acceleration Guard
+    // Fires if: vol rose 30%+ vs 5 days ago AND current vol already > 45%
+    const VOL_ACCEL_THRESHOLD = 1.30
+    const VOL_ACCEL_FLOOR     = 45   // percent
+    const VOL_ACCEL_CAP       = 50   // percent — cap allocation here when guard fires
+    const volAccelGuard = (
+      annualVol5dAgo > 0 &&
+      annualVol > annualVol5dAgo * VOL_ACCEL_THRESHOLD &&
+      annualVol > VOL_ACCEL_FLOOR
+    )
+
 
     // -- TURBO MODE STATE MACHINE ---------------------------
     // Need weekly data: sample last 52 weeks of closes (one per ~5 bars)
@@ -1421,26 +1445,37 @@ async function fetchTQQQSignal() {
     }
     // ---------------------------------------------------------
 
-    // Vol(35%) + 200MA signal
+    // Vol(35%) + 200MA signal + Vol Acceleration Guard
     const VOL_TARGET = 35
     let tqqqPct = 0, sgov = 100, signal = '', signalColor = '#ff4560'
+    let guardFired = false, tqqqPctBase = 0
 
     if(!aboveMa) {
       tqqqPct = 0; sgov = 100
       signal = 'BELOW 200MA -- 100% SGOV'
       signalColor = '#ff4560'
     } else if(annualVol <= VOL_TARGET) {
-      tqqqPct = 100; sgov = 0
+      tqqqPctBase = 100
       signal = 'ABOVE 200MA + LOW VOL -- 100% TQQQ'
       signalColor = '#00d68f'
     } else {
-      // Scale down: TQQQ% = (35/vol) * 100, capped at 100
-      tqqqPct = Math.min(100, Math.round(VOL_TARGET / annualVol * 100))
-      // Round to nearest 10%
-      tqqqPct = Math.round(tqqqPct / 10) * 10
-      sgov = 100 - tqqqPct
+      tqqqPctBase = Math.min(100, Math.round(VOL_TARGET / annualVol * 100))
+      tqqqPctBase = Math.round(tqqqPctBase / 10) * 10
       signal = 'ABOVE 200MA + HIGH VOL -- SCALED'
       signalColor = '#ff8c42'
+    }
+
+    // Apply Vol Acceleration Guard if QQQ is above 200MA
+    if(aboveMa) {
+      if(volAccelGuard && tqqqPctBase > VOL_ACCEL_CAP) {
+        guardFired = true
+        tqqqPct = VOL_ACCEL_CAP
+        signal += ' ⚡ GUARD'
+        signalColor = '#f0c040'
+      } else {
+        tqqqPct = tqqqPctBase
+      }
+      sgov = 100 - tqqqPct
     }
 
     const ma200str = ma200.toFixed(2)
@@ -1451,8 +1486,8 @@ async function fetchTQQQSignal() {
       '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:12px">' +
         '<div class="metric"><div class="metric-label">QQQ Price</div><div class="metric-value" style="font-size:16px">$'+last.toFixed(2)+'</div></div>' +
         '<div class="metric"><div class="metric-label">200-Day MA</div><div class="metric-value" style="font-size:16px;color:'+(aboveMa?'#00d68f':'#ff4560')+'">$'+ma200str+'</div><div class="metric-sub">'+(aboveMa?'&#9650; +':'&#9660; ')+pctFromMa+'%</div></div>' +
-        '<div class="metric"><div class="metric-label">Realized Vol (20d)</div><div class="metric-value" style="font-size:16px;color:'+(annualVol<=35?'#00d68f':annualVol<=50?'#ff8c42':'#ff4560')+'">'+annualVol+'%</div><div class="metric-sub">target: 35%</div></div>' +
-        '<div class="metric"><div class="metric-label">Vol Target</div><div class="metric-value" style="font-size:16px">35%</div></div>' +
+        '<div class="metric"><div class="metric-label">Realized Vol (20d)</div><div class="metric-value" style="font-size:16px;color:'+(annualVol<=35?'#00d68f':annualVol<=50?'#ff8c42':'#ff4560')+'">'+annualVol+'%</div><div class="metric-sub">5d ago: '+annualVol5dAgo+'%</div></div>' +
+        '<div class="metric"><div class="metric-label">⚡ Vol Accel Guard</div><div class="metric-value" style="font-size:14px;color:'+(guardFired?'#f0c040':'#555c6e')+'">'+(guardFired?'FIRED':'standby')+'</div><div class="metric-sub">'+(guardFired?'capped at '+VOL_ACCEL_CAP+'%':((annualVol/annualVol5dAgo)*100-100).toFixed(0)+'% change vs 5d')+'</div></div>' +
       '</div>' +
       '<div style="background:#0a0c0f;border-radius:8px;padding:14px 16px;margin-bottom:10px">' +
         '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#555c6e;margin-bottom:8px">This Weeks Signal</div>' +
@@ -3582,6 +3617,7 @@ function btSimulate(tqqqBars, qqqBars, spyBars, sgovBars, startDate) {
 
     // Step 2: On Friday, compute new weight AFTER applying return
     // weight = min(1.0, 35%/TQQQ_vol) rounded to nearest 5%, 0 if below 200MA
+    // Vol Acceleration Guard: if vol rose 30%+ in ~5 days AND vol > 45% → cap at 50%
     if(d.getDay()===5 || i===allDates.length-1) {
       const vol=calcVol(i), ma=calcMA(i), above=qP>ma
       let newWeight
@@ -3590,6 +3626,11 @@ function btSimulate(tqqqBars, qqqBars, spyBars, sgovBars, startDate) {
       } else {
         const raw = vol > 0 ? Math.min(1.0, 0.35/vol) : 1.0
         newWeight = Math.round(raw/0.05)*0.05  // Round to nearest 5%
+        // Vol Acceleration Guard
+        const vol5d = calcVol(Math.max(0, i-5))
+        if(vol5d > 0 && vol > vol5d * 1.30 && vol > 0.45) {
+          newWeight = Math.min(newWeight, 0.50)  // cap at 50% when guard fires
+        }
       }
       if(Math.abs(newWeight-weight) >= 0.04) {
         signals.push({date:d,vol,ma,qqqPrice:qP,aboveMa:above,
