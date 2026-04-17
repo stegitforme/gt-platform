@@ -1798,6 +1798,12 @@ function saveRebAccounts() {
 
 function rebSyncSignal() {
   // Auto-populate rebalancer target from live TQQQ signal if available
+  // Try global tqqqPct variable first (most reliable)
+  if(typeof tqqqPct !== 'undefined' && tqqqPct > 0) {
+    const el = document.getElementById('reb-tqqq-pct')
+    if(el && +el.value !== tqqqPct) { el.value = tqqqPct; rebCalc() }
+    return
+  }
   const sigEl = document.getElementById('tqqq-body')
   if(!sigEl) return
   // Extract allocation from signal card if already calculated
@@ -5664,6 +5670,17 @@ function initPlatform() {
     setTimeout(startLivePriceRefresh, 1000)
     // Fetch stock prices immediately on load (snapshot = 1 fast call)
     setTimeout(fetchStockPricesForTrades, 2000)
+    // Auto-fetch TQQQ signal on startup so rebalancer can sync
+    setTimeout(async function(){ try{await fetchTQQQSignal(); setTimeout(rebSyncSignal,200)}catch(e){} }, 5000)
+    // Auto-run GT scores if cache empty
+    setTimeout(function(){
+      try{
+        var cached=JSON.parse(localStorage.getItem('gt_gt_scores')||'{}')
+        if(Object.keys(cached).length===0 && typeof runGTScores==='function' && Object.keys(OV||{}).length>0){
+          runGTScores()
+        }
+      }catch(e){}
+    }, 8000)
     // Safety net at 800ms - force re-render if still blank
     setTimeout(function() {
       const body = document.getElementById('chk-body')
