@@ -752,6 +752,7 @@ tr:hover td{background:#171b22;cursor:pointer}
         <button class="btn btn-gold" style="font-size:11px;padding:4px 11px" data-btperiod="5" onclick="btSetPeriod(5)">5Y</button>
         <button class="btn btn-ghost" style="font-size:11px;padding:4px 11px" data-btperiod="10" onclick="btSetPeriod(10)">10Y</button>
         <button class="btn btn-ghost" style="font-size:11px;padding:4px 11px" data-btperiod="12" onclick="btSetPeriod(12)">Since 2014</button>
+        <button class="btn btn-ghost" style="font-size:11px;padding:4px 11px" data-btperiod="9" onclick="btSetPeriod(9)">Since 2017</button>
         <button class="btn btn-ghost" style="font-size:11px;padding:4px 11px" data-btperiod="13" onclick="btSetPeriod(13)">Since 2011</button>
       </div>
       <button class="btn btn-gold" id="bt-run-btn" onclick="btRun()" style="padding:6px 16px">&#9654; Run</button>
@@ -3492,6 +3493,7 @@ async function btRun() {
     const startDate = new Date(endDate)
     if(BT_PERIOD===13) { startDate.setFullYear(2011);startDate.setMonth(0);startDate.setDate(1) }
     else if(BT_PERIOD===12) { startDate.setFullYear(2014);startDate.setMonth(0);startDate.setDate(1) }
+    else if(BT_PERIOD===9)  { startDate.setFullYear(2017);startDate.setMonth(0);startDate.setDate(1) }
     else startDate.setFullYear(endDate.getFullYear()-BT_PERIOD)
     const fetchFrom = new Date(startDate)
     fetchFrom.setMonth(fetchFrom.getMonth()-12)
@@ -3562,7 +3564,7 @@ function btSimulate(tqqqBars, qqqBars, spyBars, sgovBars, startDate) {
   const RISK_FREE=0.045
   let sv=10000,tv=10000,qv=10000,spv=10000
   const sEq=[10000],tEq=[10000],qEq=[10000],spEq=[10000],cDates=[allDates[si]]
-  const signals=[]
+  const signals=[], weeklyWeights=[]
   let weight=0  // TQQQ weight (0.0–1.0), set each Friday, applied following week
 
   for(let i=si;i<allDates.length;i++) {
@@ -3594,6 +3596,7 @@ function btSimulate(tqqqBars, qqqBars, spyBars, sgovBars, startDate) {
           action:newWeight===0?'SGOV':newWeight>=1?'TQQQ':'HALF',
           weight:newWeight})
       }
+      weeklyWeights.push(newWeight)
       weight = newWeight
       cDates.push(d)
       sEq.push(sv); tEq.push(tv); qEq.push(qv); spEq.push(spv)
@@ -3619,7 +3622,7 @@ function btSimulate(tqqqBars, qqqBars, spyBars, sgovBars, startDate) {
 
   const sm=metrics(sEq,cDates),tm=metrics(tEq,cDates),qm=metrics(qEq,cDates),spm=metrics(spEq,cDates)
   const allocC=signals.reduce((m,s)=>{m[s.action]=(m[s.action]||0)+1;return m},{})
-  return{stratM:sm,tqqqM:tm,qqqM:qm,spyM:spm,cDates,sEq,tEq,qEq,spEq,signals,allocC,total:signals.length}
+  return{stratM:sm,tqqqM:tm,qqqM:qm,spyM:spm,cDates,sEq,tEq,qEq,spEq,signals,allocC,total:signals.length,weeklyWeights}
 }
 
 function btRender(r) {
@@ -3628,9 +3631,12 @@ function btRender(r) {
 
   // Metrics
   const sm=r.stratM, tm=r.tqqqM
-  const inTqqq=((r.allocC.TQQQ||0)/Math.max(1,r.total)*100).toFixed(0)
-  const inHalf=((r.allocC.HALF||0)/Math.max(1,r.total)*100).toFixed(0)
-  const inSgov=((r.allocC.SGOV||0)/Math.max(1,r.total)*100).toFixed(0)
+  // Continuous weighting — show avg weight and distribution
+  const ww = r.weeklyWeights || []
+  const avgW = ww.length ? Math.round(ww.reduce((a,b)=>a+b,0)/ww.length*100) : 0
+  const wHigh = ww.length ? Math.round(ww.filter(w=>w>=0.8).length/ww.length*100) : 0
+  const wMid  = ww.length ? Math.round(ww.filter(w=>w>0&&w<0.8).length/ww.length*100) : 0
+  const wZero = ww.length ? Math.round(ww.filter(w=>w===0).length/ww.length*100) : 0
   const mEl=document.getElementById('bt-metrics')
   mEl.style.display='grid'
   mEl.innerHTML=[
@@ -3639,7 +3645,7 @@ function btRender(r) {
     {l:'Time Underwater',v:(sm.tuw*100).toFixed(1)+'%',c:'#e8eaf0', s:'TQQQ BH: '+(tm.tuw*100).toFixed(1)+'%'},
     {l:'Sharpe Ratio',   v:sm.sharpe.toFixed(2), c:sm.sharpe>1?'#00d68f':'#f0c040', s:'TQQQ BH: '+tm.sharpe.toFixed(2)},
     {l:'Final Value',    v:'$'+Math.round(sm.final).toLocaleString(), c:'#f0c040', s:'$10K invested at start'},
-    {l:'% Weeks in TQQQ',v:inTqqq+'%',           c:'#4da6ff', s:'Half: '+inHalf+'% | SGOV: '+inSgov+'%'},
+    {l:'Avg TQQQ Weight',v:avgW+'%',             c:'#4da6ff', s:'≥80%: '+wHigh+'% | Partial: '+wMid+'% | Cash: '+wZero+'%'},
   ].map(m=>'<div style="background:#111318;border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:12px 14px">'
     +'<div style="font-size:10px;color:#555c6e;text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">'+m.l+'</div>'
     +'<div style="font-size:20px;font-weight:700;color:'+m.c+'">'+m.v+'</div>'
