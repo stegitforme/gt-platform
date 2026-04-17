@@ -542,7 +542,10 @@ tr:hover td{background:#171b22;cursor:pointer}
         <div id="port-risk-empty" style="font-size:12px;color:#555c6e;text-align:center;padding:8px">Save trades to see portfolio risk summary</div>
         <div id="port-risk-body" style="display:none">
           <div style="display:grid;grid-template-columns:72px 1fr 80px 90px 90px;gap:4px;margin-bottom:6px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e;padding:0 2px">
-            <div>Ticker</div><div>Strike · Expiry</div><div style="text-align:right">Contracts</div><div style="text-align:right;color:#ff8c42">½ATR Loss</div><div style="text-align:right;color:#ff4560">2x Exit Loss</div>
+            <div>Ticker</div><div>Strike · Expiry</div>
+            <div style="text-align:right;cursor:pointer;user-select:none" onclick="sortPortRisk('cts')" title="Sort by contracts">Contracts <span id="prs-cts"></span></div>
+            <div style="text-align:right;color:#ff8c42;cursor:pointer;user-select:none" onclick="sortPortRisk('half')" title="Sort by ½ATR Loss">½ATR Loss <span id="prs-half">▼</span></div>
+            <div style="text-align:right;color:#ff4560;cursor:pointer;user-select:none" onclick="sortPortRisk('full')" title="Sort by 2x Exit Loss">2x Exit Loss <span id="prs-full"></span></div>
           </div>
           <div id="port-risk-rows"></div>
           <div style="border-top:1px solid rgba(255,255,255,.07);margin-top:6px;padding-top:8px;display:grid;grid-template-columns:72px 1fr 80px 90px 90px;gap:4px;font-size:12px;font-weight:700;padding:8px 2px 4px">
@@ -670,12 +673,12 @@ tr:hover td{background:#171b22;cursor:pointer}
       <div style="font-size:11px;color:#555c6e;margin-bottom:8px;line-height:1.6">
         In Fidelity → Accounts → History → Gains &amp; Losses → Download (CSV) → open in Excel → select all option rows → paste here.<br>
         Format: Symbol(CUSIP) · Description · Date acquired · Date sold · Qty · Cost · Proceeds · ST G/L · LT G/L<br>
-        Duplicates skipped. ATR fetched at date of acquisition.
+        <span style="color:#00d68f">Safe to re-import anytime</span> — new trades are added, existing ones updated if P&L changed, unchanged ones skipped. ATRs only fetched for new tickers.
       </div>
       <textarea id="fidelity-closed-input" rows="6" style="width:100%;background:#0a0c0f;border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:8px;font-size:11px;color:#e8eaf0;font-family:'SF Mono',monospace;resize:vertical;outline:none;box-sizing:border-box" placeholder="Paste Fidelity closed trades here...&#10;AMD260515C220(7971239NH)  CALL (AMD) ...  4/14/26  4/16/26  1  $4,040.67  $5,886.20  $1,845.53  --"></textarea>
       <div id="fidelity-closed-status" style="font-size:11px;color:#555c6e;margin:6px 0;min-height:16px"></div>
       <div style="display:flex;gap:8px;margin-top:8px">
-        <button class="btn btn-gold" onclick="runFidelityClosedImport()">Import Closed Trades</button>
+        <button class="btn btn-gold" onclick="runFidelityClosedImport()">Import / Refresh Closed Trades</button>
         <button class="btn btn-ghost" onclick="document.getElementById('fidelity-closed-form').style.display='none'" style="padding:8px 14px">Cancel</button>
       </div>
     </div>
@@ -2810,6 +2813,20 @@ async function fetchStockPricesForTrades() {
 }
 
 
+// ── PORTFOLIO RISK SORT ───────────────────────────────────────────────────────
+var PORT_RISK_SORT = { col: 'half', dir: -1 }  // default: sort by ½ATR loss descending
+function sortPortRisk(col) {
+  if(PORT_RISK_SORT.col === col) PORT_RISK_SORT.dir *= -1
+  else { PORT_RISK_SORT.col = col; PORT_RISK_SORT.dir = -1 }
+  // Update header indicators
+  ;['cts','half','full'].forEach(c => {
+    const el = document.getElementById('prs-'+c)
+    if(!el) return
+    el.textContent = c === PORT_RISK_SORT.col ? (PORT_RISK_SORT.dir === -1 ? '▼' : '▲') : ''
+  })
+  renderPortfolioRisk()
+}
+
 // ── PORTFOLIO RISK SUMMARY ────────────────────────────────────────────────────
 function renderPortfolioRisk() {
   const acct    = +document.getElementById('acct').value || 350000
@@ -2831,14 +2848,23 @@ function renderPortfolioRisk() {
 
   let totalHalf = 0, totalFull = 0, totalCts = 0
 
-  const rows = openTrades.map(t => {
+  // Build with computed values first so we can sort
+  const riskData = openTrades.map(t => {
     const isStk = t.isStock || t.type === 'Stock'
     const atr  = t.atr  || 0
     const cts  = t.cts  || 1
-    const d    = isStk ? 1 : delta  // stocks use delta=1 (direct share exposure)
-    const mult = isStk ? 1 : 100    // stocks: 1 share, options: 100 share equivalent
+    const d    = isStk ? 1 : delta
+    const mult = isStk ? 1 : 100
     const half = 0.5 * atr * d * mult * cts
     const full = 2.0 * atr * d * mult * cts
+    return { t, isStk, atr, cts, half, full }
+  })
+  // Sort by selected column
+  const sc = (typeof PORT_RISK_SORT !== 'undefined') ? PORT_RISK_SORT.col : 'half'
+  const sd = (typeof PORT_RISK_SORT !== 'undefined') ? PORT_RISK_SORT.dir : -1
+  riskData.sort((a,b) => sc==='cts' ? sd*(a.cts-b.cts) : sc==='full' ? sd*(a.full-b.full) : sd*(a.half-b.half))
+
+  const rows = riskData.map(({ t, isStk, cts, half, full }) => {
     totalHalf += half
     totalFull += full
     totalCts  += cts
@@ -3201,7 +3227,7 @@ async function syncOpenPositionsPaste(text, statusCallback) {
         cts:      r.cts,       // contracts for options, shares for stocks
         cost:     r.cost,      // cost per contract/share
         costTotal:r.costTotal,
-        entry:    isStock ? r.cost : r.cost,  // use option cost as proxy until stock price fetched
+        entry:    isStock ? r.cost : 0,  // stock entry price — populated by fetchStockPricesForTrades
         atr:      atrMap[r.ticker] || 0,
         date:     new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}).replace(',',''),
         notes:    'Imported from Fidelity',
@@ -3237,29 +3263,61 @@ async function importClosedTradesPaste(text, statusCallback) {
     return
   }
 
-  if(statusCallback) statusCallback('Fetching ATRs for closed trades...', 'loading')
+  // Only fetch ATRs for NEW tickers not already in CLOSED_TRADES
+  const existingTickers = new Set(CLOSED_TRADES.map(t => t.ticker))
+  const newTickers = results.filter(r => !existingTickers.has(r.ticker))
 
-  // Fetch ATR at date of acquisition for each unique ticker
-  const atrMap = await batchFetchATRs(
-    results.map(r => ({ ticker: r.ticker, dateISO: r.dateAcqISO })),
-    (i, total, ticker) => {
-      if(statusCallback) statusCallback('Fetching ATR ' + i + '/' + total + ' (' + ticker + ')...', 'loading')
-    }
-  )
+  if(newTickers.length) {
+    if(statusCallback) statusCallback('Fetching ATRs for ' + newTickers.length + ' new tickers...', 'loading')
+  }
 
-  let added = 0, dupes = 0
+  const atrMap = {}
+  // Seed from existing closed trades so we don't re-fetch
+  CLOSED_TRADES.forEach(t => { if(t.atr && t.ticker) atrMap[t.ticker] = t.atr })
+
+  if(newTickers.length) {
+    const fetched = await batchFetchATRs(
+      newTickers.map(r => ({ ticker: r.ticker, dateISO: r.dateAcqISO })),
+      (i, total, ticker) => {
+        if(statusCallback) statusCallback('Fetching ATR ' + i + '/' + total + ' (' + ticker + ')...', 'loading')
+      }
+    )
+    Object.assign(atrMap, fetched)
+  }
+
+  let added = 0, updated = 0, skipped = 0
 
   results.forEach(r => {
-    // Dedup by OCC + acquired date
-    const exists = CLOSED_TRADES.find(t => t.dedupKey === r.dedupKey)
-    if(exists) { dupes++; return }
+    // Match by dedupKey: OCC symbol + date acquired
+    const existIdx = CLOSED_TRADES.findIndex(t => t.dedupKey === r.dedupKey)
 
-    CLOSED_TRADES.push({
-      ...r,
-      atr:   atrMap[r.ticker] || 0,
-      id:    Date.now() + added
-    })
-    added++
+    if(existIdx >= 0) {
+      // UPDATE existing record — refresh P&L, proceeds, dates
+      const existing = CLOSED_TRADES[existIdx]
+      const changed = existing.pnl !== r.pnl || existing.proceeds !== r.proceeds
+      if(changed) {
+        CLOSED_TRADES[existIdx] = {
+          ...existing,  // keep id, atr, any manual edits
+          pnl:      r.pnl,
+          pnlPct:   r.pnlPct,
+          proceeds: r.proceeds,
+          costTotal:r.costTotal,
+          dateSold: r.dateSold,
+          cts:      r.cts,
+        }
+        updated++
+      } else {
+        skipped++
+      }
+    } else {
+      // ADD new record
+      CLOSED_TRADES.push({
+        ...r,
+        atr: atrMap[r.ticker] || 0,
+        id:  Date.now() + added
+      })
+      added++
+    }
   })
 
   // Sort by date sold desc
@@ -3268,7 +3326,11 @@ async function importClosedTradesPaste(text, statusCallback) {
   if(typeof renderClosedTrades === 'function') renderClosedTrades()
   fbAutoSave(1500)
 
-  const msg = added + ' closed trades imported' + (dupes ? ', ' + dupes + ' duplicates skipped' : '')
+  const parts = []
+  if(added)   parts.push(added + ' new')
+  if(updated) parts.push(updated + ' updated')
+  if(skipped) parts.push(skipped + ' unchanged')
+  const msg = parts.length ? parts.join(', ') + ' — ' + CLOSED_TRADES.length + ' total' : 'No changes — all trades already up to date'
   if(statusCallback) statusCallback(msg, 'ok')
   setApi(msg + ' ✓', 'ok')
 }
@@ -3670,6 +3732,7 @@ function btSimulate(tqqqBars, qqqBars, spyBars, sgovBars, startDate) {
     // Vol Acceleration Guard: if vol rose 30%+ in ~5 days AND vol > 45% → cap at 50%
     if(d.getDay()===5 || i===allDates.length-1) {
       const vol=calcVol(i), ma=calcMA(i), above=qP>ma
+      const vol5d = calcVol(Math.max(0, i-5))  // always computed — used for guard check + signal log
       let newWeight
       if(!above) {
         newWeight = 0  // Below 200MA → 100% SGOV
@@ -3677,7 +3740,6 @@ function btSimulate(tqqqBars, qqqBars, spyBars, sgovBars, startDate) {
         const raw = vol > 0 ? Math.min(1.0, 0.35/vol) : 1.0
         newWeight = Math.round(raw/0.05)*0.05  // Round to nearest 5%
         // Vol Acceleration Guard
-        const vol5d = calcVol(Math.max(0, i-5))
         if(vol5d > 0 && vol > vol5d * 1.30 && vol > 0.45) {
           newWeight = Math.min(newWeight, 0.50)  // cap at 50% when guard fires
         }
@@ -4473,7 +4535,7 @@ function renderTrades() {
       '<div class="trade-card-body">' +
         '<div>' +
           '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e;margin-bottom:7px">Levels</div>' +
-          (isStk && !t.atr ? '<div style="font-size:11px;color:#555c6e">Enter ATR to see levels</div>' :
+          (!t.entry && !isStk ? '<div style="font-size:11px;color:#555c6e">Stock price loading... levels will appear shortly</div>' : isStk && !t.atr ? '<div style="font-size:11px;color:#555c6e">Enter ATR to see levels</div>' :
           mkLevel('bg-g','#00d68f','Entry',  t.entry, 0) +
           mkLevel('bg-b','#4da6ff','.5 ATR roll', r1, pct(r1)) +
           mkLevel('bg-b','#4da6ff','1x ATR roll',r2, pct(r2)) +
@@ -4484,7 +4546,7 @@ function renderTrades() {
         '<div>' +
           '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e;margin-bottom:7px">Risk & P/L</div>' +
           '<div class="grid2" style="gap:6px">' +
-            mkMini(isStk ? 'Avg cost/share' : 'Entry price', '$'+(isStk ? t.cost : t.entry).toFixed(2), '') +
+            mkMini(isStk ? 'Avg cost/share' : 'Stock px at entry', t.entry > 0 ? '$'+t.entry.toFixed(2) : '<span style="color:#ff8c42;font-size:11px">fetching...</span>', '') +
             mkMini(isStk ? 'Total cost' : 'Cost basis', basis>0?'$'+Math.round(basis).toLocaleString():'--', '') +
             (isStk ? '' : mkMini('Loss @ .5ATR', '$'+Math.round(lH).toLocaleString(), 'o')) +
             (isStk ? '' : mkMini('Loss @ 2xATR', '$'+Math.round(lF).toLocaleString(), 'r')) +
