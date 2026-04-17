@@ -94,7 +94,8 @@ tr:hover td{background:#171b22;cursor:pointer}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:#1e2330;border-radius:2px}
 @keyframes pulse{0%{opacity:.5}100%{opacity:1}}
-</style>
+
+@media(max-width:768px){.nav{gap:0;overflow-x:auto;-webkit-overflow-scrolling:touch;flex-wrap:nowrap}.nav button{font-size:11px;padding:8px 10px;white-space:nowrap;flex-shrink:0}#deploy-btn{display:none}.page{padding:10px}.sizer-page.active{grid-template-columns:1fr!important;overflow-y:auto;height:auto}.sidebar{width:100%!important;border-right:none!important}#screener table{min-width:580px}#screener .card{overflow-x:auto}#an-summary{grid-template-columns:1fr 1fr!important}.trade-card-head{flex-wrap:wrap;gap:6px}}@media(max-width:480px){.nav button{font-size:10px;padding:6px 7px}#an-summary{grid-template-columns:1fr!important}}</style>
 
 <!-- Firebase SDK -->
 <script type="module">
@@ -1222,7 +1223,7 @@ const OV = {
 }
 
 const LIVE_PRICES = {}
-const GT_SCORES = {}  // cache: ticker -> {score, trend, mom, rs, vol, atr, ext, ts}
+const GT_SCORES = JSON.parse(localStorage.getItem('gt_gt_scores')||'{}')  // cache: ticker -> {score, trend, mom, rs, vol, atr, ext, ts}
 let SCR_SORT = { col: 'score', dir: -1 }  // col: score|sig|fg|gt, dir: -1=desc 1=asc
 const WIDE_SPREADS = new Set(['AMAT','ATI','CAT','DE','GS','COHR','TT','MOD','WSM'])
 const BULL_SECTORS = new Set(['Financials','Materials','Real Estate','Industrials'])
@@ -1657,7 +1658,7 @@ async function fetchTQQQSignal() {
         (turboBadge ? '<div style="background:'+turboBadgeColor+';color:#0a0c0f;font-size:11px;font-weight:700;padding:4px 10px;border-radius:4px;letter-spacing:.05em">' + turboBadge + '</div>' : '') +
         '<div style="font-size:11px;color:#555c6e">Turbo fires after 8+ consecutive weeks below 200MA then reclaim</div>' +
       '</div>' +
-      '<div style="font-size:11px;color:#555c6e">Based on '+n+' trading days of QQQ data . 200MA uses '+ma200window+' days . Vol uses '+vol20window+' days . Run every Friday before market close</div>' +
+      '<div style="font-size:11px;color:#555c6e">Strategy: Vol(35%) Target + 200MA Gate + ⚡Vol Accel Guard | Based on '+n+' trading days of QQQ data . 200MA uses '+ma200window+' days . Vol uses '+vol20window+' days . Run every Friday before market close</div>' +
 
       // ── VOL REFERENCE TABLES ──────────────────────────────────────────────
       '<div style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,.07)">' +
@@ -2561,7 +2562,9 @@ function runFilter() {
     return
   }
 
-  tbody.innerHTML = scored.map((s, i) => {
+  const PAGE_SIZE=75,display=scored.slice(0,PAGE_SIZE)
+  if(scored.length>PAGE_SIZE)document.getElementById('scr-count').textContent='Top '+PAGE_SIZE+' of '+scored.length+' — tighten filters'
+  tbody.innerHTML = display.map((s, i) => {
     // F&G color: 15-65 is Golden Ticket sweet spot
     // Suspicious values (<=5 or >100) shown in grey
     const fgSuspect = s.d.fg <= 5 || s.d.fg > 100
@@ -2835,6 +2838,7 @@ async function runGTScores() {
     } catch(e) { done++ }
   }))
 
+  localStorage.setItem('gt_gt_scores', JSON.stringify(GT_SCORES))
   setApi('GT Scores complete — ' + tickers.length + ' tickers scored', 'ok')
   if(btn) { btn.textContent = 'Run GT Scores ▶'; btn.disabled = false }
   // Auto-sort by GT Score descending
@@ -4292,7 +4296,7 @@ function btRender(r) {
 
   // Perf table
   const rows=[
-    {n:'Vol(35%)+200MA',m:r.stratM,bold:true},
+    {n:'Vol(35%)+200MA+Guard',m:r.stratM,bold:true},
     {n:'TQQQ Buy & Hold',m:r.tqqqM},
     {n:'QQQ Buy & Hold', m:r.qqqM},
     {n:'SPY Buy & Hold', m:r.spyM},
