@@ -421,7 +421,7 @@ tr:hover td{background:#171b22;cursor:pointer}
     <div class="card">
       <div class="card-head"><span class="card-title">Account</span></div>
       <div class="card-body">
-        <div class="field"><label>Account Balance $</label><input type="number" id="acct" value="300000" oninput="calc()"></div>
+        <div class="field"><label>Account Balance $</label><input type="number" id="acct" value="350000" oninput="calc()"></div>
         <div class="field"><label>Risk Per Trade %</label><input type="number" id="riskpct" value="6" step="0.5" oninput="calc()"></div>
         <div class="field"><label>Delta (whole number)</label><input type="number" id="delta" value="80" oninput="calc()"></div>
       </div>
@@ -978,16 +978,16 @@ async function apiGet(path, skipCache) {
       }
       // Retry once after waiting
       const r2 = await fetch(API + path + sep + 'apiKey=' + KEY)
-      if(!r2.ok) { setApi('API error ' + r2.status, 'err'); return null }
+      if(!r2.ok) { if(!silent) setApi('API error ' + r2.status, 'err'); return null }
       const d2 = await r2.json()
       API_CACHE[path] = { data: d2, ts: Date.now() }
       setApi('Ready', 'ok')
       return d2
     }
     
-    if(!r.ok) { setApi('API error ' + r.status, 'err'); return null }
+    if(!r.ok) { if(!silent) setApi('API error ' + r.status, 'err'); return null }
     const d = await r.json()
-    if(d.status === 'ERROR') { setApi('API: ' + (d.error||d.message||'error'), 'err'); return null }
+    if(d.status === 'ERROR') { if(!silent) setApi('API: ' + (d.error||d.message||'error'), 'err'); return null }
     
     // Cache successful result
     API_CACHE[path] = { data: d, ts: Date.now() }
@@ -1744,7 +1744,7 @@ async function fetchEarningsCalendar() {
     const d = await apiGet('/vX/reference/earnings?ticker.any_of=' + tickers +
       '&period_of_report_date.gte=' + today +
       '&period_of_report_date.lte=' + future +
-      '&limit=50')
+      '&limit=50', true)  // silent=true: /vX/ needs Business plan, fail quietly
     if(d && d.results && d.results.length) {
       d.results.forEach(e => {
         if(e.tickers) e.tickers.forEach(t => { LIVE_EARNINGS[t] = true })
@@ -2726,7 +2726,7 @@ async function fetchStockPricesForTrades() {
 
 // ── PORTFOLIO RISK SUMMARY ────────────────────────────────────────────────────
 function renderPortfolioRisk() {
-  const acct    = +document.getElementById('acct').value || 300000
+  const acct    = +document.getElementById('acct').value || 350000
   const rp      = +document.getElementById('riskpct').value || 6
   const delta   = (+document.getElementById('delta').value || 80) / 100
   const baseRisk = acct * (rp/100)
@@ -3761,7 +3761,7 @@ function btDrawChart(r) {
 
 function calc() {
   saveRiskSettings()
-  const acct   = +document.getElementById('acct').value || 300000
+  const acct   = +document.getElementById('acct').value || 350000
   const rp     = +document.getElementById('riskpct').value || 6
   const delta  = (+document.getElementById('delta').value || 80) / 100
   const entry  = +document.getElementById('entry').value
@@ -4909,7 +4909,10 @@ function initPlatform() {
     const savedAcct = localStorage.getItem('gt_acct')
     const savedRisk = localStorage.getItem('gt_riskpct')
     const savedDelta = localStorage.getItem('gt_delta')
-    if(savedAcct) { const el=document.getElementById('acct'); if(el) el.value=savedAcct }
+    // Restore account settings — default to 350000 if never set
+    const acctEl = document.getElementById('acct')
+    if(acctEl) acctEl.value = savedAcct || '350000'
+    if(!savedAcct) localStorage.setItem('gt_acct', '350000')
     if(savedRisk) { const el=document.getElementById('riskpct'); if(el) el.value=savedRisk }
     if(savedDelta) { const el=document.getElementById('delta'); if(el) el.value=savedDelta }
     if(!KEY) {
