@@ -305,7 +305,7 @@ tr:hover td{background:#171b22;cursor:pointer}
   <!-- TQQQ VOL-TARGETING SIGNAL -->
   <div class="card" style="margin-top:14px">
     <div class="card-head">
-      <span class="card-title">TQQQ Vol-Targeting Signal</span>
+      <span class="card-title">TQQQ Live Estimate</span><span style="font-size:10px;color:#ff8c42;background:rgba(255,140,66,.1);border:1px solid rgba(255,140,66,.25);padding:2px 8px;border-radius:4px;margin-left:4px">⚠ Intraday estimate — not the official signal</span>
       <div style="display:flex;gap:6px;align-items:center">
         <span id="tqqq-updated" style="font-size:10px;color:#555c6e"></span>
         <button class="btn btn-ghost" style="font-size:11px;padding:3px 9px" onclick="fetchTQQQSignal()">Calculate</button>
@@ -330,7 +330,21 @@ tr:hover td{background:#171b22;cursor:pointer}
     </div>
   </div>
 
-  <!-- CHANGELOG v1.4 -->
+  <!-- OFFICIAL SIGNAL BOX -->
+  <div class="card" style="margin-top:8px;border-color:rgba(77,166,255,.25)">
+    <div class="card-head" style="border-color:rgba(77,166,255,.15)">
+      <span class="card-title" style="color:#4da6ff">✅ Official Weekly Signal</span>
+      <div style="display:flex;gap:6px;align-items:center">
+        <span id="official-signal-date" style="font-size:10px;color:#555c6e"></span>
+        <a href="https://stegitforme.github.io/tqqq-vol-target/" target="_blank" style="font-size:11px;color:#4da6ff;text-decoration:none;padding:3px 9px;border:1px solid rgba(77,166,255,.3);border-radius:4px">Full Report →</a>
+      </div>
+    </div>
+    <div class="card-body" id="official-signal-body" style="padding:12px 16px">
+      <div style="font-size:12px;color:#555c6e">Loading from weekly_report.py history...</div>
+    </div>
+  </div>
+
+<!-- CHANGELOG v1.4 -->
   <div class="card" style="margin-top:14px;border-color:rgba(240,192,64,.15)">
     <div class="card-head" style="border-color:rgba(240,192,64,.1)">
       <span class="card-title" style="color:#f0c040">What's New — v1.4</span>
@@ -1794,6 +1808,44 @@ function saveRebAccounts() {
   })
   localStorage.setItem('gt_reb_accounts', JSON.stringify(REB_ACCOUNTS))
   fbAutoSave(3000)  // sync after 3s of inactivity
+}
+
+async function fetchOfficialSignal() {
+  const el = document.getElementById('official-signal-body')
+  if(!el) return
+  try {
+    const r = await fetch('https://stegitforme.github.io/tqqq-vol-target/logs/history.csv?v='+Date.now())
+    const txt = await r.text()
+    const lines = txt.trim().split('\n').filter(l=>l.trim())
+    const headers = lines[0].split(',').map(h=>h.trim())
+    const last = lines[lines.length-1].split(',')
+    const row = {}
+    headers.forEach((h,i)=>row[h]=last[i])
+    const date    = row['RunDate']||'--'
+    const alloc   = row['AllocTQQQ'] ? Math.round(+row['AllocTQQQ']*100)+'%' : '--'
+    const vol     = row['RealizedVol20d'] ? (+row['RealizedVol20d']*100).toFixed(1)+'%' : '--'
+    const guard   = row['VolAccelGuard']||'--'
+    const aboveMa = row['MA200_Gate']
+    const allocColor = +row['AllocTQQQ']>=0.8?'#00d68f':+row['AllocTQQQ']>=0.4?'#f0c040':'#ff8c42'
+    const dateEl = document.getElementById('official-signal-date')
+    if(dateEl) dateEl.textContent = 'From: '+date
+    el.innerHTML =
+      '<div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">' +
+      '<div><span style="color:#555c6e">Run date: </span><span style="color:#e8eaf0;font-family:SF Mono,monospace">'+date+'</span></div>' +
+      '<div><span style="color:#555c6e">20d Vol: </span><span style="color:#e8eaf0;font-family:SF Mono,monospace">'+vol+'</span></div>' +
+      '<div><span style="color:#555c6e">Allocation: </span><span style="font-weight:700;font-size:14px;color:'+allocColor+';font-family:SF Mono,monospace">'+alloc+' TQQQ</span></div>' +
+      '<div><span style="color:#555c6e">200MA: </span><span style="color:'+(aboveMa==='True'?'#00d68f':'#ff4560')+'">'+(aboveMa==='True'?'✓ Above':'✗ Below')+'</span></div>' +
+      '<div><span style="color:#555c6e">Guard: </span><span style="color:'+(guard==='True'?'#f0c040':'#555c6e')+'">'+(guard==='True'?'⚡ FIRED':'standby')+'</span></div>' +
+      '</div>'
+    // Auto-sync rebalancer to the OFFICIAL signal
+    const officialAlloc = +row['AllocTQQQ']*100
+    if(officialAlloc > 0) {
+      const rebEl = document.getElementById('reb-tqqq-pct')
+      if(rebEl) { rebEl.value = officialAlloc; rebCalc() }
+    }
+  } catch(e) {
+    if(el) el.innerHTML = '<span style="color:#555c6e">Could not load — <a href="https://stegitforme.github.io/tqqq-vol-target/" target="_blank" style="color:#4da6ff">view report directly</a></span>'
+  }
 }
 
 function rebSyncSignal() {
@@ -5672,6 +5724,7 @@ function initPlatform() {
     setTimeout(fetchStockPricesForTrades, 2000)
     // Auto-fetch TQQQ signal on startup so rebalancer can sync
     setTimeout(async function(){ try{await fetchTQQQSignal(); setTimeout(rebSyncSignal,200)}catch(e){} }, 5000)
+    setTimeout(function(){ try{fetchOfficialSignal()}catch(e){} }, 6000)
     // Auto-run GT scores if cache empty
     setTimeout(function(){
       try{
