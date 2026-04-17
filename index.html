@@ -5418,6 +5418,8 @@ function initPlatform() {
     }, 200)
     // Start live stock price auto-refresh (every 5 min during market hours)
     setTimeout(startLivePriceRefresh, 1000)
+    // Fetch stock prices immediately on load (snapshot = 1 fast call)
+    setTimeout(fetchStockPricesForTrades, 2000)
     // Safety net at 800ms - force re-render if still blank
     setTimeout(function() {
       const body = document.getElementById('chk-body')
