@@ -726,6 +726,7 @@ tr:hover td{background:#171b22;cursor:pointer}
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <button class="btn btn-ghost" style="font-size:11px;padding:4px 11px" onclick="tenxRefreshAll()">⟳ Refresh All</button>
       <button class="btn btn-ghost" style="font-size:11px;padding:4px 11px" onclick="document.getElementById('tenx-add-form').style.display=document.getElementById('tenx-add-form').style.display==='none'?'block':'none'">+ Add Ticker</button>
+      <span id="tenx-changes" style="display:none;font-size:11px;font-weight:600;padding:3px 10px;background:rgba(240,192,64,.15);color:#f0c040;border:1px solid rgba(240,192,64,.3);border-radius:4px"></span>
       <select id="tenx-sort" onchange="tenxRender()" style="background:#0a0c0f;border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:3px 8px;font-size:11px;color:#8b91a0;outline:none;cursor:pointer;position:relative;z-index:10">
         <option value="rank">By rank score</option>
         <option value="rs">By RS vs SPY</option>
@@ -817,7 +818,7 @@ tr:hover td{background:#171b22;cursor:pointer}
       <span id="bt-status" style="font-size:11px;color:#555c6e;min-width:180px"></span>
     </div>
   </div>
-  <div id="bt-metrics" style="display:none;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;margin-bottom:16px"></div>
+  <div id="bt-metrics" style="display:none;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:10px;margin-bottom:16px"></div>
   <div id="bt-chart-wrap" style="display:none;background:#111318;border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:14px;margin-bottom:16px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
       <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#555c6e">Equity Curve &mdash; $10,000 invested</div>
@@ -899,7 +900,7 @@ tr:hover td{background:#171b22;cursor:pointer}
   <div class="card" style="margin-top:14px" id="rebalancer-card">
     <div class="card-head">
       <span class="card-title">Multi-Account Rebalancer</span>
-      <div style="display:flex;gap:8px;align-items:center">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <span style="font-size:11px;color:#555c6e">Target:</span>
         <input type="number" id="reb-tqqq-pct" value="100" min="0" max="100" step="5"
           style="width:52px;background:#0a0c0f;border:1px solid rgba(255,255,255,.12);border-radius:4px;padding:3px 7px;font-size:12px;color:#00d68f;font-family:'SF Mono',monospace;text-align:center;outline:none"
@@ -908,6 +909,9 @@ tr:hover td{background:#171b22;cursor:pointer}
         <span style="font-size:11px;color:#555c6e">/</span>
         <span id="reb-sgov-pct" style="font-size:12px;color:#4da6ff;font-weight:600">0</span>
         <span style="font-size:12px;color:#4da6ff;font-weight:600">% SGOV</span>
+        <span style="color:rgba(255,255,255,.1);margin:0 2px">|</span>
+        <span id="reb-prices" style="font-size:10px;color:#555c6e;font-family:'SF Mono',monospace"></span>
+        <button onclick="rebFetchPrices()" style="padding:2px 9px;background:transparent;border:1px solid rgba(255,255,255,.12);border-radius:4px;color:#555c6e;font-size:10px;cursor:pointer;font-family:inherit" title="Fetch live TQQQ + SGOV prices">⟳ Prices</button>
       </div>
     </div>
     <div class="card-body" style="padding:0">
@@ -931,6 +935,11 @@ tr:hover td{background:#171b22;cursor:pointer}
     <div class="card-head">
       <span class="card-title">Open Positions</span>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <button onclick="refreshPortfolioPrices()" id="port-refresh-btn"
+          style="padding:4px 12px;background:rgba(77,166,255,.1);border:1px solid rgba(77,166,255,.25);border-radius:4px;color:#4da6ff;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">
+          ⟳ Refresh Prices
+        </button>
+        <span id="port-refresh-status" style="font-size:10px;color:#555c6e"></span>
         <!-- View toggle -->
         <div style="display:flex;border:1px solid rgba(255,255,255,.1);border-radius:6px;overflow:hidden">
           <button id="view-all" onclick="setPortView('all')" style="padding:3px 10px;font-size:11px;background:#1e2330;color:#f0c040;border:none;cursor:pointer;font-family:inherit">All</button>
@@ -1785,6 +1794,33 @@ function renderRebalancer(tqqqPct, sgovPct) {
   if(sg) sg.textContent = sgovPct
   rebCalc()
 }
+// ── REBALANCER LIVE PRICE FETCH ──────────────────────────────────────────────
+async function rebFetchPrices() {
+  const btn = document.querySelector('[onclick="rebFetchPrices()"]')
+  const el  = document.getElementById('reb-prices')
+  if(btn) { btn.textContent = '⟳ ...'; btn.disabled = true }
+  try {
+    const to   = new Date().toISOString().split('T')[0]
+    const from = new Date(Date.now()-4*864e5).toISOString().split('T')[0]
+    // Fetch TQQQ
+    const tD = await apiGet('/v2/aggs/ticker/TQQQ/range/1/day/'+from+'/'+to+'?adjusted=true&sort=desc&limit=1')
+    const tPx = tD?.results?.[0]?.c
+    // Fetch SGOV
+    const sD = await apiGet('/v2/aggs/ticker/SGOV/range/1/day/'+from+'/'+to+'?adjusted=true&sort=desc&limit=1')
+    const sPx = sD?.results?.[0]?.c
+    if(tPx && sPx) {
+      // Update each account row that has $0 SGOV or $0 TQQQ with share-count estimates
+      // If user has entered dollar values, just update the price display
+      window._rebPrices = { tqqq: tPx, sgov: sPx }
+      if(el) el.textContent = 'TQQQ $'+tPx.toFixed(2)+' · SGOV $'+sPx.toFixed(2)
+      setApi('Rebalancer: TQQQ $'+tPx.toFixed(2)+' · SGOV $'+sPx.toFixed(2), 'ok')
+    }
+  } catch(e) {
+    if(el) el.textContent = 'fetch error'
+  }
+  if(btn) { btn.textContent = '⟳ Prices'; btn.disabled = false }
+}
+
 // ── END REBALANCER ────────────────────────────────────────────────────────
 
 async function fetchVIX() {
@@ -3513,6 +3549,27 @@ if(!TENX.length) {
 }
 
 function saveTenx() {
+  // Detect rank changes before saving
+  const prevTop = JSON.parse(localStorage.getItem('gt_tenx_prev_top') || '[]')
+  const currTop = [...TENX].sort((a,b)=>tenxScore(b)-tenxScore(a)).slice(0,10).map(t=>t.ticker)
+  if(prevTop.length && JSON.stringify(prevTop) !== JSON.stringify(currTop)) {
+    const dropped  = prevTop.filter(t=>!currTop.includes(t))
+    const entered  = currTop.filter(t=>!prevTop.includes(t))
+    const movedUp  = currTop.filter((t,i)=>prevTop.includes(t) && prevTop.indexOf(t) > i)
+    const movedDn  = currTop.filter((t,i)=>prevTop.includes(t) && prevTop.indexOf(t) < i)
+    if(dropped.length || entered.length) {
+      const msgs = []
+      if(entered.length) msgs.push('New: '+entered.join(', '))
+      if(dropped.length) msgs.push('Dropped: '+dropped.join(', '))
+      const el = document.getElementById('tenx-changes')
+      if(el) {
+        el.textContent = msgs.join(' | ')
+        el.style.display = 'inline-block'
+        setTimeout(()=>{ el.style.display='none' }, 15000)
+      }
+    }
+  }
+  localStorage.setItem('gt_tenx_prev_top', JSON.stringify(currTop))
   localStorage.setItem('gt_tenx', JSON.stringify(TENX))
   if(typeof fbAutoSave === 'function') fbAutoSave(2000)
 }
@@ -3946,6 +4003,7 @@ function btRender(r) {
   const wZero = ww.length ? Math.round(ww.filter(w=>w===0).length/ww.length*100) : 0
   const mEl=document.getElementById('bt-metrics')
   mEl.style.display='grid'
+  const totalGuardFires = (r.signals||[]).filter(s=>s.guardFired).length
   mEl.innerHTML=[
     {l:'Strategy CAGR',  v:pct(sm.cagr),        c:col(sm.cagr),    s:'vs QQQ '+pct(r.qqqM.cagr)},
     {l:'Max Drawdown',   v:pct(sm.maxDD),        c:sm.maxDD<-.3?'#ff4560':'#ff8c42', s:'TQQQ BH: '+pct(tm.maxDD)},
@@ -3953,6 +4011,7 @@ function btRender(r) {
     {l:'Sharpe Ratio',   v:sm.sharpe.toFixed(2), c:sm.sharpe>1?'#00d68f':'#f0c040', s:'TQQQ BH: '+tm.sharpe.toFixed(2)},
     {l:'Final Value',    v:'$'+Math.round(sm.final).toLocaleString(), c:'#f0c040', s:'$10K invested at start'},
     {l:'Avg TQQQ Weight',v:avgW+'%',             c:'#4da6ff', s:'≥80%: '+wHigh+'% | Partial: '+wMid+'% | Cash: '+wZero+'%'},
+    {l:'⚡ Guard Fires',  v:totalGuardFires || '0', c:totalGuardFires>0?'#f0c040':'#555c6e', s:totalGuardFires>0?'vol spikes capped at 50%':'no guard activations in period'},
   ].map(m=>'<div style="background:#111318;border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:12px 14px">'
     +'<div style="font-size:10px;color:#555c6e;text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">'+m.l+'</div>'
     +'<div style="font-size:20px;font-weight:700;color:'+m.c+'">'+m.v+'</div>'
@@ -5251,7 +5310,7 @@ function renderPortfolio() {
        p.gt === true  ? '<div title="GOGO position (click to mark as Long-term)" onclick="event.stopPropagation();tagPosition(\'' + p.raw + '\',false)" style="width:14px;height:14px;border-radius:3px;background:rgba(240,192,64,.15);border:1px solid rgba(240,192,64,.3);cursor:pointer;flex-shrink:0;margin-right:4px;display:flex;align-items:center;justify-content:center"><span style="font-size:7px;color:#f0c040">GT</span></div>' :
        '<div title="Click to tag as GT or Long-term" onclick="event.stopPropagation();tagPosition(\'' + p.raw + '\',true)" style="width:14px;height:14px;border-radius:3px;background:rgba(255,255,255,.03);border:1px dashed rgba(255,255,255,.08);cursor:pointer;flex-shrink:0;margin-right:4px"></div>') +
       '<div style="font-family:\'SF Mono\',monospace;font-weight:600;width:110px;flex-shrink:0">' + p.t + typeTag + (p.e ? '<div style="font-size:10px;color:#555c6e;font-weight:400">' + p.e + (p.c > 1 ? ' | ' + p.c + 'ct' : '') + '</div>' : '') + '</div>' +
-      (val ? '<div style="font-family:\'SF Mono\',monospace;font-size:11px;color:#555c6e;width:70px;flex-shrink:0">' + val + '</div>' : '<div style="width:70px;flex-shrink:0"></div>') +
+      (val ? '<div style="font-family:\'SF Mono\',monospace;font-size:11px;color:#555c6e;width:70px;flex-shrink:0">' + val + (p.underlyingPx?'<div style="font-size:9px;color:#333a4a">$'+p.underlyingPx+(p.underlyingChg>=0?' +':'')+p.underlyingChg?.toFixed(1)+'%</div>':'')+'</div>' : '<div style="width:70px;flex-shrink:0"></div>') +
       '<div style="font-family:\'SF Mono\',monospace;font-size:12px;font-weight:500;flex:1;color:' + pc + '">' + ps + ' <span style="font-size:10px;opacity:.8">' + pcs + '</span></div>' +
       '<div style="font-size:11px;color:' + tc + ';width:80px;text-align:right">' + ts + ' today</div>' +
       '<div><button class="btn btn-ghost" style="font-size:10px;padding:2px 6px;margin-left:8px" onclick="event.stopPropagation();goSize(\\\'\' + p.raw.replace(/^-/,\'\').split(/[0-9]/)[0] + \'\\\')">Size -></button></div>' +
@@ -5412,6 +5471,75 @@ async function deployToGitHub() {
       }
     }
   }
+}
+
+// ── PORTFOLIO LIVE PRICE REFRESH ─────────────────────────────────────────────
+async function refreshPortfolioPrices() {
+  const btn = document.getElementById('port-refresh-btn')
+  const status = document.getElementById('port-refresh-status')
+  if(btn) { btn.textContent = '⟳ Refreshing...'; btn.disabled = true }
+
+  const to   = new Date().toISOString().split('T')[0]
+  const from = new Date(Date.now()-4*864e5).toISOString().split('T')[0]
+
+  // Get unique underlying tickers from positions
+  const tickerSet = new Set()
+  POSITIONS.forEach(p => {
+    const base = p.raw ? p.raw.replace(/^-/,'').match(/^([A-Z]+)/)?.[1] : p.t?.split(' ')[0]
+    if(base) tickerSet.add(base)
+  })
+  const tickers = [...tickerSet]
+  const prices = {}
+  let fetched = 0
+
+  if(status) status.textContent = 'fetching '+tickers.length+' tickers...'
+
+  for(const t of tickers) {
+    try {
+      const d = await apiGet('/v2/aggs/ticker/'+t+'/range/1/day/'+from+'/'+to+'?adjusted=true&sort=desc&limit=2')
+      if(d?.results?.[0]) {
+        const bar  = d.results[0]
+        const prev = d.results[1]?.c || bar.o
+        prices[t] = { close: bar.c, chg: (bar.c-prev)/prev*100 }
+        fetched++
+      }
+    } catch(e) {}
+    if(status) status.textContent = fetched+'/'+tickers.length+' done'
+  }
+
+  // Update POSITIONS with refreshed prices
+  let updated = 0
+  POSITIONS.forEach(p => {
+    const base = p.raw ? p.raw.replace(/^-/,'').match(/^([A-Z]+)/)?.[1] : p.t?.split(' ')[0]
+    if(!base || !prices[base]) return
+    const px = prices[base]
+    if(p.type === 'stock') {
+      // For stocks: recalculate value + P&L directly
+      const costPerShare = p.cost || 0
+      const shares = p.c || 0
+      p.curPx    = +px.close.toFixed(2)
+      p.val      = Math.round(px.close * shares)
+      p.pnl      = Math.round((px.close - costPerShare) * shares)
+      p.pct      = costPerShare > 0 ? +((px.close-costPerShare)/costPerShare*100).toFixed(2) : 0
+      p.today    = Math.round(px.chg/100 * p.val)
+      p.todayPct = +px.chg.toFixed(2)
+      updated++
+    } else {
+      // For options: update underlying price display, keep option value from Fidelity
+      p.underlyingPx = +px.close.toFixed(2)
+      p.underlyingChg = +px.chg.toFixed(2)
+      updated++
+    }
+  })
+
+  // Save refreshed data + re-render
+  savePortfolioData(POSITIONS, {refreshedAt: new Date().toLocaleTimeString()})
+  renderPortfolio()
+
+  const ts = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})
+  if(status) status.textContent = 'Updated '+ts+' ('+updated+' positions)'
+  if(btn) { btn.textContent = '⟳ Refresh Prices'; btn.disabled = false }
+  setApi('Portfolio refreshed: '+fetched+' prices updated', 'ok')
 }
 
 // Wait for DOM to be fully ready
