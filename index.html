@@ -1814,7 +1814,7 @@ async function fetchOfficialSignal() {
   const el = document.getElementById('official-signal-body')
   if(!el) return
   try {
-    const r = await fetch('https://stegitforme.github.io/tqqq-vol-target/logs/history.csv?v='+Date.now())
+    const r = await fetch('https://raw.githubusercontent.com/stegitforme/tqqq-vol-target/main/logs/history.csv?v='+Date.now())
     const txt = await r.text()
     const lines = txt.trim().split('\n').filter(l=>l.trim())
     const headers = lines[0].split(',').map(h=>h.trim())
