@@ -100,7 +100,7 @@ tr:hover td{background:#171b22;cursor:pointer}
 <!-- Firebase SDK -->
 <script type="module">
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js'
-  import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js'
+  import { getAuth, signInAnonymously, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js'
   import { getDatabase, ref, set, get, onValue } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js'
 
   const firebaseConfig = {
@@ -116,22 +116,11 @@ tr:hover td{background:#171b22;cursor:pointer}
   const app = initializeApp(firebaseConfig)
   const auth = getAuth(app)
   const db = getDatabase(app)
-  const provider = new GoogleAuthProvider()
 
-  // Sign in with Google
-  window.fbSignIn = () => {
-    signInWithPopup(auth, provider).catch(e => console.warn('Sign-in error:', e))
-  }
-  window.fbSignOut = () => {
-    signOut(auth).then(() => {
-      window.FBUID = null
-      document.getElementById('fb-signin-btn').style.display = 'flex'
-      document.getElementById('fb-user-info').style.display = 'none'
-      setApi('Signed out of Firebase', 'ok')
-    })
-  }
+  // Auto sign-in anonymously — no popup, no user action needed, survives reloads
+  // UID is stable per browser (Firebase persists anonymous auth in IndexedDB)
+  signInAnonymously(auth).catch(e => console.warn('Firebase anon auth error:', e))
 
-  // Watch auth state
   onAuthStateChanged(auth, user => {
     if(user) {
       window.FBUID = user.uid
@@ -140,16 +129,16 @@ tr:hover td{background:#171b22;cursor:pointer}
       window.FBSet = set
       window.FBGet = get
       window.FBOnValue = onValue
-      // Update UI
-      const btn = document.getElementById('fb-signin-btn')
+      // Update header to show connected (no sign-in button needed)
       const info = document.getElementById('fb-user-info')
+      const btn = document.getElementById('fb-signin-btn')
       const name = document.getElementById('fb-user-name')
       if(btn) btn.style.display = 'none'
       if(info) info.style.display = 'flex'
-      if(name) name.textContent = user.displayName || user.email || 'Signed in'
-      setApi('Firebase · ' + (user.displayName || user.email), 'ok')
+      if(name) name.textContent = 'Signed in'
+      setApi('Firebase connected', 'ok')
       if(typeof loadFromFirebase === 'function') loadFromFirebase()
-      // Watch for OVTLYR sync — real-time Firebase listener (suggestion #2)
+      // Real-time OVTLYR sync listener
       try {
         const pendingRef = ref(db, 'pending_ov')
         onValue(pendingRef, function(snap) {
@@ -157,12 +146,11 @@ tr:hover td{background:#171b22;cursor:pointer}
             if(!snap || !snap.exists()) return
             const d = snap.val()
             if(!d || !d.ov || !d.importedAt) return
-            // Suggestion #1: only import if newer than last import
             const lastSavedAt = parseInt(localStorage.getItem('gt_ov_last_savedAt') || '0')
             if(d.savedAt && d.savedAt <= lastSavedAt) return
             localStorage.setItem('gt_ov_last_savedAt', d.savedAt || Date.now())
             const cnt = Object.keys(d.ov).length
-            console.log('GOGO: OVTLYR sync detected — ' + cnt + ' tickers')
+            console.log('GOGO: OVTLYR sync — ' + cnt + ' tickers')
             Object.entries(d.ov).forEach(function(e){ if(typeof OV !== 'undefined') OV[e[0]] = e[1] })
             localStorage.setItem('gt_ov_data', JSON.stringify(d))
             const el = document.getElementById('ov-last-update')
@@ -183,11 +171,8 @@ tr:hover td{background:#171b22;cursor:pointer}
           } catch(innerErr){ console.warn('OV import error:', innerErr.message) }
         })
       } catch(e) { console.warn('pending_ov listener error:', e.message) }
+    } else {
       window.FBUID = null
-      let btn = document.getElementById('fb-signin-btn')
-      let info = document.getElementById('fb-user-info')
-      if(btn) btn.style.display = 'flex'
-      if(info) info.style.display = 'none'
     }
   })
 </script>
