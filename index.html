@@ -101,7 +101,7 @@ tr:hover td{background:#171b22;cursor:pointer}
 <script type="module">
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js'
   import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js'
-  import { getDatabase, ref, set, get } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js'
+  import { getDatabase, ref, set, get, onValue } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js'
 
   const firebaseConfig = {
     apiKey: "AIzaSyC2gl09aCvefp3iWnOFjO8c5UBg-I3aR-A",
@@ -139,6 +139,7 @@ tr:hover td{background:#171b22;cursor:pointer}
       window.FBRef = ref
       window.FBSet = set
       window.FBGet = get
+      window.FBOnValue = onValue
       // Update UI
       const btn = document.getElementById('fb-signin-btn')
       const info = document.getElementById('fb-user-info')
@@ -148,23 +149,26 @@ tr:hover td{background:#171b22;cursor:pointer}
       if(name) name.textContent = user.displayName || user.email || 'Signed in'
       setApi('Firebase · ' + (user.displayName || user.email), 'ok')
       if(typeof loadFromFirebase === 'function') loadFromFirebase()
-      // Watch for OVTLYR sync — polls Firebase REST every 15s
-      ;(function startOVPoll() {
-        var POLL_URL = 'https://gogo-trading-81293-default-rtdb.firebaseio.com/pending_ov.json'
-        var lastSavedAt = 0
-        function importOVFromPending(d) {
+      // Watch for OVTLYR sync — real-time Firebase listener (suggestion #2)
+      try {
+        const pendingRef = ref(db, 'pending_ov')
+        onValue(pendingRef, function(snap) {
           try {
+            if(!snap || !snap.exists()) return
+            const d = snap.val()
             if(!d || !d.ov || !d.importedAt) return
+            // Suggestion #1: only import if newer than last import
+            const lastSavedAt = parseInt(localStorage.getItem('gt_ov_last_savedAt') || '0')
             if(d.savedAt && d.savedAt <= lastSavedAt) return
-            lastSavedAt = d.savedAt || Date.now()
-            var cnt = Object.keys(d.ov).length
+            localStorage.setItem('gt_ov_last_savedAt', d.savedAt || Date.now())
+            const cnt = Object.keys(d.ov).length
             console.log('GOGO: OVTLYR sync detected — ' + cnt + ' tickers')
             Object.entries(d.ov).forEach(function(e){ if(typeof OV !== 'undefined') OV[e[0]] = e[1] })
             localStorage.setItem('gt_ov_data', JSON.stringify(d))
-            var el = document.getElementById('ov-last-update')
+            const el = document.getElementById('ov-last-update')
             if(el) el.textContent = 'Last import: ' + new Date(d.importedAt).toLocaleString() + ' (' + cnt + ' tickers)'
             if(typeof runFilter === 'function') runFilter()
-            if(typeof setApi === 'function') setApi('OVTLYR synced — ' + cnt + ' tickers ✓', 'ok')
+            if(typeof setApi === 'function') setApi('OVTLYR synced \u2014 ' + cnt + ' tickers \u2713', 'ok')
             if(typeof fbAutoSave === 'function') fbAutoSave(1000)
             var toast = document.getElementById('ov-sync-toast')
             if(toast) toast.remove()
@@ -176,19 +180,9 @@ tr:hover td{background:#171b22;cursor:pointer}
             setTimeout(function(){ toast.style.opacity='0'; setTimeout(function(){ toast.remove() },500) }, 4000)
             var scBtn = Array.from(document.querySelectorAll('.nav button')).find(function(b){ return b.textContent.trim()==='Screener' })
             if(scBtn){ scBtn.style.color='#00d68f'; setTimeout(function(){ scBtn.style.color='' },3000) }
-          } catch(err){ console.warn('OV import error:', err.message) }
-        }
-        function poll() {
-          fetch(POLL_URL, {headers:{Authorization:'Bearer '+((window.FBAUTH&&window.FBAUTH.currentUser&&window.FBAUTH.currentUser.getIdToken)?'':'')}, cache:'no-cache'})
-            .then(function(r){ return r.json() })
-            .then(function(d){ if(d && !d.error) importOVFromPending(d) })
-            .catch(function(){})
-          setTimeout(poll, 15000)
-        }
-        // First poll after 3s then every 15s
-        setTimeout(poll, 3000)
-      })()
-    } else {
+          } catch(innerErr){ console.warn('OV import error:', innerErr.message) }
+        })
+      } catch(e) { console.warn('pending_ov listener error:', e.message) }
       window.FBUID = null
       const btn = document.getElementById('fb-signin-btn')
       const info = document.getElementById('fb-user-info')
