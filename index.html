@@ -1082,13 +1082,13 @@ async function tBars(sym,days){
   days=days||100
   var to=new Date().toISOString().slice(0,10)
   var fr=new Date(Date.now()-days*864e5).toISOString().slice(0,10)
-  var r=await fetch(TRADIER+'/markets/history?symbol='+sym+'&interval=daily&start='+fr+'&end='+to,{headers:{'Authorization':'Bearer '+TRADIER_TOKEN,'Accept':'application/json'}})
+  var r=await fetch('https://yahoo-proxy.sgoglanian.workers.dev/tradier/history?symbol='+sym+'&days='+days)
   var d=await r.json()
   var b=d?.history?.day||[]
   return b.map(function(x){return{c:x.close,h:x.high,l:x.low,o:x.open,v:x.volume}})
 }
 async function tQuotes(syms){
-  var r=await fetch(TRADIER+'/markets/quotes?symbols='+syms,{headers:{'Authorization':'Bearer '+TRADIER_TOKEN,'Accept':'application/json'}})
+  var r=await fetch('https://yahoo-proxy.sgoglanian.workers.dev/tradier/quotes?symbols='+syms)
   var d=await r.json()
   var q=d?.quotes?.quote
   return Array.isArray(q)?q:(q?[q]:[])
