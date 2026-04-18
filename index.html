@@ -407,8 +407,8 @@ tr:hover td{background:#171b22;cursor:pointer}
             4. Save -- the bookmark now lives in your bar<br><br>
             <b style="color:#f0c040">Daily refresh (takes ~10 seconds):</b><br>
             1. Open <a href="https://console.ovtlyr.com" target="_blank" style="color:#4da6ff">console.ovtlyr.com</a> Screener and wait for data to load<br>
-            2. Click the GT Scrape bookmark -> alert confirms copy<br>
-            3. Return here -> paste -> Import
+            2. Click the GT Scrape bookmark — data sends directly to GOGO<br>
+            3. Switch to GOGO — it auto-updates! No paste needed
           </div>
         </div>
         <div style="display:flex;flex-direction:column;gap:7px;min-width:145px">
@@ -2258,75 +2258,7 @@ function hasEarnings(ticker) {
 }
 
 // -- OVTLYR DATA REFRESH ==========================
-const BOOKMARKLET_CODE = `javascript:(function(){
-  // Step 1: Click all Load More buttons to get full list (GT Platform re-sorts on import)
-  function clickLoadMore(attempt){
-    var btns=Array.from(document.querySelectorAll('a.fold_moreBtn'));
-    btns.forEach(function(b){b.click();});
-    if(attempt<6){setTimeout(function(){clickLoadMore(attempt+1);},1200);}
-    else{setTimeout(scrape,1500);}
-  }
-  // Step 3: Scrape all rows
-  function scrape(){
-    var rows=Array.from(document.querySelectorAll('tr.ovtlyr__row'));
-    if(!rows.length){alert('GT Scrape: No rows found. Make sure you are on console.ovtlyr.com/stocks-etfs');return;}
-    var data={};
-    rows.forEach(function(r){
-      var cells=Array.from(r.querySelectorAll('td'));
-      if(cells.length<13)return;
-      var ticker=(cells[1].innerText||'').split('\\n')[0].trim().toUpperCase();
-      if(!ticker||ticker.length>7||ticker==='SYMBOL')return;
-      var sig=parseFloat((cells[4].innerText||'').replace(/[^0-9.-]/g,''))||0;
-      if(!sig)return;
-      // F&G is cells[12]: value like "41.18 (Moving Up)" -> 41.18
-      // Confirmed by inspecting OVTLYR table structure directly
-      var fg = parseFloat((cells[12]?.innerText||'0').replace(/[^0-9.-]/g,''))||0;
-      var vol=parseInt((cells[11].innerText||'0').replace(/,/g,''))||0;
-      var sec=(cells[6].innerText||'').split('/')[0].trim();
-      var nine=(cells[15].innerText||'').trim();
-      if(!data[ticker]||sig>data[ticker].r)data[ticker]={r:sig,fg:fg,v:vol,s:sec,nine:nine};
-    });
-    if(!Object.keys(data).length){alert('GT Scrape: No data found. Try waiting for page to fully load.');return;}
-    var json=JSON.stringify(data);
-    // Show non-blocking notification instead of alert
-    function showNotice(msg) {
-      var n = document.createElement('div');
-      n.style.cssText = 'position:fixed;top:20px;right:20px;z-index:99999;background:#0a0c0f;color:#00d68f;border:2px solid #00d68f;border-radius:8px;padding:14px 18px;font-size:14px;font-weight:600;font-family:monospace;max-width:380px;box-shadow:0 4px 20px rgba(0,0,0,.5)';
-      n.textContent = msg;
-      document.body.appendChild(n);
-      setTimeout(function(){ if(n.parentNode) n.parentNode.removeChild(n); }, 5000);
-    }
-    var count = Object.keys(data).length;
-    // Show a copyable textarea overlay - clipboard blocked by OVTLYR CSP
-    var overlay = document.createElement('div');
-    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.85);z-index:999999;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:monospace';
-    var title = document.createElement('div');
-    title.style.cssText = 'color:#f0c040;font-size:16px;font-weight:700;margin-bottom:12px';
-    title.textContent = '✓ GT Scrape: ' + count + ' tickers — Press Ctrl+A then Ctrl+C to copy, then close';
-    var ta = document.createElement('textarea');
-    ta.value = json;
-    ta.style.cssText = 'width:80%;height:180px;background:#0a0c0f;color:#00d68f;border:2px solid #f0c040;border-radius:6px;padding:10px;font-size:11px;font-family:monospace;resize:none;outline:none';
-    var closeBtn = document.createElement('button');
-    closeBtn.textContent = '✕ Close (after copying)';
-    closeBtn.style.cssText = 'margin-top:12px;padding:8px 20px;background:#f0c040;color:#0a0c0f;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;font-family:monospace';
-    closeBtn.onclick = function(){ document.body.removeChild(overlay); };
-    overlay.appendChild(title);
-    overlay.appendChild(ta);
-    overlay.appendChild(closeBtn);
-    document.body.appendChild(overlay);
-    ta.focus(); ta.select();
-    // Also try clipboard as bonus
-    try { navigator.clipboard.writeText(json).then(function(){ title.textContent = '✓ GT Scrape: ' + count + ' tickers — Copied to clipboard! You can close.'; title.style.color='#00d68f'; }); } catch(e) {}
-  }
-  // Show start indicator
-  var startNote = document.createElement('div');
-  startNote.id = 'gt-scrape-notice';
-  startNote.style.cssText = 'position:fixed;top:20px;right:20px;z-index:99999;background:#0a0c0f;color:#f0c040;border:2px solid #f0c040;border-radius:8px;padding:14px 18px;font-size:14px;font-weight:600;font-family:monospace;box-shadow:0 4px 20px rgba(0,0,0,.5)';
-  startNote.textContent = '⟳ GT Scrape: Loading data...';
-  document.body.appendChild(startNote);
-  // Start immediately
-  clickLoadMore(0);
-})();`
+const BOOKMARKLET_CODE = `javascript:(function(){var uid='rWAji9bQVfbeiCtq3ECoiufHlB53';var worker='https://yahoo-proxy.sgoglanian.workers.dev/ovtlyr-sync';var rows=Array.from(document.querySelectorAll('tr')).filter(function(tr){return tr.querySelectorAll('td').length>10});if(!rows.length){alert('OVTLYR: No data found. Make sure the Screener page is loaded.');return;}var data={};rows.forEach(function(row){var c=Array.from(row.querySelectorAll('td'));var t=c[1]&&c[1].innerText.trim().split(/\s+/)[0];if(!t||t.length>7||!/^[A-Z]/.test(t))return;var r=parseFloat((c[4]&&c[4].innerText.trim().replace(/%|,/g,''))||0)||0;var fg=parseFloat(((c[12]&&c[12].innerText)||'').match(/(\d+\.?\d*)/)?.[1]||0)||0;var s=(c[6]&&c[6].innerText.trim().split('/')[0].trim())||'';var nine=(c[15]&&c[15].innerText.trim())||'';if(r>0)data[t]={r:r,fg:fg,s:s,nine:nine};});var count=Object.keys(data).length;if(!count){alert('No tickers found. Make sure Screener data is visible.');return;}fetch(worker,{method:'POST',headers:{'Content-Type':'application/json','X-UID':uid},body:JSON.stringify({ov:data,importedAt:Date.now(),source:'bookmarklet-v2',count:count})}).then(function(r){return r.json()}).then(function(d){if(d.ok){alert('\u2705 Done! '+count+' tickers synced to GOGO. Switch to GOGO \u2014 it auto-refreshes.');}else{alert('\u26a0\ufe0f Error: '+JSON.stringify(d));}}).catch(function(e){alert('Network error: '+e.message);});})();;`
 
 function copyBookmarklet() {
   // Primary: clipboard API
