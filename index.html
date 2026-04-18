@@ -184,8 +184,8 @@ tr:hover td{background:#171b22;cursor:pointer}
         })
       } catch(e) { console.warn('pending_ov listener error:', e.message) }
       window.FBUID = null
-      const btn = document.getElementById('fb-signin-btn')
-      const info = document.getElementById('fb-user-info')
+      let btn = document.getElementById('fb-signin-btn')
+      let info = document.getElementById('fb-user-info')
       if(btn) btn.style.display = 'flex'
       if(info) info.style.display = 'none'
     }
