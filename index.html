@@ -2900,6 +2900,22 @@ async function loadFromFirebase() {
       }
     }
 
+    // Also check users/{uid}/ov_data (written by Tampermonkey — cross-device sync)
+    try {
+      const ovDirect = await fbLoad('ov_data')
+      if(ovDirect && ovDirect.ov) {
+        const localTs = parseInt(localStorage.getItem('gt_ov_last_savedAt') || '0')
+        if((ovDirect.savedAt || 0) > localTs) {
+          Object.entries(ovDirect.ov).forEach(([k,v]) => { OV[k] = v })
+          localStorage.setItem('gt_ov_data', JSON.stringify(ovDirect))
+          localStorage.setItem('gt_ov_last_savedAt', String(ovDirect.savedAt || Date.now()))
+          const ovEl = document.getElementById('ov-last-update')
+          if(ovEl) ovEl.textContent = 'Last import: ' + new Date(ovDirect.importedAt).toLocaleString() + ' (' + Object.keys(ovDirect.ov).length + ' tickers)'
+          runFilter()
+          console.log('GOGO: Loaded OV from cross-device path — ' + Object.keys(ovDirect.ov).length + ' tickers')
+        }
+      }
+    } catch(ovErr) { console.warn('OV direct load error:', ovErr.message) }
     // Trades
     if(data.trades && Array.isArray(data.trades)) {
       TRADES = data.trades.map(t => ({...t, rolls: Array.isArray(t.rolls) ? t.rolls : []}))
