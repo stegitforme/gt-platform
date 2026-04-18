@@ -150,9 +150,8 @@ tr:hover td{background:#171b22;cursor:pointer}
       if(typeof loadFromFirebase === 'function') loadFromFirebase()
       // Watch for OVTLYR extension sync — auto-imports when extension writes to Firebase
       try {
-        if(typeof window.FBOnValue !== 'function') throw new Error('FBOnValue not ready')
-        const pendingRef = window.FBRef(window.FBDB, 'pending_ov')
-        window.FBOnValue(pendingRef, function(snap) {
+        const pendingRef = ref(db, 'pending_ov')
+        onValue(pendingRef, function(snap) {
           if(!snap || !snap.exists()) return
           const d = snap.val()
           if(!d || !d.ov || !d.importedAt) return
