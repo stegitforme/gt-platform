@@ -157,7 +157,7 @@ tr:hover td{background:#171b22;cursor:pointer}
           const d = snap.val()
           if(!d || !d.ov || !d.importedAt) return
           const stored = JSON.parse(localStorage.getItem('gt_ov_data') || '{}')
-          if(d.savedAt && stored.savedAt && d.savedAt <= stored.savedAt) return
+                // (removed stale guard — always process fresh pending_ov data)
           console.log('GOGO: Extension sync detected — ' + Object.keys(d.ov).length + ' tickers')
           Object.entries(d.ov).forEach(([k,v]) => { if(typeof OV !== 'undefined') OV[k] = v })
           localStorage.setItem('gt_ov_data', JSON.stringify(d))
