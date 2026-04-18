@@ -539,9 +539,9 @@ tr:hover td{background:#171b22;cursor:pointer}
     <div class="card">
       <div class="card-head"><span class="card-title">Account</span></div>
       <div class="card-body">
-        <div class="field"><label>Account Balance $</label><input type="number" id="acct" value="350000" oninput="calc()"></div>
-        <div class="field"><label>Risk Per Trade %</label><input type="number" id="riskpct" value="6" step="0.5" oninput="calc()"></div>
-        <div class="field"><label>Delta (whole number)</label><input type="number" id="delta" value="80" oninput="calc()"></div>
+        <div class="field"><label style="color:#f0c040;font-weight:700">Risk Budget $</label><input type="number" id="risk-budget" value="21000" step="500" oninput="syncRiskBudget();calc()" style="font-size:16px;font-weight:700;color:#f0c040"><div style="font-size:11px;color:#555c6e;margin-top:3px">Calc: $<input type="number" id="acct" value="350000" step="1000" oninput="calcRiskFromPct()" style="width:88px;font-size:11px;padding:2px 4px;display:inline-block"> &times; <input type="number" id="riskpct" value="6" step="0.5" oninput="calcRiskFromPct()" style="width:40px;font-size:11px;padding:2px 4px;display:inline-block">% = <span id="risk-pct-calc" style="color:#8b91a0">$21,000</span></div></div>
+        <div class="field"><label>Trades to plan</label><input type="number" id="risk-n-trades" value="10" min="1" max="50" oninput="calc()"></div>
+        <div class="field"><label>Delta (e.g. 0.77)</label><input type="number" id="delta" value="0.80" step="0.01" min="0.01" max="1.00" oninput="calc()"></div>
       </div>
     </div>
     <div class="card">
@@ -611,6 +611,7 @@ tr:hover td{background:#171b22;cursor:pointer}
         </div>
       </div>
     </div>
+    <table id="atr-scenario-table" style="width:100%;border-collapse:collapse;margin-top:14px;font-family:monospace;font-size:13px;background:#0d1117;border-radius:8px"><tr style="color:#555c6e;font-size:10px"><th style="text-align:left;padding:6px 10px">Stop Scenario</th><th style="padding:6px 10px">Contracts</th><th style="padding:6px 10px">Max Loss</th><th style="padding:6px 10px">Risk/Contract</th></tr><tr><td colspan="4" style="padding:10px;text-align:center;font-size:12px;color:#555c6e">Enter ticker, entry &amp; ATR to see scenarios</td></tr></table>
     <!-- PORTFOLIO RISK SUMMARY -->
     <div class="card" style="margin-bottom:12px">
       <div class="card-head" style="display:flex;align-items:center;justify-content:space-between">
@@ -673,7 +674,7 @@ tr:hover td{background:#171b22;cursor:pointer}
       <span id="total-pnl-display" style="font-size:12px;color:#555c6e"></span>
       <button id="pnl-refresh-btn" class="btn btn-ghost" style="font-size:11px;padding:4px 10px" onclick="refreshAllPnL()">Refresh P&amp;L</button>
       <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px;color:#4da6ff;border-color:rgba(77,166,255,.3)" onclick="fetchStockPricesForTrades()" title="Fetch live stock prices for all open trades">⟳ Stock Prices</button>
-      <select id="tm-sort" onchange="renderTrades()" style="background:#0a0c0f;border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:3px 8px;font-size:11px;color:#8b91a0;outline:none;cursor:pointer;position:relative;z-index:10">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap"><span style="font-size:11px;color:#555c6e;font-weight:600">ATR Stop:</span><button id="atr-btn-half" onclick="setAtrStop(0.5)" class="btn btn-ghost" style="font-size:11px;padding:3px 10px">&#189; ATR</button><button id="atr-btn-1" onclick="setAtrStop(1)" class="btn btn-ghost" style="font-size:11px;padding:3px 10px;background:#1a2332;color:#f0c040;border:1px solid #f0c040">1 ATR</button><button id="atr-btn-2" onclick="setAtrStop(2)" class="btn btn-ghost" style="font-size:11px;padding:3px 10px">2 ATR</button></div><div id="tm-risk-bar" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;padding:8px 12px;background:#0d1117;border-radius:8px;border:1px solid #1e2d3d;font-size:12px;margin-bottom:8px"><span style="color:#555c6e">Budget:</span><span id="tm-budget-total" style="color:#f0c040;font-weight:700">--</span><span style="color:#555c6e">Deployed:</span><span id="tm-deployed" style="color:#ff8c42;font-weight:700">--</span><span style="color:#555c6e">Available:</span><span id="tm-available" style="color:#00d68f;font-weight:700">--</span></div><select id="tm-sort" onchange="renderTrades()" style="background:#0a0c0f;border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:3px 8px;font-size:11px;color:#8b91a0;outline:none;cursor:pointer;position:relative;z-index:10">
         <option value="date-desc">Newest first</option>
         <option value="date-asc">Oldest first</option>
         <option value="pnl-desc">P&amp;L: best first</option>
@@ -1075,6 +1076,23 @@ tr:hover td{background:#171b22;cursor:pointer}
 <script>
 // API key stored in localStorage -- never hardcoded in the public file
 let KEY = localStorage.getItem('gt_api_key') || ''
+let TRADIER_TOKEN = localStorage.getItem('gt_tradier_token') || ''
+const TRADIER = 'https://api.tradier.com/v1'
+async function tBars(sym,days){
+  days=days||100
+  var to=new Date().toISOString().slice(0,10)
+  var fr=new Date(Date.now()-days*864e5).toISOString().slice(0,10)
+  var r=await fetch(TRADIER+'/markets/history?symbol='+sym+'&interval=daily&start='+fr+'&end='+to,{headers:{'Authorization':'Bearer '+TRADIER_TOKEN,'Accept':'application/json'}})
+  var d=await r.json()
+  var b=d?.history?.day||[]
+  return b.map(function(x){return{c:x.close,h:x.high,l:x.low,o:x.open,v:x.volume}})
+}
+async function tQuotes(syms){
+  var r=await fetch(TRADIER+'/markets/quotes?symbols='+syms,{headers:{'Authorization':'Bearer '+TRADIER_TOKEN,'Accept':'application/json'}})
+  var d=await r.json()
+  var q=d?.quotes?.quote
+  return Array.isArray(q)?q:(q?[q]:[])
+}
 
 function checkApiKey() {
   if(KEY) return true
@@ -1138,49 +1156,43 @@ const API_CACHE = {}
 const CACHE_TTL = 5 * 60 * 1000  // 5 minutes
 
 async function apiGet(path, skipCache, silent=false) {
-  if(!KEY) { checkApiKey(); return null }
-  const sep = path.includes('?') ? '&' : '?'
-  
-  // Return cached result if fresh
-  if(!skipCache && API_CACHE[path]) {
-    const age = Date.now() - API_CACHE[path].ts
-    if(age < CACHE_TTL) {
-      setApi('Ready (cached ' + Math.round(age/1000) + 's ago)', 'ok')
-      return API_CACHE[path].data
-    }
+  // Convert Polygon path to Tradier call
+  // Supported: /v2/aggs/ticker/{sym}/range/1/day/{from}/{to}
+  const cacheKey = path
+  if(!skipCache && API_CACHE[cacheKey]) {
+    const age = Date.now() - API_CACHE[cacheKey].ts
+    if(age < CACHE_TTL) { setApi('Ready (cached '+Math.round(age/1000)+'s ago)','ok'); return API_CACHE[cacheKey].data }
   }
-  
-  setApi('Fetching...', 'loading')
+  // Parse Polygon-style path
+  const aggMatch = path.match(/\/v2\/aggs\/ticker\/([^/]+)\/range\/1\/day\/([^/]+)\/([^?]+)/)
+  const snapMatch = path.match(/\/v2\/snapshot.*tickers=([^&]+)/)
+  const refMatch  = path.match(/\/v3\/reference\/tickers\/([^?]+)/)
+  let result = null
   try {
-    const r = await fetch(API + path + sep + 'apiKey=' + KEY)
-    
-    // Handle 429 rate limit with countdown
-    if(r.status === 429) {
-      setApi('Rate limit hit — showing cached data', 'warn')
-      const retry = parseInt(r.headers.get('retry-after') || '12')
-      for(let i = retry; i > 0; i--) {
-        setApi('Rate limited, retrying in ' + i + 's (Polygon: 5 req/min)', 'err')
-        await new Promise(res => setTimeout(res, 1000))
-      }
-      // Retry once after waiting
-      const r2 = await fetch(API + path + sep + 'apiKey=' + KEY)
-      if(!r2.ok) { if(!silent) setApi('API error ' + r2.status, 'err'); return null }
-      const d2 = await r2.json()
-      API_CACHE[path] = { data: d2, ts: Date.now() }
-      setApi('Ready', 'ok')
-      return d2
+    setApi('Fetching...','loading')
+    if(aggMatch) {
+      // Historical bars
+      var sym = aggMatch[1], from = aggMatch[2], to = aggMatch[3].split('?')[0]
+      var days = Math.ceil((new Date(to)-new Date(from))/864e5)+5
+      var bars = await tBars(sym, days)
+      result = {results: bars, ticker: sym, status: 'OK'}
+    } else if(snapMatch) {
+      // Snapshot/quote
+      var syms = snapMatch[1]
+      var quotes = await tQuotes(syms)
+      result = {tickers: quotes.map(function(q){return{ticker:q.symbol,day:{c:q.last,v:q.volume},lastTrade:{p:q.last},prevDay:{c:q.prevclose||q.last}}}), status:'OK'}
+    } else {
+      // Fallback to Polygon for anything else (reference data etc)
+      if(!KEY) return null
+      var sep = path.includes('?')?'&':'?'
+      var r = await fetch(API+path+sep+'apiKey='+KEY)
+      if(!r.ok) { if(!silent) setApi('API error '+r.status,'err'); return null }
+      result = await r.json()
     }
-    
-    if(!r.ok) { if(!silent) setApi('API error ' + r.status, 'err'); return null }
-    const d = await r.json()
-    if(d.status === 'ERROR') { if(!silent) setApi('API: ' + (d.error||d.message||'error'), 'err'); return null }
-    
-    // Cache successful result
-    API_CACHE[path] = { data: d, ts: Date.now() }
-    setApi('Ready', 'ok')
-    return d
+    if(result) { API_CACHE[cacheKey]={data:result,ts:Date.now()}; setApi('Ready','ok') }
+    return result
   } catch(e) {
-    setApi('Network error -- check connection', 'err')
+    if(!silent) setApi('Tradier error: '+e.message,'err')
     return null
   }
 }
@@ -3130,6 +3142,7 @@ function saveRiskSettings() {
   if(r) localStorage.setItem('gt_riskpct', r)
 }
 function loadRiskSettings() {
+  const rb=localStorage.getItem('gt_risk_budget');if(rb){var el=document.getElementById('risk-budget');if(el)el.value=rb}
   const a = localStorage.getItem('gt_acct')
   const r = localStorage.getItem('gt_riskpct')
   if(a) { const el = document.getElementById('acct'); if(el) el.value = a }
@@ -3412,10 +3425,9 @@ function sortPortRisk(col) {
 
 // ── PORTFOLIO RISK SUMMARY ────────────────────────────────────────────────────
 function renderPortfolioRisk() {
-  const acct    = +document.getElementById('acct').value || 350000
-  const rp      = +document.getElementById('riskpct').value || 6
-  const delta   = (+document.getElementById('delta').value || 80) / 100
-  const baseRisk = acct * (rp/100)
+  const baseRisk = +document.getElementById('risk-budget')?.value || +localStorage.getItem('gt_risk_budget') || 21000
+  const delta    = +document.getElementById('delta')?.value || 0.80
+  const acct = baseRisk; const rp = 100
 
   const openTrades = TRADES.filter(t => t.status === 'open')
 
@@ -4538,39 +4550,45 @@ function btDrawChart(r) {
 }
 
 
+function syncRiskBudget(){var rb=+document.getElementById("risk-budget")?.value||0;if(rb>0)localStorage.setItem("gt_risk_budget",rb)}
+function calcRiskFromPct(){var a=+document.getElementById("acct").value||350000,r=+document.getElementById("riskpct").value||6,rb=Math.round(a*r/100);var el=document.getElementById("risk-pct-calc");if(el)el.textContent="$"+rb.toLocaleString();var rbEl=document.getElementById("risk-budget");if(rbEl){rbEl.value=rb;syncRiskBudget()}calc()}
+function setAtrStop(mult){window.GT_ATR_MULT=mult;["half","1","2"].forEach(function(k){var b=document.getElementById("atr-btn-"+k);if(b){b.style.background="";b.style.color="";b.style.border=""}});var key=mult===0.5?"half":String(mult);var a=document.getElementById("atr-btn-"+key);if(a){a.style.background="#1a2332";a.style.color="#f0c040";a.style.border="1px solid #f0c040"}renderPortfolioRisk();updateTmRiskSummary()}
+function updateTmRiskSummary(){var rb=+localStorage.getItem("gt_risk_budget")||+document.getElementById("risk-budget")?.value||21000;var mult=window.GT_ATR_MULT||1;var delta=+document.getElementById("delta")?.value||0.80;var open=TRADES.filter(function(t){return t.status==="open"});var dep=open.reduce(function(s,t){var d=(t.isStock||t.type==="Stock")?1:delta;return s+(t.atr||0)*mult*d*100*(t.cts||1)},0);var avail=Math.max(0,rb-dep);var b=document.getElementById("tm-budget-total");if(b)b.textContent="$"+Math.round(rb).toLocaleString();var d2=document.getElementById("tm-deployed");if(d2)d2.textContent=dep>0?"-$"+Math.round(dep).toLocaleString():"$0";var a=document.getElementById("tm-available");if(a){a.textContent="$"+Math.round(avail).toLocaleString();a.style.color=avail>0?"#00d68f":"#ff4560"}}
 function calc() {
   saveRiskSettings()
-  const acct   = +document.getElementById('acct').value || 350000
-  const rp     = +document.getElementById('riskpct').value || 6
-  const delta  = (+document.getElementById('delta').value || 80) / 100
-  const entry  = +document.getElementById('entry').value
-  const atr    = +document.getElementById('atr').value
-  const optcost= +document.getElementById('optcost').value
-  const ticker = document.getElementById('tkr').value || ''
-
+  const rb      = +document.getElementById('risk-budget')?.value || +localStorage.getItem('gt_risk_budget') || 21000
+  const nTrades = +document.getElementById('risk-n-trades')?.value || 10
+  const delta   = +document.getElementById('delta').value || 0.80
+  const entry   = +document.getElementById('entry').value
+  const atr     = +document.getElementById('atr').value
+  const optcost = +document.getElementById('optcost').value
+  const ticker  = document.getElementById('tkr').value || ''
+  const perTrade = rb / nTrades
   document.getElementById('sz-ticker').textContent = ticker
-
   if(!entry || !atr) return
-
-  const baseRisk = acct * (rp/100)
-  const cts  = Math.floor(baseRisk / (2 * atr * delta * 100))
-  const cap  = cts * (optcost||0) * 100
-  const lossH= 0.5 * atr * delta * 100 * cts
-  const lossF= 2   * atr * delta * 100 * cts
-  const g50  = cap * 0.50
-
-  document.getElementById('m-cts').textContent  = cts
-  document.getElementById('m-cts-s').textContent= '&#948;'+Math.round(delta*100)+' . 2xATR=$'+(2*atr).toFixed(2)
-  document.getElementById('m-cap').textContent  = cap > 0 ? '$'+Math.round(cap).toLocaleString() : '--'
-  document.getElementById('m-cap-s').textContent= optcost > 0 ? '$'+optcost+' x '+cts+' x 100' : 'enter option cost'
-  document.getElementById('m-risk').textContent = '$'+Math.round(baseRisk).toLocaleString()
-  document.getElementById('m-risk-s').textContent= rp+'% of $'+acct.toLocaleString()
-  document.getElementById('m-hl').textContent   = '$'+Math.round(lossH).toLocaleString()
-  document.getElementById('m-fl').textContent   = '$'+Math.round(lossF).toLocaleString()
-  document.getElementById('m-g30').textContent  = g50 > 0 ? '+$'+Math.round(g50).toLocaleString() : '--'
-
+  const rpc   = atr * delta * 100
+  const cts_h = Math.max(1, Math.floor(perTrade / (rpc * 0.5)))
+  const cts_1 = Math.max(1, Math.floor(perTrade / (rpc * 1.0)))
+  const cts_2 = Math.max(1, Math.floor(perTrade / (rpc * 2.0)))
+  const cts   = cts_1
+  const cap   = cts * (optcost||0) * 100
+  const g50   = cap * 0.50
+  var t = document.getElementById('atr-scenario-table')
+  if(t) t.innerHTML = '<tr style="color:#555c6e;font-size:10px"><th style="text-align:left;padding:5px 10px">Stop</th><th style="padding:5px 10px">Contracts</th><th style="padding:5px 10px">Max Loss</th><th style="padding:5px 10px">Risk/Ct</th></tr>'+
+    '<tr style="color:#00d68f"><td style="padding:5px 10px">½ ATR (-$'+(atr*0.5).toFixed(2)+')</td><td style="font-size:16px;font-weight:700;text-align:center">'+cts_h+'</td><td style="text-align:center">-$'+Math.round(perTrade*0.5).toLocaleString()+'</td><td style="text-align:center">$'+Math.round(rpc*0.5)+'</td></tr>'+
+    '<tr style="color:#f0c040;background:#111827"><td style="padding:5px 10px">1 ATR (-$'+(atr*1.0).toFixed(2)+')</td><td style="font-size:16px;font-weight:700;text-align:center">'+cts_1+'</td><td style="text-align:center">-$'+Math.round(perTrade).toLocaleString()+'</td><td style="text-align:center">$'+Math.round(rpc)+'</td></tr>'+
+    '<tr style="color:#ff4560"><td style="padding:5px 10px">2 ATR (-$'+(atr*2.0).toFixed(2)+')</td><td style="font-size:16px;font-weight:700;text-align:center">'+cts_2+'</td><td style="text-align:center">-$'+Math.round(perTrade*2).toLocaleString()+'</td><td style="text-align:center">$'+Math.round(rpc*2)+'</td></tr>'
+  document.getElementById('m-cts').textContent   = cts_1
+  document.getElementById('m-cap').textContent   = cap>0?'$'+Math.round(cap).toLocaleString():'--'
+  document.getElementById('m-cap-s').textContent = optcost>0?'$'+optcost+' x '+cts+' x 100':'enter option cost'
+  document.getElementById('m-risk').textContent  = '$'+Math.round(perTrade).toLocaleString()
+  document.getElementById('m-risk-s').textContent= '$'+Math.round(rb).toLocaleString()+' ÷ '+nTrades+' trades'
+  document.getElementById('m-hl').textContent    = '-$'+Math.round(perTrade*0.5).toLocaleString()
+  document.getElementById('m-fl').textContent    = '-$'+Math.round(perTrade*2).toLocaleString()
+  document.getElementById('m-g30').textContent   = g50>0?'+$'+Math.round(g50).toLocaleString():'--'
   renderLevels(entry, atr)
   renderPortfolioRisk()
+  updateTmRiskSummary()
 }
 
 function renderLevels(entry, atr) {
