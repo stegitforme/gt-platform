@@ -100,9 +100,8 @@ tr:hover td{background:#171b22;cursor:pointer}
 <!-- Firebase SDK -->
 <script type="module">
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js'
-  import { getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js'
+  import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js'
   import { getDatabase, ref, set, get, onValue } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js'
-
   const firebaseConfig = {
     apiKey: "AIzaSyC2gl09aCvefp3iWnOFjO8c5UBg-I3aR-A",
     authDomain: "gogo-trading-81293.firebaseapp.com",
@@ -112,20 +111,22 @@ tr:hover td{background:#171b22;cursor:pointer}
     messagingSenderId: "973675032269",
     appId: "1:973675032269:web:8fbd917ba8a670098f4384"
   }
-
   const app = initializeApp(firebaseConfig)
   const auth = getAuth(app)
   const db = getDatabase(app)
   const provider = new GoogleAuthProvider()
-
-  // Handle redirect result on page load (completes sign-in after Google redirect)
-  getRedirectResult(auth).catch(e => console.warn('Redirect result error:', e))
-
-  // Expose sign-in/out globally
-  window.fbSignIn = () => signInWithRedirect(auth, provider)
+  // Popup first, redirect fallback if blocked
+  window.fbSignIn = async () => {
+    try {
+      await signInWithPopup(auth, provider)
+    } catch(e) {
+      if(e.code === 'auth/popup-blocked' || e.code === 'auth/popup-closed-by-user') {
+        signInWithRedirect(auth, provider)
+      } else { console.warn('Sign-in error:', e.code) }
+    }
+  }
   window.fbSignOut = () => signOut(auth)
-
-  // Auth state — fires automatically on every load if already signed in
+  getRedirectResult(auth).catch(e => { if(e.code !== 'auth/null-user') console.warn('Redirect:', e.code) })
   onAuthStateChanged(auth, user => {
     if(user) {
       window.FBUID = user.uid
@@ -134,17 +135,16 @@ tr:hover td{background:#171b22;cursor:pointer}
       window.FBSet = set
       window.FBGet = get
       window.FBOnValue = onValue
-      // Update header UI
       const signInBtn = document.getElementById('fb-signin-btn')
       const userInfo = document.getElementById('fb-user-info')
       const userName = document.getElementById('fb-user-name')
+      const overlay = document.getElementById('mobile-signin-overlay')
       if(signInBtn) signInBtn.style.display = 'none'
-      var overlay = document.getElementById('mobile-signin-overlay'); if(overlay) overlay.style.display = 'none'
       if(userInfo) userInfo.style.display = 'flex'
       if(userName) userName.textContent = user.displayName || user.email || 'Signed in'
+      if(overlay) overlay.style.display = 'none'
       setApi('Firebase \u00b7 ' + (user.displayName || user.email || 'connected'), 'ok')
       if(typeof loadFromFirebase === 'function') loadFromFirebase()
-      // Real-time OVTLYR sync listener
       try {
         const pendingRef = ref(db, 'pending_ov')
         onValue(pendingRef, function(snap) {
@@ -172,8 +172,6 @@ tr:hover td{background:#171b22;cursor:pointer}
             toast.innerHTML = '\u2705 OVTLYR synced \u2014 ' + cnt + ' tickers<br><span style="font-size:11px;font-weight:400;color:#8b91a0">Screener refreshed</span>'
             document.body.appendChild(toast)
             setTimeout(function(){ toast.style.opacity='0'; setTimeout(function(){ toast.remove() },500) }, 4000)
-            var scBtn = Array.from(document.querySelectorAll('.nav button')).find(function(b){ return b.textContent.trim()==='Screener' })
-            if(scBtn){ scBtn.style.color='#00d68f'; setTimeout(function(){ scBtn.style.color='' },3000) }
           } catch(innerErr){ console.warn('OV import error:', innerErr.message) }
         })
       } catch(e) { console.warn('pending_ov listener error:', e.message) }
