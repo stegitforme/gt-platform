@@ -2925,12 +2925,12 @@ async function loadFromFirebase() {
       const ovDirect = await fbLoad('ov_data')
       if(ovDirect && ovDirect.ov) {
         const localTs = parseInt(localStorage.getItem('gt_ov_last_savedAt') || '0')
-        if((ovDirect.savedAt || 0) > localTs) {
+        if(true || (ovDirect.savedAt || 0) > localTs) { // always load on startup
           Object.entries(ovDirect.ov).forEach(([k,v]) => { OV[k] = v })
           localStorage.setItem('gt_ov_data', JSON.stringify(ovDirect))
           localStorage.setItem('gt_ov_last_savedAt', String(ovDirect.savedAt || Date.now()))
-          const ovEl = document.getElementById('ov-last-update')
-          if(ovEl) ovEl.textContent = 'Last import: ' + new Date(ovDirect.importedAt).toLocaleString() + ' (' + Object.keys(ovDirect.ov).length + ' tickers)'
+          const ovEl2 = document.getElementById('ov-last-update')
+          if(ovEl2) ovEl2.textContent = 'Last import: ' + new Date(ovDirect.importedAt).toLocaleString() + ' (' + Object.keys(ovDirect.ov).length + ' tickers)'
           runFilter()
           console.log('GOGO: Loaded OV from cross-device path — ' + Object.keys(ovDirect.ov).length + ' tickers')
         }
