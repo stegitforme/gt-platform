@@ -1490,7 +1490,7 @@ function renderSectors() {
   document.getElementById('sector-body').innerHTML = SECTORS.map(s => {
     const col = s.p >= 50 ? '#00d68f' : s.p >= 35 ? '#ff8c42' : '#ff4560'
     const bc = s.bull ? '#00d68f' : '#555c6e'
-    const cc = s.c >= 0 ? '#00d68f' : '#ff4560'
+    const cc = s.c >= 0 ? '#00d68f' : '#ff4560';
     return '<div class="sector-row"><div class="sector-name">' + s.n + '</div><div class="sector-track"><div class="sector-fill" style="width:' + s.p + '%;background:' + bc + '"></div></div><div class="sector-pct" style="color:' + col + '">' + s.p.toFixed(1) + '%</div><div class="sector-chg" style="color:' + cc + '">' + (s.c>=0?'+':'') + s.c.toFixed(2) + '%</div></div>'
   }).join('')
 }
@@ -1857,7 +1857,7 @@ async function fetchTQQQSignal() {
         const isCurrent = Math.abs(v - annualVol) <= 2.5
         const bg = isCurrent ? 'background:rgba(240,192,64,.12);' : ''
         const fw = isCurrent ? 'font-weight:700;' : ''
-        const arrow = isCurrent ? ' ◄' : ''
+        const arrow = isCurrent ? ' ◄' : '';
         return '<div style="padding:3px 6px;border-bottom:1px solid rgba(255,255,255,.04);color:#8b91a0;'+bg+fw+'font-size:10px;font-family:SF Mono,monospace">'+v+'%'+arrow+'</div>' +
                '<div style="padding:3px 6px;border-bottom:1px solid rgba(255,255,255,.04);color:'+col+';'+bg+fw+'font-size:10px;font-family:SF Mono,monospace">'+a+'</div>' +
                '<div style="padding:3px 6px;border-bottom:1px solid rgba(255,255,255,.04);color:#555c6e;'+bg+'font-size:10px">'+zone+'</div>'
@@ -1888,7 +1888,7 @@ async function fetchTQQQSignal() {
         const matchesCurrent = Math.abs(v5d - annualVol5dAgo) <= 3 && Math.abs(vnow - annualVol) <= 3
         const bg = matchesCurrent ? 'background:rgba(240,192,64,.12);' : ''
         const fw = matchesCurrent ? 'font-weight:700;' : ''
-        const fc = fires ? '#f0c040' : '#555c6e'
+        const fc = fires ? '#f0c040' : '#555c6e';
         return '<div style="padding:3px 5px;border-bottom:1px solid rgba(255,255,255,.04);color:#8b91a0;'+bg+fw+'font-size:10px;font-family:SF Mono,monospace">'+v5d+'%</div>' +
                '<div style="padding:3px 5px;border-bottom:1px solid rgba(255,255,255,.04);color:#8b91a0;'+bg+fw+'font-size:10px;font-family:SF Mono,monospace">'+vnow+'%</div>' +
                '<div style="padding:3px 5px;border-bottom:1px solid rgba(255,255,255,.04);color:'+fc+';'+bg+fw+'font-size:10px;font-family:SF Mono,monospace">'+rise+'</div>' +
@@ -2051,7 +2051,7 @@ function rebCalc() {
           + '<br><span style="color:#555c6e;font-size:10px">buy $' + Math.round(-delta).toLocaleString() + ' SGOV</span>'
     }
 
-    var inp = 'background:#0a0c0f;border-radius:3px;padding:3px 6px;font-size:11px;font-family:SF Mono,monospace;text-align:right;outline:none;width:88px;'
+    var inp = 'background:#0a0c0f;border-radius:3px;padding:3px 6px;font-size:11px;font-family:SF Mono,monospace;text-align:right;outline:none;width:88px;';
     return '<tr style="border-bottom:1px solid rgba(255,255,255,.04)">'
       + '<td style="padding:6px 12px"><input id="reb-name-'+i+'" value="'+acc.name+'" onblur="rebCalc()"'
       + ' style="background:transparent;border:none;color:#e8eaf0;font-size:12px;width:118px;outline:none"></td>'
@@ -2662,7 +2662,7 @@ function renderTopStrip(scored) {
   var top = scored.slice(0,5)
   chips.innerHTML = top.map(function(s) {
     var sc = Math.round(s.score)
-    var col = sc>=85?'#00d68f':sc>=65?'#f0c040':'#ff8c42'
+    var col = sc>=85?'#00d68f':sc>=65?'#f0c040':'#ff8c42';
     return '<span onclick="goSize(\'' + s.t + '\')" style="cursor:pointer;background:#0d1117;border:1px solid '+col+';border-radius:4px;padding:3px 8px;font-size:11px;display:inline-flex;gap:6px;align-items:center">'
       +'<b style="color:'+col+'">'+s.t+'</b>'
       +'<span style="color:#555c6e">'+sc+'</span>'
@@ -2760,7 +2760,7 @@ function runFilter() {
   var starred = wl.includes(s.t)
   var starBtn = '<button onclick="event.stopPropagation();toggleStar(\'' + s.t + '\')" style="background:none;border:none;cursor:pointer;font-size:14px;padding:0 2px" title="Add to Planner">'+(starred?'⭐':'☆')+'</button>'
   // Plan Trade button
-  var planBtn = '<button onclick="event.stopPropagation();goSize(\'' + s.t + '\')" class="btn btn-gold" style="font-size:10px;padding:3px 8px;white-space:nowrap">Plan Trade →</button>'
+  var planBtn = '<button onclick="event.stopPropagation();goSize(\'' + s.t + '\')" class="btn btn-gold" style="font-size:10px;padding:3px 8px;white-space:nowrap">Plan Trade →</button>';
   return '<tr style="cursor:pointer" onclick="goSize(\'' + s.t + '\')">' +
     '<td class="dim" style="width:24px;font-size:10px">' + (i+1) + '</td>' +
     '<td style="font-weight:700">' + s.t + '</td>' +
@@ -3435,7 +3435,7 @@ function renderClosedTrades() {
   const rows = filtered.map(t => {
     const pnlColor = t.pnl > 0 ? '#00d68f' : '#ff4560'
     const pnlStr = (t.pnl > 0 ? '+' : '') + '$' + Math.round(t.pnl).toLocaleString()
-    const pnlPctStr = (t.pnlPct > 0 ? '+' : '') + t.pnlPct.toFixed(1) + '%'
+    const pnlPctStr = (t.pnlPct > 0 ? '+' : '') + t.pnlPct.toFixed(1) + '%';
     return '<div style="display:grid;grid-template-columns:130px 80px 90px 90px 1fr 90px 90px 80px;gap:6px;padding:8px 6px;border-bottom:1px solid rgba(255,255,255,.04);font-size:11px;align-items:center">' +
       '<div style="font-family:\'SF Mono\',monospace;font-weight:600;color:#f0c040">' + t.display + '</div>' +
       '<div style="color:#555c6e">' + t.cts + ' ct' + (t.cts>1?'s':'') + '</div>' +
@@ -4583,7 +4583,7 @@ function btRender(r) {
     '<thead><tr>'+thL+'Strategy</th>'+th+'CAGR</th>'+th+'Total Return</th>'+th+'Max Drawdown</th>'+th+'Time UW</th>'+th+'Sharpe</th>'+th+'$10K Today</th></tr></thead>'
     +'<tbody>'+rows.map(({n,m,bold})=>{
       const fw=bold?'font-weight:600':''; const tc=bold?'color:#f0c040':''
-      const td=(v,c)=>'<td style="padding:9px 12px;text-align:right;border-bottom:1px solid rgba(255,255,255,.04);color:'+c+';'+fw+'">'+v+'</td>'
+      const td=(v,c)=>'<td style="padding:9px 12px;text-align:right;border-bottom:1px solid rgba(255,255,255,.04);color:'+c+';'+fw+'">'+v+'</td>';
       return '<tr><td style="padding:9px 12px;border-bottom:1px solid rgba(255,255,255,.04);'+fw+';'+tc+'">'+n+'</td>'
         +td(pct(m.cagr),col(m.cagr))+td(pct(m.tot),col(m.tot))
         +td(pct(m.maxDD),col(m.maxDD))+td((m.tuw*100).toFixed(1)+'%','#e8eaf0')
@@ -4764,7 +4764,7 @@ function normalizeSector(s) {
 }
 function getSector(sym) {
   var d = OV[sym] || OV[rootTicker(sym)]
-  var s = d?.s || SECTOR_FALLBACK[sym] || SECTOR_FALLBACK[rootTicker(sym)] || '—'
+  var s = d?.s || SECTOR_FALLBACK[sym] || SECTOR_FALLBACK[rootTicker(sym)] || '—';
   return normalizeSector(s)
 }
 
@@ -4855,7 +4855,7 @@ function renderOpenTable() {
     sb.innerHTML = Object.entries(sectorTotals).sort(function(a,b){return b[1]-a[1]}).map(function(e) {
       var pct = totalRisk>0?Math.round(e[1]/totalRisk*100):0
       var col = pct>40?'#ff4560':pct>25?'#ff8c42':'#8b91a0'
-      var warn = pct>40?' ⚠️ HIGH':pct>25?' ⚠️ ELEVATED':''
+      var warn = pct>40?' ⚠️ HIGH':pct>25?' ⚠️ ELEVATED':'';
       return '<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid #0d1117">'+
         '<span style="color:#e8eaf0">'+e[0]+warn+'</span>'+
         '<span><b style="color:'+col+'">$'+Math.round(e[1]).toLocaleString()+'</b> <span style="color:#555c6e">('+pct+'%)</span></span>'+
@@ -5427,7 +5427,7 @@ function renderInternalResults(results, filtered) {
   var topStrip = document.getElementById('int-top-strip')
   if(topChips && results.length) {
     topChips.innerHTML = results.slice(0,5).map(function(r) {
-      var col = r.score.total>=80?'#00d68f':r.score.total>=60?'#f0c040':'#ff8c42'
+      var col = r.score.total>=80?'#00d68f':r.score.total>=60?'#f0c040':'#ff8c42';
       return '<span onclick="goSize(''+r.sym+'')" style="cursor:pointer;background:#0d1117;border:1px solid '+col+';border-radius:4px;padding:3px 8px;font-size:11px;display:inline-flex;gap:6px;align-items:center">'+
         '<b style="color:'+col+'">'+r.sym+'</b>'+
         '<span style="color:#555c6e">'+r.score.total+'</span>'+
@@ -5954,7 +5954,7 @@ function clearAllTrades() {
 }
 
 function mkMini(label, val, col) {
-  const c = col==='g'?'#00d68f':col==='r'?'#ff4560':col==='o'?'#ff8c42':'#e8eaf0'
+  const c = col==='g'?'#00d68f':col==='r'?'#ff4560':col==='o'?'#ff8c42':'#e8eaf0';
   return '<div class="metric" style="padding:8px 10px"><div class="metric-label">'+label+'</div><div class="metric-value" style="font-size:14px;color:'+c+'">'+val+'</div></div>'
 }
 
@@ -6910,7 +6910,7 @@ async function fetchLeapsData() {
       ]
       const passing = checks.filter(c=>c.ok).length
       const allGo = passing === checks.length
-      const goColor = allGo ? '#00d68f' : passing>=3 ? '#f0c040' : '#ff8c42'
+      const goColor = allGo ? '#00d68f' : passing>=3 ? '#f0c040' : '#ff8c42';
       return '<div style="background:#111318;border:1px solid '+(allGo?'rgba(0,214,143,.25)':'rgba(255,255,255,.07)')+';border-radius:8px;padding:14px">' +
         '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">' +
           '<span style="font-family:SF Mono,monospace;font-weight:700;font-size:18px;color:#f0c040">'+r.ticker+'</span>' +
@@ -6996,7 +6996,7 @@ function renderAnalytics() {
   document.getElementById('an-ticker-chart').innerHTML = tickerData.map(([ticker,d])=>{
     const pct = Math.abs(d.pnl)/maxPnl*100
     const col = d.pnl>=0 ? '#00d68f' : '#ff4560'
-    const wr = d.count ? (d.wins/d.count*100).toFixed(0)+'%' : '--'
+    const wr = d.count ? (d.wins/d.count*100).toFixed(0)+'%' : '--';
     return '<div style="display:grid;grid-template-columns:55px 1fr 70px 35px;gap:6px;align-items:center;margin-bottom:5px">' +
       '<div style="font-family:SF Mono,monospace;font-size:11px;font-weight:600;color:#f0c040;text-overflow:ellipsis;overflow:hidden;white-space:nowrap">'+ticker+'</div>' +
       '<div style="background:rgba(255,255,255,.05);border-radius:2px;height:14px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+col+';border-radius:2px;transition:width .3s"></div></div>' +
@@ -7019,7 +7019,7 @@ function renderAnalytics() {
   const maxMPnl = Math.max(...monthData.map(([,d])=>Math.abs(d.pnl)), 1)
   document.getElementById('an-month-chart').innerHTML = monthData.map(([,d])=>{
     const pct=Math.abs(d.pnl)/maxMPnl*100
-    const col=d.pnl>=0?'#00d68f':'#ff4560'
+    const col=d.pnl>=0?'#00d68f':'#ff4560';
     return '<div style="display:grid;grid-template-columns:60px 1fr 75px;gap:6px;align-items:center;margin-bottom:5px">' +
       '<div style="font-size:11px;color:#8b91a0;white-space:nowrap">'+d.label+'</div>' +
       '<div style="background:rgba(255,255,255,.05);border-radius:2px;height:14px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+col+';border-radius:2px"></div></div>' +
@@ -7088,7 +7088,7 @@ function renderAnalytics() {
     holdEl.innerHTML = bData.map(b=>{
       const pct = b.count/maxCount*100
       const wr = b.count ? Math.round(b.wins/b.count*100) : 0
-      const col = wr>=60?'#00d68f':wr>=40?'#f0c040':'#ff4560'
+      const col = wr>=60?'#00d68f':wr>=40?'#f0c040':'#ff4560';
       return '<div style="display:grid;grid-template-columns:50px 1fr 30px 35px;gap:6px;align-items:center;margin-bottom:6px">' +
         '<div style="font-size:11px;color:#8b91a0">'+b.l+'</div>' +
         '<div style="background:rgba(255,255,255,.05);border-radius:2px;height:18px;overflow:hidden;position:relative">' +
@@ -7117,7 +7117,7 @@ function renderAnalytics() {
     holdPnlEl.innerHTML = '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">' +
       b2.map(b=>{
         const wr = b.count ? Math.round(b.wins/b.count*100) : 0
-        const col = wr>=60?'#00d68f':wr>=40?'#f0c040':'#ff4560'
+        const col = wr>=60?'#00d68f':wr>=40?'#f0c040':'#ff4560';
         return '<div style="background:#0a0c0f;border-radius:6px;padding:10px;text-align:center">' +
           '<div style="font-size:10px;color:#555c6e;margin-bottom:6px;white-space:pre">'+b.l+'</div>' +
           '<div style="font-size:18px;font-weight:700;color:#4da6ff">'+b.count+'</div>' +
@@ -7138,7 +7138,7 @@ function renderAnalytics() {
     '<thead><tr>'+th('Trade')+th('Closed')+th('Qty')+th('Cost/ct')+th('P&L')+th('P&L %')+th('Hold')+'</tr></thead>' +
     '<tbody>' + sorted.map(t=>{
       const hold = t.dateAcq&&t.dateSold ? Math.round((new Date(t.dateSold.replace(/-/g,' '))-new Date(t.dateAcq.replace(/-/g,' ')))/864e5)+'d' : '--'
-      const col = t.pnl>=0?'#00d68f':'#ff4560'
+      const col = t.pnl>=0?'#00d68f':'#ff4560';
       return '<tr>'+
         td('<span style="font-family:SF Mono,monospace;font-weight:600;color:#f0c040">'+(t.ticker||t.display||'?')+'</span>')+
         td(t.dateSold||t.dateAcq||'--','#555c6e')+
