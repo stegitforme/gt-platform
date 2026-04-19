@@ -1162,7 +1162,7 @@ async function tQuotes(syms){
 
 function checkApiKey() {
   if(KEY) return true
-  document.getElementById('setup-overlay').style.display = 'flex'
+  document.getElementById('setup-overlay').style.display = 'flex';
   return false
 }
 
@@ -2144,7 +2144,7 @@ function renderScrWatchlist() {
   if(!el) return
   if(cnt) cnt.textContent = SCR_WATCHLIST.length + ' ticker' + (SCR_WATCHLIST.length!==1?'s':'')
   if(!SCR_WATCHLIST.length) {
-    el.innerHTML = '<div style="font-size:12px;color:#555c6e;text-align:center;padding:16px">Star tickers above to add them here</div>'
+    el.innerHTML = '<div style="font-size:12px;color:#555c6e;text-align:center;padding:16px">Star tickers above to add them here</div>';
     return
   }
   el.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px">' +
@@ -2572,7 +2572,7 @@ async function loadOVDataFromGitHub() {
     Object.entries(saved.ov).forEach(([k,v]) => { OV[k] = v })
     localStorage.setItem('gt_ov_data', JSON.stringify(saved))
     const el = document.getElementById('ov-last-update')
-    if(el) el.textContent = 'Last import: ' + saved.importedAt + ' (cloud)'
+    if(el) el.textContent = 'Last import: ' + saved.importedAt + ' (cloud)';
     return true
   } catch(e) {
     return false
@@ -2721,7 +2721,7 @@ function runFilter() {
   const tbody = document.getElementById('scr-body')
 
   if(!scored.length) {
-    tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:24px;color:#555c6e">No tickers match filters</td></tr>'
+    tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:24px;color:#555c6e">No tickers match filters</td></tr>';
     return
   }
 
@@ -3378,7 +3378,7 @@ function ctFilterTrades(trades) {
     if(fv) from = new Date(fv)
     if(tv) { to = new Date(tv); to.setHours(23,59,59) }
   }
-  if(!from && !to) return trades  // 'all'
+  if(!from && !to) return trades  // 'all';
   return trades.filter(t => {
     const d = new Date(t.dateSold?.replace(/-/g,' ') || t.dateAcq?.replace(/-/g,' '))
     if(isNaN(d)) return true
@@ -3396,7 +3396,7 @@ function renderClosedTrades() {
 
   if(!CLOSED_TRADES.length) {
     listEl.innerHTML = '<div style="text-align:center;padding:32px;color:#555c6e;font-size:13px">No closed trades yet — paste Fidelity history above</div>'
-    if(countEl) countEl.textContent = '0 closed trades'
+    if(countEl) countEl.textContent = '0 closed trades';
     return
   }
 
@@ -3580,7 +3580,7 @@ function renderPortfolioRisk() {
   const bodyEl  = document.getElementById('port-risk-body')
   if(!openTrades.length) {
     if(emptyEl) emptyEl.style.display = 'block'
-    if(bodyEl)  bodyEl.style.display  = 'none'
+    if(bodyEl)  bodyEl.style.display  = 'none';
     return
   }
   if(emptyEl) emptyEl.style.display = 'none'
@@ -4208,7 +4208,7 @@ function tenxRender() {
   const listEl = document.getElementById('tenx-list')
   if(!listEl) return
   if(!TENX.length) {
-    listEl.innerHTML = '<div style="text-align:center;padding:40px;color:#555c6e">No tickers yet — click + Add Ticker</div>'
+    listEl.innerHTML = '<div style="text-align:center;padding:40px;color:#555c6e">No tickers yet — click + Add Ticker</div>';
     return
   }
 
@@ -4604,7 +4604,7 @@ function btRender(r) {
       const guardN = guardByYear[y] || 0
       const guardCell = guardN > 0
         ? '<td style="padding:7px 12px;text-align:right;border-bottom:1px solid rgba(255,255,255,.04);color:#f0c040;font-weight:600">⚡ '+guardN+'x</td>'
-        : '<td style="padding:7px 12px;text-align:right;border-bottom:1px solid rgba(255,255,255,.04);color:#333a4a">—</td>'
+        : '<td style="padding:7px 12px;text-align:right;border-bottom:1px solid rgba(255,255,255,.04);color:#333a4a">—</td>';
       return '<tr><td style="padding:7px 12px;border-bottom:1px solid rgba(255,255,255,.04);color:#555c6e">'+y+'</td>'
         +td(pct(r.stratM.ann[y]),col(r.stratM.ann[y]))+td(pct(r.tqqqM.ann[y]),col(r.tqqqM.ann[y]))
         +td(pct(r.qqqM.ann[y]),col(r.qqqM.ann[y]))+td(pct(r.spyM.ann[y]),col(r.spyM.ann[y]))+guardCell+'</tr>'
@@ -4623,7 +4623,7 @@ function btRender(r) {
       const td=(v,c)=>'<td style="padding:7px 12px;text-align:right;border-bottom:1px solid rgba(255,255,255,.04);color:'+c+'">'+v+'</td>'
       const guardCell = s.guardFired
         ? '<td style="padding:7px 12px;text-align:right;border-bottom:1px solid rgba(255,255,255,.04);color:#f0c040;font-weight:700">⚡ FIRED</td>'
-        : '<td style="padding:7px 12px;text-align:right;border-bottom:1px solid rgba(255,255,255,.04);color:#333a4a">—</td>'
+        : '<td style="padding:7px 12px;text-align:right;border-bottom:1px solid rgba(255,255,255,.04);color:#333a4a">—</td>';
       return '<tr style="'+(s.guardFired?'background:rgba(240,192,64,.04)':'')+'"><td style="padding:7px 12px;border-bottom:1px solid rgba(255,255,255,.04);color:#555c6e">'
         +s.date.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+'</td>'
         +td('$'+s.qqqPrice.toFixed(2),'#e8eaf0')+td('$'+s.ma.toFixed(2),'#555c6e')
@@ -4759,7 +4759,7 @@ function rootTicker(raw) {
 var SECTOR_FALLBACK = {'LUNR':'Space','VRT':'Tech','GLW':'Tech','SMCI':'Tech','DELL':'Tech','HPE':'Tech','CRWD':'Tech','PANW':'Tech','ZS':'Tech','ANET':'Tech','CDNS':'Tech','SNPS':'Tech'}
 var SECTOR_NORMALIZE = {'Technology':'Tech','Communications':'Communication','Consumer Discretionary':'Discretionary','Consumer Staples':'Staples','Health Care':'Healthcare','Real Estate':'REIT'}
 function normalizeSector(s) {
-  if(!s||s==='—') return '—'
+  if(!s||s==='—') return '—';
   return SECTOR_NORMALIZE[s] || s
 }
 function getSector(sym) {
@@ -4876,7 +4876,7 @@ function renderCandidateTable() {
   var tbody = document.getElementById("pl-cand-body")
   if(!tbody) return
   if(!PLANNER_CANDIDATES.length){
-    tbody.innerHTML="<tr><td colspan='10' style='padding:12px;text-align:center;color:#555c6e'>Star stocks in Screener or add a ticker above</td></tr>"
+    tbody.innerHTML="<tr><td colspan='10' style='padding:12px;text-align:center;color:#555c6e'>Star stocks in Screener or add a ticker above</td></tr>";
     return
   }
   var defaultRisk = +document.getElementById("pl-default-risk")?.value || 5500
@@ -4907,7 +4907,7 @@ function renderCandidateTable() {
         ? "<span style='color:#00d68f;font-size:11px'>✅ fits</span>"
         : fits && concentrated
           ? "<span style='color:#ff8c42;font-size:11px'>⚠️ sector</span>"
-          : "<span style='color:#ff4560;font-size:11px'>❌ over</span>"
+          : "<span style='color:#ff4560;font-size:11px'>❌ over</span>";
     return "<tr style='border-bottom:1px solid #0d1117'>"+
       "<td style='padding:5px 10px;font-weight:600'>"+sym+"</td>"+
       "<td style='padding:5px 4px;color:#8b91a0;font-size:11px'>"+sector+"</td>"+
@@ -5397,7 +5397,7 @@ function renderInternalResults(results, filtered) {
   var tbody = document.getElementById('int-body')
   if(!tbody) return
   if(!results || !results.length) {
-    tbody.innerHTML = '<tr><td colspan="11" style="padding:20px;text-align:center;color:#555c6e">No results — click "Run Screen" to score tickers</td></tr>'
+    tbody.innerHTML = '<tr><td colspan="11" style="padding:20px;text-align:center;color:#555c6e">No results — click "Run Screen" to score tickers</td></tr>';
     return
   }
   var display = results.slice(0, 100)
@@ -5562,7 +5562,7 @@ async function fetchTicker(ticker) {
 
   if(!d || !d.results || d.results.length < 15) {
     st.textContent = 'No data for ' + ticker + ' -- check ticker symbol'
-    st.style.color = '#ff4560'
+    st.style.color = '#ff4560';
     return
   }
 
@@ -5660,7 +5660,7 @@ async function fetchOptions(ticker) {
 
     const d = await apiGet(url)
     if(!d || !d.results || !d.results.length) {
-      ol.textContent = 'No options found for ' + ticker + ' ' + expiryISO + '. Verify expiry date or check Options plan.'
+      ol.textContent = 'No options found for ' + ticker + ' ' + expiryISO + '. Verify expiry date or check Options plan.';
       return
     }
 
@@ -5683,7 +5683,7 @@ async function fetchOptions(ticker) {
     }
 
     if(!best) {
-      ol.innerHTML = 'No contracts with data found near ATM. Try a different expiry.'
+      ol.innerHTML = 'No contracts with data found near ATM. Try a different expiry.';
       return
     }
 
@@ -5995,7 +5995,7 @@ function renderTrades() {
       '<div style="text-align:center;padding:40px;color:#555c6e">' +
       '<div style="font-size:26px;margin-bottom:10px">&#128203;</div>' +
       '<div style="font-size:13px;font-weight:500;color:#8b91a0">No trades yet</div>' +
-      '<div style="font-size:11px;margin-top:4px">Click "+ New Trade" or use Position Sizer and click "Save as Trade"</div></div>'
+      '<div style="font-size:11px;margin-top:4px">Click "+ New Trade" or use Position Sizer and click "Save as Trade"</div></div>';
     return
   }
 
@@ -6572,7 +6572,7 @@ function renderPortfolio() {
     if(search && !p.t.toLowerCase().includes(search) && !(p.desc||'').toLowerCase().includes(search)) return false
     // View filter
     if(PORT_VIEW === 'gt')  return p.gt === true  || p.type === 'option'
-    if(PORT_VIEW === 'lt')  return p.gt === false && p.type !== 'option'
+    if(PORT_VIEW === 'lt')  return p.gt === false && p.type !== 'option';
     return true  // 'all'
   })
   
@@ -6615,7 +6615,7 @@ function renderPortfolio() {
   } catch(e) {}
 
   if(!positions.length) {
-    document.getElementById('port-body').innerHTML = '<div style="padding:20px;text-align:center;color:#555c6e;font-size:12px">No positions' + (search ? ' matching "' + search + '"' : '') + '</div>'
+    document.getElementById('port-body').innerHTML = '<div style="padding:20px;text-align:center;color:#555c6e;font-size:12px">No positions' + (search ? ' matching "' + search + '"' : '') + '</div>';
     return
   }
 
@@ -6631,7 +6631,7 @@ function renderPortfolio() {
     const typeTag = p.type === 'option' ? '<span style="font-size:9px;background:rgba(77,166,255,.15);color:#4da6ff;padding:1px 4px;border-radius:3px;margin-left:4px">OPT</span>' : '<span style="font-size:9px;background:rgba(0,214,143,.1);color:#00d68f;padding:1px 4px;border-radius:3px;margin-left:4px">EQ</span>'
     if(!p || !p.raw) return ''
     if(!p || !p.raw) return ''
-    if(!p || !p.raw) return ''
+    if(!p || !p.raw) return '';
     return '<div class="pos-row" onclick="goSize(\'' + p.raw.replace(/^-/,'').split(/[0-9]/)[0] + '\')">' +
       '<div style="width:6px;height:6px;border-radius:50%;background:' + dot + ';flex-shrink:0;margin-right:4px"></div>' +
       (p.gt === false ? '<div title="Long-term hold (click to mark as GT)" onclick="event.stopPropagation();tagPosition(\'' + p.raw + '\',true)" style="width:14px;height:14px;border-radius:3px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);cursor:pointer;flex-shrink:0;margin-right:4px;display:flex;align-items:center;justify-content:center"><span style="font-size:7px;color:#555c6e">LT</span></div>' :
@@ -6671,7 +6671,7 @@ function initPlatform() {
     if(savedDelta) { const el=document.getElementById('delta'); if(el) el.value=savedDelta }
     if(!KEY) {
       const overlay = document.getElementById('setup-overlay')
-      if(overlay) overlay.style.display = 'flex'
+      if(overlay) overlay.style.display = 'flex';
       return
     }
     loadPortfolioData()
