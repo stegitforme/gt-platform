@@ -813,7 +813,7 @@ tr:hover td{background:#171b22;cursor:pointer}
       <button class="btn btn-ghost" style="width:auto;font-size:11px;padding:5px 11px" onclick="document.getElementById('fidelity-closed-form').style.display=document.getElementById('fidelity-closed-form').style.display==='none'?'block':'none'">⬇ Paste from Fidelity</button>
       <span id="closed-trade-count" style="font-size:12px;color:#555c6e">0 closed trades</span>
       <span id="closed-pnl-summary" style="font-size:12px;color:#555c6e"></span>
-      <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px;margin-left:auto;color:#ff4560;border-color:rgba(255,69,96,.3)" onclick="if(confirm('Clear all closed trades?')){CLOSED_TRADES=[];saveClosedTrades();renderClosedTrades()}">Clear all</button>
+      <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px;margin-left:auto;color:#ff4560;border-color:rgba(255,69,96,.3)" onclick="if(confirm('Clear all closed trades?')){CLOSED_TRADES=[];saveClosedTrades();fbAutoSave(1500);renderClosedTrades()}">Clear all</button>
     </div>
     <!-- Date filter bar -->
     <div style="display:flex;align-items:center;gap:6px;margin-bottom:14px;flex-wrap:wrap;padding:8px 12px;background:#111318;border-radius:8px;border:1px solid rgba(255,255,255,.06)">
@@ -3084,6 +3084,7 @@ async function saveAllToFirebase() {
   const payload = {
     ov_data:     { ov: OV, importedAt: new Date().toISOString() },
     trades:      TRADES,
+    closed_trades: CLOSED_TRADES,
     reb_accounts:REB_ACCOUNTS,
     risk: { acct: localStorage.getItem('gt_acct'), riskpct: localStorage.getItem('gt_riskpct'), budget: localStorage.getItem('gt_risk_budget'), n_trades: localStorage.getItem('gt_risk_n_trades'), delta: localStorage.getItem('gt_risk_delta'), atr_mult: window.GT_ATR_MULT||1 },
     watchlist: JSON.parse(localStorage.getItem('gt_scr_watchlist') || '[]'),
