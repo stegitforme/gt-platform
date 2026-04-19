@@ -4430,7 +4430,10 @@ async function btFetch(ticker, fromMs) {
   const bars = []
   for(let i=0;i<days_arr.length;i++) {
     const b = days_arr[i]
-    if(b && b.close != null) bars.push({date:new Date(b.date), close:b.close})
+    if(b && b.close != null) {
+      const p = b.date.split('-')
+      bars.push({date:new Date(+p[0], +p[1]-1, +p[2]), close:b.close})
+    }
   }
   return bars
 }
