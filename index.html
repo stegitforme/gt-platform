@@ -559,7 +559,7 @@ tr:hover td{background:#171b22;cursor:pointer}
 </div>
 <div class="card" style="margin-bottom:12px">
   <div class="card-head" style="display:flex;justify-content:space-between;align-items:center">
-    <span class="card-title">Open Positions — Deployed Risk @ 1 ATR</span>
+    <span class="card-title">Open Positions — <span style="color:#f0c040">Planning Risk @ 1 ATR</span></span>
     <span id="pl-sector-toggle" onclick="toggleSectorView()" style="font-size:11px;color:#4da6ff;cursor:pointer">by sector</span>
   </div>
   <div class="card-body" style="padding:0">
@@ -572,7 +572,7 @@ tr:hover td{background:#171b22;cursor:pointer}
           <th style="padding:6px 4px;text-align:right">Cts</th>
           <th style="padding:6px 4px;text-align:right">ATR</th>
           <th style="padding:6px 4px;text-align:right">Delta</th>
-          <th style="padding:6px 4px;text-align:right">Risk@1ATR</th>
+          <th style="padding:6px 4px;text-align:right" title="ATR × delta × 100 × contracts">Risk@1ATR (Plan)</th>
         </tr></thead>
         <tbody id="pl-open-body"><tr><td colspan="7" style="padding:12px;text-align:center;color:#555c6e">Loading positions...</td></tr></tbody>
         <tfoot><tr style="border-top:1px solid #1e2d3d;font-weight:700">
@@ -592,7 +592,7 @@ tr:hover td{background:#171b22;cursor:pointer}
       <input type="number" id="pl-default-risk" value="5500" step="100" style="width:80px;font-size:12px;padding:3px 6px" oninput="plannerCalc()">
       <span style="font-size:11px;color:#555c6e">Delta</span>
       <input type="number" id="pl-default-delta" value="0.80" step="0.01" min="0.01" max="1" style="width:55px;font-size:12px;padding:3px 6px" oninput="plannerCalc()">
-      <button onclick="refreshCandidateATRs()" class="btn btn-ghost" style="font-size:11px;padding:3px 10px">↻ Refresh ATR</button>
+      <button onclick="refreshCandidateATRs()" class="btn btn-ghost" style="font-size:11px;padding:3px 10px">↻ Refresh ATR</button> <span id="pl-atr-updated" style="font-size:10px;color:#555c6e"></span>
     </div>
   </div>
   <div class="card-body" style="padding:0">
@@ -4672,9 +4672,16 @@ var PLANNER_SECTOR_VIEW = false
 function rootTicker(raw) {
   return (raw || "").split(" ")[0].replace(/[$]/g,"").toUpperCase()
 }
+var SECTOR_FALLBACK = {'LUNR':'Space','VRT':'Tech','GLW':'Tech','SMCI':'Tech','DELL':'Tech','HPE':'Tech','CRWD':'Tech','PANW':'Tech','ZS':'Tech','ANET':'Tech','CDNS':'Tech','SNPS':'Tech'}
+var SECTOR_NORMALIZE = {'Technology':'Tech','Communications':'Communication','Consumer Discretionary':'Discretionary','Consumer Staples':'Staples','Health Care':'Healthcare','Real Estate':'REIT'}
+function normalizeSector(s) {
+  if(!s||s==='—') return '—'
+  return SECTOR_NORMALIZE[s] || s
+}
 function getSector(sym) {
   var d = OV[sym] || OV[rootTicker(sym)]
-  return d?.s || "—"
+  var s = d?.s || SECTOR_FALLBACK[sym] || SECTOR_FALLBACK[rootTicker(sym)] || '—'
+  return normalizeSector(s)
 }
 
 // ── PLANNER INIT ─────────────────────────────────────────────────────────────
@@ -4707,35 +4714,68 @@ function renderOpenTable() {
   if(!open.length){tbody.innerHTML="<tr><td colspan='7' style='padding:12px;text-align:center;color:#555c6e'>No open trades</td></tr>";return}
   var defaultDelta = 0.80
   var sectorTotals = {}
-  var rows = open.map(function(t) {
+  var tickerGroups = {}
+  // First pass — group by root ticker
+  open.forEach(function(t) {
     var sym = rootTicker(t.ticker)
-    var sector = getSector(sym)
-    var delta = t.delta || defaultDelta
-    var atr = t.atr || 0
-    var risk = atr * delta * 100 * (t.cts || 1)
-    if(sector !== "—") sectorTotals[sector] = (sectorTotals[sector]||0) + risk
-    var dteStr = ""
-    if(t.desc) { var d=Math.round((new Date(t.desc.replace(/-/g," "))-new Date())/864e5); dteStr=isNaN(d)?"":(" <span style='color:"+(d<=7?"#ff4560":d<=21?"#ff8c42":"#555c6e")+";font-size:10px'>"+d+"d</span>") }
-    return "<tr style='border-bottom:1px solid #0d1117'>"+
-      "<td style='padding:5px 10px;font-weight:600'>"+sym+"</td>"+
-      "<td style='padding:5px 4px;color:#8b91a0;font-size:11px'>"+sector+"</td>"+
-      "<td style='padding:5px 4px;color:#555c6e;font-size:11px'>"+(t.desc||"—")+dteStr+"</td>"+
-      "<td style='padding:5px 4px;text-align:right'>"+(t.cts||0)+"</td>"+
-      "<td style='padding:5px 4px;text-align:right'>$"+atr.toFixed(2)+"</td>"+
-      "<td style='padding:5px 4px;text-align:right'>"+(delta.toFixed?delta.toFixed(2):delta)+"</td>"+
-      "<td style='padding:5px 4px;text-align:right;color:#ff8c42;font-weight:600'>-$"+Math.round(risk).toLocaleString()+"</td>"+
-      "</tr>"
+    if(!tickerGroups[sym]) tickerGroups[sym] = []
+    tickerGroups[sym].push(t)
   })
-  tbody.innerHTML = rows.join("")
-  // Sector breakdown
-  var sb = document.getElementById("pl-sector-breakdown")
+  var rows = []
+  var totalRisk = 0
+  Object.keys(tickerGroups).sort().forEach(function(sym) {
+    var group = tickerGroups[sym]
+    var sector = getSector(sym)
+    var groupRisk = 0
+    // Individual rows for each contract
+    group.forEach(function(t) {
+      var delta = t.delta || defaultDelta
+      var atr = t.atr || 0
+      var risk = atr * delta * 100 * (t.cts||1)
+      groupRisk += risk
+      totalRisk += risk
+      if(sector!=='—') sectorTotals[sector] = (sectorTotals[sector]||0) + risk
+      var strike = t.strike || ''
+      var optType = t.type==='Put'?'P':'C'
+      var displayTicker = sym + (strike?' '+strike+optType:'')
+      var dteStr = ''
+      if(t.desc){var d=Math.round((new Date(t.desc.replace(/-/g,' '))-new Date())/864e5);if(!isNaN(d))dteStr=' <span style="color:'+(d<=7?'#ff4560':d<=21?'#ff8c42':'#555c6e')+';font-size:10px">'+d+'d</span>'}
+      rows.push('<tr style="border-bottom:1px solid #0d1117">'+
+        '<td style="padding:4px 10px;font-size:12px"><span style="font-weight:600">'+sym+'</span> <span style="color:#555c6e;font-size:10px">'+(strike?strike+optType:'')+'</span></td>'+
+        '<td style="padding:4px 4px;color:#8b91a0;font-size:11px">'+sector+'</td>'+
+        '<td style="padding:4px 4px;color:#555c6e;font-size:11px">'+(t.desc||'—')+dteStr+'</td>'+
+        '<td style="padding:4px 4px;text-align:right;font-size:12px">'+(t.cts||0)+'</td>'+
+        '<td style="padding:4px 4px;text-align:right;font-size:12px">$'+atr.toFixed(2)+'</td>'+
+        '<td style="padding:4px 4px;text-align:right;font-size:12px">'+delta.toFixed(2)+'</td>'+
+        '<td style="padding:4px 4px;text-align:right;font-size:12px;color:#ff8c42">-$'+Math.round(risk).toLocaleString()+'</td>'+
+        '</tr>')
+    })
+    // Subtotal row if multiple contracts on same ticker
+    if(group.length > 1) {
+      var totalCts = group.reduce(function(s,t){return s+(t.cts||0)},0)
+      rows.push('<tr style="background:#0d1117;border-bottom:2px solid #1e2d3d">'+
+        '<td style="padding:3px 10px;font-size:11px;color:#f0c040" colspan="3"><span style="font-weight:700">'+sym+'</span> total ('+group.length+' contracts)</td>'+
+        '<td style="padding:3px 4px;text-align:right;font-size:11px;color:#f0c040">'+totalCts+'</td>'+
+        '<td colspan="2"></td>'+
+        '<td style="padding:3px 4px;text-align:right;font-size:11px;font-weight:700;color:#f0c040">-$'+Math.round(groupRisk).toLocaleString()+'</td>'+
+        '</tr>')
+    }
+  })
+  tbody.innerHTML = rows.join('')
+  // Update open count
+  var oc = document.getElementById('pl-open-count'); if(oc) oc.textContent = open.length
+  // Sector breakdown with concentration warnings
+  var sb = document.getElementById('pl-sector-breakdown')
   if(sb) {
-    var total = open.reduce(function(s,t){var d=t.delta||defaultDelta;return s+(t.atr||0)*d*100*(t.cts||1)},0)
-    sb.innerHTML = Object.entries(sectorTotals).sort(function(a,b){return b[1]-a[1]}).map(function(e){
-      var pct = total>0?Math.round(e[1]/total*100):0
-      var col = pct>40?"#ff4560":pct>25?"#ff8c42":"#8b91a0"
-      return "<span style='margin-right:16px'>"+e[0]+": <b style='color:"+col+"'>$"+Math.round(e[1]).toLocaleString()+"</b> <span style='color:#555c6e'>("+pct+"%)</span></span>"
-    }).join("")
+    sb.innerHTML = Object.entries(sectorTotals).sort(function(a,b){return b[1]-a[1]}).map(function(e) {
+      var pct = totalRisk>0?Math.round(e[1]/totalRisk*100):0
+      var col = pct>40?'#ff4560':pct>25?'#ff8c42':'#8b91a0'
+      var warn = pct>40?' ⚠️ HIGH':pct>25?' ⚠️ ELEVATED':''
+      return '<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid #0d1117">'+
+        '<span style="color:#e8eaf0">'+e[0]+warn+'</span>'+
+        '<span><b style="color:'+col+'">$'+Math.round(e[1]).toLocaleString()+'</b> <span style="color:#555c6e">('+pct+'%)</span></span>'+
+        '</div>'
+    }).join('')
   }
 }
 function toggleSectorView() {
@@ -4885,6 +4925,8 @@ async function fetchAllCandidateATRs() {
   for(var i=0;i<PLANNER_CANDIDATES.length;i++){
     await fetchCandidateATR(PLANNER_CANDIDATES[i].sym)
   }
+  var el=document.getElementById('pl-atr-updated')
+  if(el) el.textContent='Updated '+new Date().toLocaleTimeString()
 }
 async function refreshCandidateATRs() {
   PLANNER_ATR_CACHE={}
