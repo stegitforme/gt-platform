@@ -2645,7 +2645,10 @@ function runFilter() {
     if(noEarn && !earnOk) return null
     if(bullOnly && !BULL_SECTORS.has(d.s)) return null
     if(noWide && !spreadOk) return null
-    const score = Math.min(40, d.r * 0.4) + (d.fg>=15&&d.fg<=65?20:5) + (earnOk?20:0) + (spreadOk?10:0) + (d.v>3e6?10:5)
+    const fgScore = d.fg<15?0:d.fg<25?8:d.fg<40?14:d.fg<=60?20:d.fg<=74?14:d.fg<=84?6:0
+    const volScore = (d.v||0)<1e6?0:(d.v||0)<3e6?4:(d.v||0)<10e6?7:10
+    const rsScore = (d.r||0)>=500?10:(d.r||0)>=200?6:(d.r||0)>=50?3:0
+    const score = Math.min(40,(d.r||0)*0.4) + fgScore + (earnOk?20:0) + volScore + rsScore
     return {t, d, spreadOk, earnOk, score}
   }).filter(Boolean).sort((a,b) => {
     if(typeof SCR_SORT === 'undefined' || !SCR_SORT) return b.score - a.score
