@@ -248,7 +248,7 @@ tr:hover td{background:#171b22;cursor:pointer}
 <div class="nav">
   <button class="active" onclick="show('market',this)">Market</button>
   <button onclick="show('screener',this)">Screener</button>
-  <button onclick="show('sizer',this)">Position Sizer</button>
+<button onclick="show('sizer',this);initPlanner()">Planner</button>
   <button onclick="show('trades',this)">Trade Manager</button>
   <button onclick="show('tenx',this)">10-Bagger</button>
   <button onclick="show('backtest',this)">Backtest</button>
@@ -535,126 +535,148 @@ tr:hover td{background:#171b22;cursor:pointer}
 
 <!-- &#9552;&#9552;&#9552; POSITION SIZER &#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552; -->
 <div id="sizer" class="sizer-page">
-  <div class="sidebar">
-    <div class="card">
-      <div class="card-head"><span class="card-title">Risk Manager</span></div>
-      <div class="card-body">
-        <div class="field"><label style="color:#f0c040;font-weight:700;font-size:11px;letter-spacing:.08em">TOTAL RISK BUDGET $</label><input type="number" id="risk-budget" value="21000" step="500" oninput="syncRiskBudget();calc()" style="font-size:22px;font-weight:700;color:#f0c040;padding:8px"></div>
-        <div style="margin:6px 0"><div style="display:flex;justify-content:space-between;font-size:11px;color:#555c6e;margin-bottom:3px"><span>Risk Deployed</span><span id="risk-meter-pct" style="font-weight:700">0%</span></div><div style="background:#1e2d3d;border-radius:4px;height:12px;overflow:hidden"><div id="risk-meter-bar" style="height:100%;width:0%;background:#00d68f;border-radius:4px;transition:width .4s,background .4s"></div></div><div style="display:flex;justify-content:space-between;font-size:12px;margin-top:5px"><span style="color:#ff8c42">Deployed: <b id="risk-deployed">$0</b></span><span style="color:#00d68f">Available: <b id="risk-available">$21,000</b></span></div></div>
-        <div id="risk-freed-today" style="font-size:11px;color:#00d68f;text-align:right;min-height:14px"></div>
-        <div id="trade-ok-indicator" style="display:none;padding:7px 10px;border-radius:6px;font-size:12px;font-weight:700;text-align:center;margin-bottom:6px"></div>
-        <div style="display:flex;gap:6px"><div style="flex:1"><label style="font-size:10px;color:#555c6e">÷ N TRADES</label><input type="number" id="risk-n-trades" value="10" min="1" max="99" oninput="calc()" style="width:100%"></div><div style="flex:1"><label style="font-size:10px;color:#555c6e">DELTA</label><input type="number" id="delta" value="0.80" step="0.01" min="0.01" max="1.00" oninput="calc()" style="width:100%"></div></div>
-        <input type="hidden" id="acct" value="350000"><input type="hidden" id="riskpct" value="6">
+<div class="card" style="margin-bottom:12px">
+  <div class="card-body" style="padding:14px">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+      <div>
+        <div style="font-size:11px;color:#555c6e;font-weight:600;letter-spacing:.08em">TOTAL RISK BUDGET $</div>
+        <input type="number" id="risk-budget" value="21000" step="500" oninput="syncRiskBudget();plannerCalc()" style="font-size:22px;font-weight:700;color:#f0c040;background:transparent;border:none;border-bottom:1px solid #f0c040;width:140px;padding:2px 0">
+      </div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap">
+        <div style="text-align:center"><div style="font-size:10px;color:#555c6e">DEPLOYED</div><div id="pl-deployed" style="font-size:18px;font-weight:700;color:#ff8c42">--</div></div>
+        <div style="text-align:center"><div style="font-size:10px;color:#555c6e">AVAILABLE</div><div id="pl-available" style="font-size:18px;font-weight:700;color:#00d68f">--</div></div>
+        <div style="text-align:center"><div style="font-size:10px;color:#555c6e">AFTER CANDIDATES</div><div id="pl-after" style="font-size:18px;font-weight:700">--</div></div>
       </div>
     </div>
-    <div class="card">
-      <div class="card-head"><span class="card-title">Trade Inputs</span></div>
-      <div class="card-body">
-        <div class="field">
-          <label>Ticker -- press Enter to fetch live</label>
-          <input type="text" id="tkr" placeholder="NVDA" oninput="this.value=this.value.toUpperCase()" onkeydown="if(event.key==='Enter')fetchTicker(this.value)">
-        </div>
-        <div id="tkr-st" style="font-size:11px;color:#555c6e;font-family:\'SF Mono\',monospace;margin:-5px 0 9px;min-height:14px;line-height:1.6"></div>
-        <div class="field"><label>Entry Price $</label><input type="number" id="entry" placeholder="189.40" step="0.01" oninput="calc()"></div>
-        <div class="field"><label>ATR (14) $</label><input type="number" id="atr" placeholder="5.27" step="0.01" oninput="calc()"></div>
-        <div class="field"><label>Option Cost Per Contract $</label><input type="number" id="optcost" placeholder="38.90" step="0.01" oninput="calc()"></div>
-        <div class="field"><label>Strike Price $</label><input type="number" id="strike" placeholder="230" step="1" oninput="calc()"></div>
-        <div class="field"><label>Expiry</label><input type="text" id="expiry" value="May-15-2026"></div>
-        <div id="opt-live" style="font-size:11px;color:#555c6e;font-family:\'SF Mono\',monospace;padding:7px 10px;background:#171b22;border:1px solid rgba(255,255,255,.07);border-radius:6px;min-height:26px;margin-bottom:9px;line-height:1.6">Type ticker + Enter to fetch live option chain</div>
-        <button class="btn btn-gold" onclick="calc()">Calculate</button>
-        <button class="btn btn-blue" style="width:100%;margin-top:6px" onclick="goSaveAsTrade()">Save as Trade -></button>
-      </div>
+    <div style="background:#1e2d3d;border-radius:4px;height:10px;overflow:hidden;margin-bottom:6px">
+      <div id="pl-meter" style="height:100%;width:0%;background:#00d68f;border-radius:4px;transition:width .4s,background .4s"></div>
     </div>
-    <div class="card">
-      <div class="card-head"><span class="card-title">Roll Calculator</span></div>
-      <div class="card-body">
-        <div class="field"><label>New Entry Price After Roll $</label><input type="number" id="roll-entry" placeholder="New price..." step="0.01"></div>
-        <div class="field"><label>New ATR (blank = same) $</label><input type="number" id="roll-atr" placeholder="Same as current..." step="0.01"></div>
-        <button class="btn btn-green" onclick="doRoll()">Apply Roll</button>
-        <div id="roll-hist" style="margin-top:10px"></div>
-      </div>
+    <div style="display:flex;justify-content:space-between;font-size:11px;color:#555c6e">
+      <span><b id="pl-open-count">0</b> open trades &bull; <b id="pl-cand-count">0</b> candidates</span>
+      <span id="pl-verdict" style="font-weight:700"></span>
     </div>
-    <div class="card">
-      <div class="card-head"><span class="card-title">Expected Move Calculator</span><span style="font-size:10px;color:#555c6e">ATM straddle x 85%</span></div>
-      <div class="card-body">
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:9px">
-          <div class="field" style="margin:0"><label>ATM Call $</label><input type="number" id="em-c" step="0.01" oninput="calcEM()"></div>
-          <div class="field" style="margin:0"><label>ATM Put $</label><input type="number" id="em-p" step="0.01" oninput="calcEM()"></div>
-          <div class="field" style="margin:0"><label>Stock Price $</label><input type="number" id="em-s" step="0.01" oninput="calcEM()"></div>
-        </div>
-        <div id="em-res" style="display:none">
-          <div class="grid3" style="margin-bottom:7px">
-            <div class="metric" style="padding:8px 10px"><div class="metric-label">Straddle</div><div id="em-st" class="metric-value b" style="font-size:15px">--</div></div>
-            <div class="metric" style="padding:8px 10px"><div class="metric-label">Move &plusmn;</div><div id="em-mv" class="metric-value gold" style="font-size:15px">--</div></div>
-            <div class="metric" id="em-sc" style="padding:8px 10px"><div class="metric-label">Breaks stop?</div><div id="em-br" class="metric-value" style="font-size:13px">--</div></div>
-          </div>
+  </div>
+</div>
+<div class="card" style="margin-bottom:12px">
+  <div class="card-head" style="display:flex;justify-content:space-between;align-items:center">
+    <span class="card-title">Open Positions — Deployed Risk @ 1 ATR</span>
+    <span id="pl-sector-toggle" onclick="toggleSectorView()" style="font-size:11px;color:#4da6ff;cursor:pointer">by sector</span>
+  </div>
+  <div class="card-body" style="padding:0">
+    <div id="pl-open-table" style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead><tr style="color:#555c6e;font-size:10px;text-transform:uppercase;border-bottom:1px solid #1e2d3d">
+          <th style="padding:6px 10px;text-align:left">Ticker</th>
+          <th style="padding:6px 4px;text-align:left">Sector</th>
+          <th style="padding:6px 4px;text-align:left">Expiry</th>
+          <th style="padding:6px 4px;text-align:right">Cts</th>
+          <th style="padding:6px 4px;text-align:right">ATR</th>
+          <th style="padding:6px 4px;text-align:right">Delta</th>
+          <th style="padding:6px 4px;text-align:right">Risk@1ATR</th>
+        </tr></thead>
+        <tbody id="pl-open-body"><tr><td colspan="7" style="padding:12px;text-align:center;color:#555c6e">Loading positions...</td></tr></tbody>
+        <tfoot><tr style="border-top:1px solid #1e2d3d;font-weight:700">
+          <td colspan="6" style="padding:6px 10px;font-size:11px;color:#555c6e">TOTAL DEPLOYED</td>
+          <td id="pl-open-total" style="padding:6px 4px;text-align:right;color:#ff8c42">--</td>
+        </tr></tfoot>
+      </table>
+    </div>
+    <div id="pl-sector-breakdown" style="display:none;padding:8px 10px;border-top:1px solid #1e2d3d;font-size:11px"></div>
+  </div>
+</div>
+<div class="card" style="margin-bottom:12px">
+  <div class="card-head" style="display:flex;justify-content:space-between;align-items:center">
+    <span class="card-title">Candidates — New Trades to Plan</span>
+    <div style="display:flex;gap:8px;align-items:center">
+      <span style="font-size:11px;color:#555c6e">Default risk $</span>
+      <input type="number" id="pl-default-risk" value="5500" step="100" style="width:80px;font-size:12px;padding:3px 6px" oninput="plannerCalc()">
+      <span style="font-size:11px;color:#555c6e">Delta</span>
+      <input type="number" id="pl-default-delta" value="0.80" step="0.01" min="0.01" max="1" style="width:55px;font-size:12px;padding:3px 6px" oninput="plannerCalc()">
+      <button onclick="refreshCandidateATRs()" class="btn btn-ghost" style="font-size:11px;padding:3px 10px">↻ Refresh ATR</button>
+    </div>
+  </div>
+  <div class="card-body" style="padding:0">
+    <div style="padding:8px 10px;border-bottom:1px solid #1e2d3d;display:flex;gap:8px;align-items:center">
+      <input type="text" id="pl-add-ticker" placeholder="Add ticker (e.g. AAPL)" style="flex:1;font-size:13px;padding:5px 8px;text-transform:uppercase" oninput="this.value=this.value.toUpperCase()" onkeydown="if(event.key==='Enter')addCandidate(this.value)">
+      <button onclick="addCandidate(document.getElementById('pl-add-ticker').value)" class="btn btn-gold" style="font-size:12px;padding:5px 14px">+ Add</button>
+    </div>
+    <div id="pl-cand-table" style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead><tr style="color:#555c6e;font-size:10px;text-transform:uppercase;border-bottom:1px solid #1e2d3d">
+          <th style="padding:6px 10px;text-align:left">Ticker</th>
+          <th style="padding:6px 4px;text-align:left">Sector</th>
+          <th style="padding:6px 4px;text-align:right">ATR</th>
+          <th style="padding:6px 4px;text-align:right">Delta</th>
+          <th style="padding:6px 4px;text-align:right">RPC</th>
+          <th style="padding:6px 4px;text-align:right">Risk $</th>
+          <th style="padding:6px 4px;text-align:right">Cts</th>
+          <th style="padding:6px 4px;text-align:right">Capital</th>
+          <th style="padding:6px 4px;text-align:center">Status</th>
+          <th style="padding:6px 4px"></th>
+        </tr></thead>
+        <tbody id="pl-cand-body"><tr><td colspan="10" style="padding:12px;text-align:center;color:#555c6e">Star stocks in Screener or add a ticker above</td></tr></tbody>
+        <tfoot><tr style="border-top:1px solid #1e2d3d;font-weight:700">
+          <td colspan="5" style="padding:6px 10px;font-size:11px;color:#555c6e">TOTAL NEW RISK</td>
+          <td id="pl-cand-risk-total" style="padding:6px 4px;text-align:right;color:#f0c040">--</td>
+          <td id="pl-cand-cts-total" style="padding:6px 4px;text-align:right;color:#555c6e">--</td>
+          <td id="pl-cand-cap-total" style="padding:6px 4px;text-align:right;color:#555c6e">--</td>
+          <td colspan="2"></td>
+        </tr></tfoot>
+      </table>
+    </div>
+  </div>
+</div>
+<div class="card">
+  <div class="card-head" onclick="toggleQuickSize()" style="cursor:pointer;display:flex;justify-content:space-between">
+    <span class="card-title">Quick Size — Single Trade Calculator</span>
+    <span id="qs-toggle-icon" style="color:#555c6e;font-size:12px">▼ expand</span>
+  </div>
+  <div id="qs-body" style="display:none">
+    <div style="display:flex;gap:12px;flex-wrap:wrap">
+      <div class="sidebar" style="min-width:200px;flex:0 0 220px">
+        <div class="card-body" style="padding:12px">
+          <div class="field"><label style="font-size:10px">TICKER</label><input type="text" id="tkr" placeholder="NVDA" oninput="this.value=this.value.toUpperCase()" onkeydown="if(event.key==='Enter')fetchTicker(this.value)"></div>
           <div style="display:flex;gap:6px">
-            <div id="em-up" style="flex:1;padding:7px;text-align:center;border-radius:6px;font-family:\'SF Mono\',monospace;font-size:12px;font-weight:500"></div>
-            <div id="em-dn" style="flex:1;padding:7px;text-align:center;border-radius:6px;font-family:\'SF Mono\',monospace;font-size:12px;font-weight:500"></div>
+            <div class="field" style="flex:1;margin:0"><label style="font-size:10px">÷ N</label><input type="number" id="risk-n-trades" value="10" oninput="calc()"></div>
+            <div class="field" style="flex:1;margin:0"><label style="font-size:10px">DELTA</label><input type="number" id="delta" value="0.80" step="0.01" oninput="calc()"></div>
           </div>
+          <div class="field"><label style="font-size:10px">ENTRY $</label><input type="number" id="entry" placeholder="0.00" step="0.01" oninput="calc()"></div>
+          <div class="field"><label style="font-size:10px">ATR $</label><input type="number" id="atr" placeholder="0.00" step="0.01" oninput="calc()"></div>
+          <div class="field"><label style="font-size:10px">OPTION COST $</label><input type="number" id="optcost" placeholder="0.00" step="0.01" oninput="calc()"></div>
+          <div class="field"><label style="font-size:10px">STRIKE</label><input type="number" id="strike" placeholder="0" oninput="calc()"></div>
+          <div class="field"><label style="font-size:10px">EXPIRY</label><input type="text" id="expiry" value="May-15-2026"></div>
+          <div id="tkr-st" style="font-size:11px;color:#555c6e;margin-top:4px"></div>
+          <button class="btn btn-gold" style="width:100%;margin-top:8px" onclick="fetchTicker(document.getElementById('tkr').value)">Fetch Live</button>
+        </div>
+      </div>
+      <div class="main-pane" style="flex:1;min-width:300px">
+        <div class="card-body" style="padding:12px">
+          <div style="font-size:12px;font-weight:700;color:#e8eaf0;margin-bottom:8px" id="sz-ticker">--</div>
+          <table id="atr-scenario-table" style="width:100%;border-collapse:collapse;font-family:monospace;font-size:13px;background:#0d1117;border-radius:8px"><tr style="color:#555c6e;font-size:10px"><th style="text-align:left;padding:5px 10px">Stop</th><th style="padding:5px 10px">Contracts</th><th style="padding:5px 10px">Max Loss</th><th style="padding:5px 10px">Risk/Ct</th></tr><tr><td colspan="4" style="padding:10px;text-align:center;font-size:12px;color:#555c6e">Enter ticker + ATR above</td></tr></table>
+          <div class="grid3" style="margin-top:10px">
+            <div class="metric"><div class="metric-label">Per-Trade Risk</div><div id="m-risk" class="metric-value gold">--</div><div id="m-risk-s" class="metric-sub">budget ÷ N</div></div>
+            <div class="metric"><div class="metric-label">Capital Deployed</div><div id="m-cap" class="metric-value b">--</div><div id="m-cap-s" class="metric-sub">total cost</div></div>
+            <div class="metric"><div class="metric-label">+50% Target</div><div id="m-g30" class="metric-value g">--</div><div class="metric-sub">on cost basis</div></div>
+          </div>
+          <div style="display:none"><span id="m-cts">--</span><span id="m-cts-s"></span><span id="m-hl">--</span><span id="m-fl">--</span></div>
+          <div id="lvl-body" style="margin-top:10px"></div>
         </div>
       </div>
     </div>
+    <!-- Roll Calculator -->
+    <div id="roll-section" style="padding:0 12px 12px"></div>
+    <!-- Expected Move -->
+    <div id="em-section" style="padding:0 12px 12px"></div>
   </div>
-
-  <div class="main-pane">
-    <div class="card">
-      <div class="card-head">
-        <span class="card-title">Position Sizing</span>
-        <span id="sz-ticker" style="font-size:13px;font-weight:700;color:#f0c040"></span>
-      </div>
-      <div class="card-body">
-        <div class="grid3">
-          <div class="metric"><div class="metric-label">Per-Trade Risk</div><div id="m-risk" class="metric-value gold">--</div><div id="m-risk-s" class="metric-sub">budget ÷ N</div></div>
-          <div class="metric"><div class="metric-label">Capital Deployed</div><div id="m-cap" class="metric-value b">--</div><div id="m-cap-s" class="metric-sub">total cost</div></div>
-          <div class="metric"><div class="metric-label">+50% Target</div><div id="m-g30" class="metric-value g">--</div><div class="metric-sub">on cost basis</div></div>
-        </div>
-        <div style="display:none"><span id="m-cts">--</span><span id="m-cts-s"></span><span id="m-hl">--</span><span id="m-fl">--</span></div>
-        </div>
-      </div>
-    </div>
-    <table id="atr-scenario-table" style="width:100%;border-collapse:collapse;margin-top:14px;font-family:monospace;font-size:13px;background:#0d1117;border-radius:8px"><tr style="color:#555c6e;font-size:10px"><th style="text-align:left;padding:6px 10px">Stop Scenario</th><th style="padding:6px 10px">Contracts</th><th style="padding:6px 10px">Max Loss</th><th style="padding:6px 10px">Risk/Contract</th></tr><tr><td colspan="4" style="padding:10px;text-align:center;font-size:12px;color:#555c6e">Enter ticker, entry &amp; ATR to see scenarios</td></tr></table>
-    <!-- PORTFOLIO RISK SUMMARY -->
-    <div class="card" style="margin-bottom:12px">
-      <div class="card-head" style="display:flex;align-items:center;justify-content:space-between">
-        <span class="card-title">Portfolio Risk</span>
-        <button class="btn btn-ghost" style="font-size:11px;padding:3px 9px" onclick="renderPortfolioRisk()">Refresh</button>
-      </div>
-      <div class="card-body" style="padding:12px">
-        <div id="port-risk-empty" style="font-size:12px;color:#555c6e;text-align:center;padding:8px">Save trades to see portfolio risk summary</div>
-        <div id="port-risk-body" style="display:none">
-          <div style="display:grid;grid-template-columns:72px 1fr 80px 90px 90px;gap:4px;margin-bottom:6px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e;padding:0 2px">
-            <div>Ticker</div><div>Strike · Expiry</div>
-            <div style="text-align:right;cursor:pointer;user-select:none" onclick="sortPortRisk('cts')" title="Sort by contracts">Contracts <span id="prs-cts"></span></div>
-            <div style="text-align:right;color:#ff8c42;cursor:pointer;user-select:none" onclick="sortPortRisk('half')" title="Sort by ½ATR Loss">½ATR Loss <span id="prs-half">▼</span></div>
-            <div style="text-align:right;color:#ff4560;cursor:pointer;user-select:none" onclick="sortPortRisk('full')" title="Sort by 2x Exit Loss">2x Exit Loss <span id="prs-full"></span></div>
-          </div>
-          <div id="port-risk-rows"></div>
-          <div style="border-top:1px solid rgba(255,255,255,.07);margin-top:6px;padding-top:8px;display:grid;grid-template-columns:72px 1fr 80px 90px 90px;gap:4px;font-size:12px;font-weight:700;padding:8px 2px 4px">
-            <div style="color:#555c6e;grid-column:1/3">TOTAL</div>
-            <div style="text-align:right;color:#e8eaf0" id="port-total-cts">--</div>
-            <div style="text-align:right;color:#ff8c42" id="port-total-half">--</div>
-            <div style="text-align:right;color:#ff4560" id="port-total-full">--</div>
-          </div>
-          <div style="padding:8px 2px 2px;display:flex;gap:14px;flex-wrap:wrap;border-top:1px solid rgba(255,255,255,.07);margin-top:6px">
-            <div style="font-size:11px;color:#555c6e">Risk budget: <span id="port-budget" style="color:#f0c040;font-family:'SF Mono',monospace">--</span></div>
-            <div style="font-size:11px;color:#555c6e">Used: <span id="port-budget-used" style="color:#ff8c42;font-family:'SF Mono',monospace">--</span></div>
-            <div style="font-size:11px;color:#555c6e">Remaining: <span id="port-budget-left" style="color:#00d68f;font-family:'SF Mono',monospace">--</span></div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-head">
-        <span class="card-title">ATR Trade Levels</span>
-        <button class="btn btn-ghost" style="font-size:11px;padding:3px 9px" onclick="copyLevels()">Copy for TradingView</button>
-      </div>
-      <div id="lvl-body" class="card-body" style="padding:12px 14px">
-        <div style="text-align:center;padding:24px;color:#555c6e;font-size:12px">Enter trade inputs to see levels</div>
-      </div>
-    </div>
-  </div>
+</div>
+<input type="hidden" id="acct" value="350000">
+<input type="hidden" id="riskpct" value="6">
+<input type="hidden" id="trade-ok-indicator">
+<input type="hidden" id="risk-freed-today">
+<input type="hidden" id="risk-deployed">
+<input type="hidden" id="risk-available">
+<input type="hidden" id="risk-meter-bar">
+<input type="hidden" id="risk-meter-pct">
 </div>
 
 <!-- &#9552;&#9552;&#9552; TRADE MANAGER &#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552; -->
@@ -2952,6 +2974,7 @@ async function saveAllToFirebase() {
     reb_accounts:REB_ACCOUNTS,
     risk: { acct: localStorage.getItem('gt_acct'), riskpct: localStorage.getItem('gt_riskpct'), budget: localStorage.getItem('gt_risk_budget'), n_trades: localStorage.getItem('gt_risk_n_trades'), delta: localStorage.getItem('gt_risk_delta'), atr_mult: window.GT_ATR_MULT||1 },
     watchlist: JSON.parse(localStorage.getItem('gt_scr_watchlist') || '[]'),
+    planner_candidates: JSON.parse(localStorage.getItem('gt_planner_candidates') || '[]'),
     turbo:       JSON.parse(localStorage.getItem('gt_turbo_state') || '{}'),
     savedAt:     Date.now()
   }
@@ -3003,6 +3026,7 @@ async function loadFromFirebase() {
       if(typeof renderTrades === 'function') renderTrades()
     if(typeof updateTmRiskSummary === 'function') updateTmRiskSummary()
     if(typeof updateRiskMeter === 'function') updateRiskMeter()
+    if(typeof initPlanner === 'function' && document.getElementById('sizer')?.classList.contains('active')) initPlanner()
     }
     // 10-Bagger watchlist
     if(data.tenx && Array.isArray(data.tenx)) {
@@ -3037,6 +3061,10 @@ async function loadFromFirebase() {
   // Watchlist
   if(data.watchlist && Array.isArray(data.watchlist)) {
     localStorage.setItem('gt_scr_watchlist', JSON.stringify(data.watchlist))
+  }
+  if(data.planner_candidates && Array.isArray(data.planner_candidates)) {
+    PLANNER_CANDIDATES = data.planner_candidates
+    localStorage.setItem('gt_planner_candidates', JSON.stringify(PLANNER_CANDIDATES))
   }
   // Update UI after Firebase restore
   if(typeof updateRiskMeter === 'function') { setTimeout(updateRiskMeter, 100) }
@@ -4636,6 +4664,287 @@ function checkCanTakeTrade(perTrade) {
     ind.innerHTML='❌ OVER BUDGET<br><small style="font-weight:400">Need $'+Math.round(perTrade).toLocaleString()+' • Short $'+Math.round(perTrade-avail).toLocaleString()+'</small>'
   }
 }
+// ══ PLANNER ══════════════════════════════════════════════════════════════════
+var PLANNER_CANDIDATES = JSON.parse(localStorage.getItem("gt_planner_candidates") || "[]")
+var PLANNER_ATR_CACHE = {}
+var PLANNER_SECTOR_VIEW = false
+
+function rootTicker(raw) {
+  return (raw || "").split(" ")[0].replace(/[$]/g,"").toUpperCase()
+}
+function getSector(sym) {
+  var d = OV[sym] || OV[rootTicker(sym)]
+  return d?.s || "—"
+}
+
+// ── PLANNER INIT ─────────────────────────────────────────────────────────────
+async function initPlanner() {
+  // Merge watchlist stars into candidates
+  var wl = JSON.parse(localStorage.getItem("gt_scr_watchlist") || "[]")
+  wl.forEach(function(sym) {
+    if(!PLANNER_CANDIDATES.find(function(c){return c.sym===sym})) {
+      PLANNER_CANDIDATES.push({sym:sym, delta:0.80, riskOverride:null, atr:null, optcost:null})
+    }
+  })
+  savePlannerCandidates()
+  renderOpenTable()
+  renderCandidateTable()
+  plannerCalc()
+  // Auto-fetch ATRs for candidates
+  fetchAllCandidateATRs()
+}
+
+function savePlannerCandidates() {
+  localStorage.setItem("gt_planner_candidates", JSON.stringify(PLANNER_CANDIDATES))
+  fbAutoSave(2000)
+}
+
+// ── OPEN POSITIONS TABLE ─────────────────────────────────────────────────────
+function renderOpenTable() {
+  var open = TRADES.filter(function(t){return t.status==="open"})
+  var tbody = document.getElementById("pl-open-body")
+  if(!tbody) return
+  if(!open.length){tbody.innerHTML="<tr><td colspan='7' style='padding:12px;text-align:center;color:#555c6e'>No open trades</td></tr>";return}
+  var defaultDelta = 0.80
+  var sectorTotals = {}
+  var rows = open.map(function(t) {
+    var sym = rootTicker(t.ticker)
+    var sector = getSector(sym)
+    var delta = t.delta || defaultDelta
+    var atr = t.atr || 0
+    var risk = atr * delta * 100 * (t.cts || 1)
+    if(sector !== "—") sectorTotals[sector] = (sectorTotals[sector]||0) + risk
+    var dteStr = ""
+    if(t.desc) { var d=Math.round((new Date(t.desc.replace(/-/g," "))-new Date())/864e5); dteStr=isNaN(d)?"":(" <span style='color:"+(d<=7?"#ff4560":d<=21?"#ff8c42":"#555c6e")+";font-size:10px'>"+d+"d</span>") }
+    return "<tr style='border-bottom:1px solid #0d1117'>"+
+      "<td style='padding:5px 10px;font-weight:600'>"+sym+"</td>"+
+      "<td style='padding:5px 4px;color:#8b91a0;font-size:11px'>"+sector+"</td>"+
+      "<td style='padding:5px 4px;color:#555c6e;font-size:11px'>"+(t.desc||"—")+dteStr+"</td>"+
+      "<td style='padding:5px 4px;text-align:right'>"+(t.cts||0)+"</td>"+
+      "<td style='padding:5px 4px;text-align:right'>$"+atr.toFixed(2)+"</td>"+
+      "<td style='padding:5px 4px;text-align:right'>"+(delta.toFixed?delta.toFixed(2):delta)+"</td>"+
+      "<td style='padding:5px 4px;text-align:right;color:#ff8c42;font-weight:600'>-$"+Math.round(risk).toLocaleString()+"</td>"+
+      "</tr>"
+  })
+  tbody.innerHTML = rows.join("")
+  // Sector breakdown
+  var sb = document.getElementById("pl-sector-breakdown")
+  if(sb) {
+    var total = open.reduce(function(s,t){var d=t.delta||defaultDelta;return s+(t.atr||0)*d*100*(t.cts||1)},0)
+    sb.innerHTML = Object.entries(sectorTotals).sort(function(a,b){return b[1]-a[1]}).map(function(e){
+      var pct = total>0?Math.round(e[1]/total*100):0
+      var col = pct>40?"#ff4560":pct>25?"#ff8c42":"#8b91a0"
+      return "<span style='margin-right:16px'>"+e[0]+": <b style='color:"+col+"'>$"+Math.round(e[1]).toLocaleString()+"</b> <span style='color:#555c6e'>("+pct+"%)</span></span>"
+    }).join("")
+  }
+}
+function toggleSectorView() {
+  PLANNER_SECTOR_VIEW = !PLANNER_SECTOR_VIEW
+  var sb = document.getElementById("pl-sector-breakdown")
+  var btn = document.getElementById("pl-sector-toggle")
+  if(sb) sb.style.display = PLANNER_SECTOR_VIEW ? "block" : "none"
+  if(btn) btn.textContent = PLANNER_SECTOR_VIEW ? "hide sector" : "by sector"
+}
+
+// ── CANDIDATES TABLE ─────────────────────────────────────────────────────────
+function renderCandidateTable() {
+  var tbody = document.getElementById("pl-cand-body")
+  if(!tbody) return
+  if(!PLANNER_CANDIDATES.length){
+    tbody.innerHTML="<tr><td colspan='10' style='padding:12px;text-align:center;color:#555c6e'>Star stocks in Screener or add a ticker above</td></tr>"
+    return
+  }
+  var defaultRisk = +document.getElementById("pl-default-risk")?.value || 5500
+  var defaultDelta = +document.getElementById("pl-default-delta")?.value || 0.80
+  var deployed = calcDeployed()
+  var budget = +localStorage.getItem("gt_risk_budget") || +document.getElementById("risk-budget")?.value || 21000
+  var available = Math.max(0, budget - deployed)
+  var cumulative = 0
+  var rows = PLANNER_CANDIDATES.map(function(c, idx) {
+    var sym = c.sym
+    var sector = getSector(sym)
+    var atr = c.atr || 0
+    var delta = c.delta || defaultDelta
+    var riskAlloc = c.riskOverride || defaultRisk
+    var rpc = atr > 0 ? atr * delta * 100 : 0
+    var cts = rpc > 0 ? Math.floor(riskAlloc / rpc) : 0
+    var tradeRisk = cts * rpc
+    var capital = cts * (c.optcost||0) * 100
+    cumulative += tradeRisk
+    var afterThis = deployed + cumulative
+    var fits = afterThis <= budget
+    var sectorRisk = calcSectorRisk(sector)
+    var sectorPct = deployed > 0 ? sectorRisk / deployed * 100 : 0
+    var concentrated = sectorPct > 35
+    var statusHtml = atr===0
+      ? "<span style='color:#555c6e;font-size:10px'>fetching...</span>"
+      : fits && !concentrated
+        ? "<span style='color:#00d68f;font-size:11px'>✅ fits</span>"
+        : fits && concentrated
+          ? "<span style='color:#ff8c42;font-size:11px'>⚠️ sector</span>"
+          : "<span style='color:#ff4560;font-size:11px'>❌ over</span>"
+    return "<tr style='border-bottom:1px solid #0d1117'>"+
+      "<td style='padding:5px 10px;font-weight:600'>"+sym+"</td>"+
+      "<td style='padding:5px 4px;color:#8b91a0;font-size:11px'>"+sector+"</td>"+
+      "<td style='padding:5px 4px;text-align:right'>"+(atr>0?"$"+atr.toFixed(2):"—")+"</td>"+
+      "<td style='padding:5px 4px;text-align:right'><input type='number' value='"+delta.toFixed(2)+"' step='0.01' min='0.1' max='1' style='width:50px;font-size:11px;padding:2px 4px;text-align:right' onchange='updateCandidateDelta("+idx+",this.value)'></td>"+
+      "<td style='padding:5px 4px;text-align:right;color:#555c6e'>"+(rpc>0?"$"+Math.round(rpc):"—")+"</td>"+
+      "<td style='padding:5px 4px;text-align:right'><input type='number' value='"+Math.round(riskAlloc)+"' step='100' style='width:65px;font-size:11px;padding:2px 4px;text-align:right' onchange='updateCandidateRisk("+idx+",this.value)'></td>"+
+      "<td style='padding:5px 4px;text-align:right;font-weight:700;color:#f0c040'>"+(cts>0?cts:"—")+"</td>"+
+      "<td style='padding:5px 4px;text-align:right;color:#555c6e'>"+(capital>0?"$"+Math.round(capital).toLocaleString():"—")+"</td>"+
+      "<td style='padding:5px 4px;text-align:center'>"+statusHtml+"</td>"+
+      "<td style='padding:5px 4px;text-align:center'><button onclick='removeCandidate("+idx+")' style='background:none;border:none;color:#555c6e;cursor:pointer;font-size:14px' title='Remove'>✕</button></td>"+
+      "</tr>"
+  })
+  tbody.innerHTML = rows.join("")
+  // Totals
+  var totalRisk = PLANNER_CANDIDATES.reduce(function(s,c){
+    var d=c.delta||defaultDelta;var r=c.riskOverride||defaultRisk;
+    var rpc=(c.atr||0)*d*100;var cts=rpc>0?Math.floor(r/rpc):0;return s+cts*rpc
+  },0)
+  var totalCap = PLANNER_CANDIDATES.reduce(function(s,c){
+    var d=c.delta||defaultDelta;var r=c.riskOverride||defaultRisk;
+    var rpc=(c.atr||0)*d*100;var cts=rpc>0?Math.floor(r/rpc):0;return s+cts*(c.optcost||0)*100
+  },0)
+  var el1=document.getElementById("pl-cand-risk-total");if(el1)el1.textContent=totalRisk>0?"-$"+Math.round(totalRisk).toLocaleString():"--"
+  var el2=document.getElementById("pl-cand-cap-total");if(el2)el2.textContent=totalCap>0?"$"+Math.round(totalCap).toLocaleString():"--"
+  document.getElementById("pl-cand-count").textContent = PLANNER_CANDIDATES.length
+}
+
+// ── CANDIDATE ACTIONS ────────────────────────────────────────────────────────
+async function addCandidate(sym) {
+  sym = (sym||"").toUpperCase().trim()
+  if(!sym) return
+  var inp = document.getElementById("pl-add-ticker"); if(inp) inp.value=""
+  if(PLANNER_CANDIDATES.find(function(c){return c.sym===sym})) return
+  PLANNER_CANDIDATES.push({sym:sym, delta:0.80, riskOverride:null, atr:null, optcost:null})
+  savePlannerCandidates()
+  renderCandidateTable()
+  plannerCalc()
+  await fetchCandidateATR(sym)
+}
+function removeCandidate(idx) {
+  PLANNER_CANDIDATES.splice(idx,1)
+  savePlannerCandidates()
+  renderCandidateTable()
+  plannerCalc()
+}
+function updateCandidateDelta(idx, val) {
+  PLANNER_CANDIDATES[idx].delta = +val
+  savePlannerCandidates()
+  renderCandidateTable()
+  plannerCalc()
+}
+function updateCandidateRisk(idx, val) {
+  PLANNER_CANDIDATES[idx].riskOverride = +val
+  savePlannerCandidates()
+  renderCandidateTable()
+  plannerCalc()
+}
+
+// ── ATR FETCH ────────────────────────────────────────────────────────────────
+async function fetchCandidateATR(sym) {
+  if(PLANNER_ATR_CACHE[sym]) {
+    var c=PLANNER_CANDIDATES.find(function(x){return x.sym===sym})
+    if(c){c.atr=PLANNER_ATR_CACHE[sym].atr;c.optcost=PLANNER_ATR_CACHE[sym].optcost}
+    renderCandidateTable();plannerCalc();return
+  }
+  try {
+    var bars = await tBars(sym, 30)
+    if(!bars||bars.length<2) return
+    var atr = calcATR(bars)
+    // Try to get ~0.80 delta option cost
+    var optcost = null
+    try {
+      var eR=await fetch("https://yahoo-proxy.sgoglanian.workers.dev/tradier/expirations?symbol="+sym)
+      var eD=await eR.json();var exps=eD?.expirations?.date||[]
+      var today=new Date()
+      var exp=exps.find(function(e){var d=Math.round((new Date(e)-today)/864e5);return d>=21&&d<=45})
+      if(exp){
+        var cR=await fetch("https://yahoo-proxy.sgoglanian.workers.dev/tradier/options?symbol="+sym+"&expiration="+exp)
+        var cD=await cR.json()
+        var calls=(cD?.options?.option||[]).filter(function(o){return o.option_type==="call"&&o.greeks?.delta&&o.greeks.delta>0.5})
+        if(calls.length){
+          var near80=calls.sort(function(a,b){return Math.abs(a.greeks.delta-0.80)-Math.abs(b.greeks.delta-0.80)})[0]
+          optcost=near80?.ask||near80?.last||null
+          // Also update delta
+          var cand=PLANNER_CANDIDATES.find(function(x){return x.sym===sym})
+          if(cand&&near80?.greeks?.delta) cand.delta=+near80.greeks.delta.toFixed(2)
+        }
+      }
+    } catch(e2){}
+    PLANNER_ATR_CACHE[sym]={atr,optcost}
+    var cand=PLANNER_CANDIDATES.find(function(x){return x.sym===sym})
+    if(cand){cand.atr=atr;if(optcost)cand.optcost=optcost}
+    savePlannerCandidates()
+    renderCandidateTable()
+    plannerCalc()
+  } catch(e){}
+}
+async function fetchAllCandidateATRs() {
+  for(var i=0;i<PLANNER_CANDIDATES.length;i++){
+    await fetchCandidateATR(PLANNER_CANDIDATES[i].sym)
+  }
+}
+async function refreshCandidateATRs() {
+  PLANNER_ATR_CACHE={}
+  await fetchAllCandidateATRs()
+}
+
+// ── PLANNER SUMMARY CALC ─────────────────────────────────────────────────────
+function calcDeployed() {
+  var open=TRADES.filter(function(t){return t.status==="open"})
+  return open.reduce(function(s,t){var d=t.delta||0.80;return s+(t.atr||0)*d*100*(t.cts||1)},0)
+}
+function calcSectorRisk(sector) {
+  if(!sector||sector==="—") return 0
+  var open=TRADES.filter(function(t){return t.status==="open"})
+  return open.reduce(function(s,t){
+    if(getSector(rootTicker(t.ticker))===sector){var d=t.delta||0.80;return s+(t.atr||0)*d*100*(t.cts||1)}
+    return s
+  },0)
+}
+function plannerCalc() {
+  var budget = +localStorage.getItem("gt_risk_budget") || +document.getElementById("risk-budget")?.value || 21000
+  var deployed = calcDeployed()
+  var defaultRisk = +document.getElementById("pl-default-risk")?.value || 5500
+  var defaultDelta = +document.getElementById("pl-default-delta")?.value || 0.80
+  var candTotal = PLANNER_CANDIDATES.reduce(function(s,c){
+    var d=c.delta||defaultDelta;var r=c.riskOverride||defaultRisk
+    var rpc=(c.atr||0)*d*100;var cts=rpc>0?Math.floor(r/rpc):0;return s+cts*rpc
+  },0)
+  var afterCands = deployed + candTotal
+  var available = Math.max(0, budget - deployed)
+  var pct = budget>0?Math.min(100,Math.round(deployed/budget*100)):0
+  var col = pct>90?"#ff4560":pct>70?"#ff8c42":"#00d68f"
+  // Update summary
+  var dep=document.getElementById("pl-deployed");if(dep)dep.textContent="$"+Math.round(deployed).toLocaleString()
+  var avl=document.getElementById("pl-available");if(avl){avl.textContent="$"+Math.round(available).toLocaleString();avl.style.color=available>0?"#00d68f":"#ff4560"}
+  var aft=document.getElementById("pl-after");if(aft){
+    aft.textContent="$"+Math.round(afterCands).toLocaleString()
+    aft.style.color=afterCands>budget?"#ff4560":"#00d68f"
+  }
+  var bar=document.getElementById("pl-meter");if(bar){bar.style.width=pct+"%";bar.style.background=col}
+  var oc=document.getElementById("pl-open-count");if(oc)oc.textContent=TRADES.filter(function(t){return t.status==="open"}).length
+  var verd=document.getElementById("pl-verdict");if(verd){
+    var over=afterCands-budget
+    verd.textContent=over>0?"❌ OVER by $"+Math.round(over).toLocaleString():"✅ Within budget"
+    verd.style.color=over>0?"#ff4560":"#00d68f"
+  }
+  // Update open total
+  var ot=document.getElementById("pl-open-total");if(ot)ot.textContent="-$"+Math.round(deployed).toLocaleString()
+  // Also keep the legacy risk meter in sync
+  window._riskDeployed=deployed;window._riskAvailable=available
+}
+
+function toggleQuickSize() {
+  var body=document.getElementById("qs-body");var icon=document.getElementById("qs-toggle-icon")
+  if(!body)return
+  var open=body.style.display!=="none"
+  body.style.display=open?"none":"block"
+  if(icon)icon.textContent=open?"▼ expand":"▲ collapse"
+}
+// ── END PLANNER ───────────────────────────────────────────────────────────────
 function calc() {
   saveRiskSettings()
   const rb      = +document.getElementById('risk-budget')?.value || +localStorage.getItem('gt_risk_budget') || 21000
