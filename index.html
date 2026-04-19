@@ -3085,6 +3085,7 @@ async function saveAllToFirebase() {
     ov_data:     { ov: OV, importedAt: new Date().toISOString() },
     trades:      TRADES,
     closed_trades: CLOSED_TRADES,
+    tenx:        TENX,
     reb_accounts:REB_ACCOUNTS,
     risk: { acct: localStorage.getItem('gt_acct'), riskpct: localStorage.getItem('gt_riskpct'), budget: localStorage.getItem('gt_risk_budget'), n_trades: localStorage.getItem('gt_risk_n_trades'), delta: localStorage.getItem('gt_risk_delta'), atr_mult: window.GT_ATR_MULT||1 },
     watchlist: JSON.parse(localStorage.getItem('gt_scr_watchlist') || '[]'),
