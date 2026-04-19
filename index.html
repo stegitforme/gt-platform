@@ -6593,6 +6593,55 @@ function parseFidelityCSV(text) {
   return { positions, totalVal, totalPnl, totalToday, count: positions.length }
 }
 
+// ── STAGE 1: CSV → TRADES adapter (dormant) ──────────────────────────────────
+// Maps one parseFidelityCSV() position row to a TRADES-shaped row.
+// NOT YET CALLED. Stage 2 will wire this into importCSV for dual-write.
+// Field names match the existing TRADES schema (occ/ticker/cts/cost/totalGL/…)
+// so no reader needs modification. Two new fields are introduced for later
+// stages:
+//   portfolioTag: 'gt' | 'lt' | null  — carries POSITIONS's `gt` flag
+//   isCash + type:'Cash'              — money-market / cash-equivalent rows
+// Firebase round-trip safe: unknown fields are preserved verbatim by the
+// {...t} spread in loadFromFirebase (verified 2026-04-19).
+function _portfolioPositionToTrade(p) {
+  const symRaw = (p.raw || '').replace(/\*+$/,'').toUpperCase()
+  const isCash = /^(SPAXX|FDLXX|FCASH|FZDXX|FZFXX|SPRXX|FDRXX|FGTXX)$/.test(symRaw)
+              || /money\s*market|(^|\s)cash(\s|$)/i.test(p.desc || '')
+  const isOption = p.type === 'option'
+  const isStock  = !isOption && !isCash
+  const optType  = isOption ? (/P$/.test(p.t || '') ? 'Put' : 'Call') : null
+  const type     = isCash ? 'Cash' : isOption ? optType : 'Stock'
+  const tag      = p.gt === true ? 'gt' : p.gt === false ? 'lt' : null
+  return {
+    id:        Date.now() + Math.floor(Math.random()*1000),
+    occ:       p.raw || '',
+    ticker:    p.t || '',
+    strike:    p.strike || 0,
+    type:      type,
+    isStock:   isStock,
+    isCash:    isCash,
+    desc:      isOption ? (p.e || '') : '',
+    cts:       p.c || 0,
+    cost:      p.cost || 0,
+    costTotal: (isOption && p.cost && p.c) ? p.cost * p.c * 100
+             : (isStock  && p.cost && p.c) ? p.cost * p.c
+             : 0,
+    entry:     isStock ? (p.cost || 0) : 0,
+    atr:       0,   // Stage 2 will fill via batchFetchATRs on dual-write
+    date:      new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}).replace(',',''),
+    notes:     'From Portfolio CSV',
+    status:    'open',
+    rolls:     [],
+    curVal:    p.val || 0,
+    todayGL:   p.today || 0,
+    todayPct:  p.todayPct || 0,
+    totalGL:   p.pnl || 0,
+    totalPct:  p.pct || 0,
+    lastPx:    0,
+    portfolioTag: tag
+  }
+}
+
 // Sync options positions from portfolio into Trade Manager
 function syncOptionsToTrades() {
   const options = POSITIONS.filter(p => p.type === 'option')
