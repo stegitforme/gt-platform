@@ -100,7 +100,6 @@ tr:hover td{background:#171b22;cursor:pointer}
 @media(max-width:768px){.nav{gap:0;overflow-x:auto;-webkit-overflow-scrolling:touch;flex-wrap:nowrap}.nav button{font-size:11px;padding:8px 10px;white-space:nowrap;flex-shrink:0}#deploy-btn{display:none}.page{padding:10px}.sizer-page.active{grid-template-columns:1fr!important;overflow-y:auto;height:auto}.sidebar{width:100%!important;border-right:none!important}#screener table{min-width:580px}#screener .card{overflow-x:auto}#an-summary{grid-template-columns:1fr 1fr!important}.trade-card-head{flex-wrap:wrap;gap:6px}}@media(max-width:480px){.nav button{font-size:10px;padding:6px 7px}#an-summary{grid-template-columns:1fr!important}}</style>
 
 <!-- Firebase SDK -->
-<script src="app.js?v=6"></script>
 <script type="module">
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js'
   import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js'
@@ -146,7 +145,7 @@ tr:hover td{background:#171b22;cursor:pointer}
       if(userInfo) userInfo.style.display = 'flex'
       if(userName) userName.textContent = user.displayName || user.email || 'Signed in'
       if(overlay) overlay.style.display = 'none'
-      if(typeof setApi==='function') setApi('Firebase \u00b7 ' + (user.displayName || user.email || 'connected'), 'ok')
+      if(typeof setApi==='function') typeof setApi==="function"&&setApi('Firebase \u00b7 ' + (user.displayName || user.email || 'connected'), 'ok')
       if(typeof loadFromFirebase === 'function') loadFromFirebase()
       try {
         const pendingRef = ref(db, 'pending_ov')
@@ -165,7 +164,7 @@ tr:hover td{background:#171b22;cursor:pointer}
             const ovEl = document.getElementById('ov-last-update')
             if(ovEl) ovEl.textContent = 'Last import: ' + new Date(d.importedAt).toLocaleString() + ' (' + cnt + ' tickers)'
             if(typeof runFilter === 'function') runFilter()
-            if(typeof setApi === 'function') setApi('OVTLYR synced \u2014 ' + cnt + ' tickers \u2713', 'ok')
+            if(typeof setApi === 'function') typeof setApi==="function"&&setApi('OVTLYR synced \u2014 ' + cnt + ' tickers \u2713', 'ok')
             if(typeof fbAutoSave === 'function') fbAutoSave(1000)
             var toast = document.getElementById('ov-sync-toast')
             if(toast) toast.remove()
@@ -200,5 +199,6 @@ tr:hover td{background:#171b22;cursor:pointer}
     </button>
     <div style="color:#555c6e;font-size:11px;text-align:center;max-width:260px">Uses your Google account — same data across all your devices</div>
   </div>
-  </body>
+  <script src="app.js?v=6" defer></script>
+</body>
 </html>
