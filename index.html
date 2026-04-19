@@ -537,11 +537,14 @@ tr:hover td{background:#171b22;cursor:pointer}
 <div id="sizer" class="sizer-page">
   <div class="sidebar">
     <div class="card">
-      <div class="card-head"><span class="card-title">Account</span></div>
+      <div class="card-head"><span class="card-title">Risk Manager</span></div>
       <div class="card-body">
-        <div class="field"><label style="color:#f0c040;font-weight:700">Risk Budget $</label><input type="number" id="risk-budget" value="21000" step="500" oninput="syncRiskBudget();calc()" style="font-size:16px;font-weight:700;color:#f0c040"><div style="font-size:11px;color:#555c6e;margin-top:3px">Calc: $<input type="number" id="acct" value="350000" step="1000" oninput="calcRiskFromPct()" style="width:88px;font-size:11px;padding:2px 4px;display:inline-block"> &times; <input type="number" id="riskpct" value="6" step="0.5" oninput="calcRiskFromPct()" style="width:40px;font-size:11px;padding:2px 4px;display:inline-block">% = <span id="risk-pct-calc" style="color:#8b91a0">$21,000</span></div></div>
-        <div class="field"><label>Per-trade risk = Budget ÷ <span style="color:#f0c040">N</span></label><input type="number" id="risk-n-trades" value="10" min="1" max="99" oninput="calc()" placeholder="e.g. 10"><div style="font-size:11px;color:#555c6e;margin-top:2px">Change anytime — no limit on trades</div></div>
-        <div class="field"><label>Delta (e.g. 0.77)</label><input type="number" id="delta" value="0.80" step="0.01" min="0.01" max="1.00" oninput="calc()"></div>
+        <div class="field"><label style="color:#f0c040;font-weight:700;font-size:11px;letter-spacing:.08em">TOTAL RISK BUDGET $</label><input type="number" id="risk-budget" value="21000" step="500" oninput="syncRiskBudget();calc()" style="font-size:22px;font-weight:700;color:#f0c040;padding:8px"></div>
+        <div style="margin:6px 0"><div style="display:flex;justify-content:space-between;font-size:11px;color:#555c6e;margin-bottom:3px"><span>Risk Deployed</span><span id="risk-meter-pct" style="font-weight:700">0%</span></div><div style="background:#1e2d3d;border-radius:4px;height:12px;overflow:hidden"><div id="risk-meter-bar" style="height:100%;width:0%;background:#00d68f;border-radius:4px;transition:width .4s,background .4s"></div></div><div style="display:flex;justify-content:space-between;font-size:12px;margin-top:5px"><span style="color:#ff8c42">Deployed: <b id="risk-deployed">$0</b></span><span style="color:#00d68f">Available: <b id="risk-available">$21,000</b></span></div></div>
+        <div id="risk-freed-today" style="font-size:11px;color:#00d68f;text-align:right;min-height:14px"></div>
+        <div id="trade-ok-indicator" style="display:none;padding:7px 10px;border-radius:6px;font-size:12px;font-weight:700;text-align:center;margin-bottom:6px"></div>
+        <div style="display:flex;gap:6px"><div style="flex:1"><label style="font-size:10px;color:#555c6e">÷ N TRADES</label><input type="number" id="risk-n-trades" value="10" min="1" max="99" oninput="calc()" style="width:100%"></div><div style="flex:1"><label style="font-size:10px;color:#555c6e">DELTA</label><input type="number" id="delta" value="0.80" step="0.01" min="0.01" max="1.00" oninput="calc()" style="width:100%"></div></div>
+        <input type="hidden" id="acct" value="350000"><input type="hidden" id="riskpct" value="6">
       </div>
     </div>
     <div class="card">
@@ -602,12 +605,11 @@ tr:hover td{background:#171b22;cursor:pointer}
       </div>
       <div class="card-body">
         <div class="grid3">
-          <div class="metric"><div class="metric-label">Max Contracts</div><div id="m-cts" class="metric-value gold">--</div><div id="m-cts-s" class="metric-sub">enter inputs</div></div>
+          <div class="metric"><div class="metric-label">Per-Trade Risk</div><div id="m-risk" class="metric-value gold">--</div><div id="m-risk-s" class="metric-sub">budget ÷ N</div></div>
           <div class="metric"><div class="metric-label">Capital Deployed</div><div id="m-cap" class="metric-value b">--</div><div id="m-cap-s" class="metric-sub">total cost</div></div>
-          <div class="metric"><div class="metric-label">Per-Trade Risk</div><div id="m-risk" class="metric-value">--</div><div id="m-risk-s" class="metric-sub">budget ÷ N</div></div>
-          <div class="metric"><div class="metric-label">Loss @ .5 ATR Stop</div><div id="m-hl" class="metric-value o">--</div><div class="metric-sub">orange line trigger</div></div>
-          <div class="metric"><div class="metric-label">Loss @ 2x ATR Exit</div><div id="m-fl" class="metric-value r">--</div><div class="metric-sub">red emergency line</div></div>
-          <div class="metric"><div class="metric-label">+50% Gain Target</div><div id="m-g30" class="metric-value g">--</div><div class="metric-sub">on cost basis</div></div>
+          <div class="metric"><div class="metric-label">+50% Target</div><div id="m-g30" class="metric-value g">--</div><div class="metric-sub">on cost basis</div></div>
+        </div>
+        <div style="display:none"><span id="m-cts">--</span><span id="m-cts-s"></span><span id="m-hl">--</span><span id="m-fl">--</span></div>
         </div>
       </div>
     </div>
@@ -1375,6 +1377,7 @@ function setCheck(id, pass) {
 
 function renderChecklist() {
   setTimeout(function(){rebCalc()},200)
+  if(TRADIER_TOKEN) autoSetDeltaFromChain(ticker)
   let html = '', total = 0, passing = 0
   CHECKS.forEach(g => {
     // For group score, skip null items (not yet evaluated)
@@ -2999,6 +3002,7 @@ async function loadFromFirebase() {
       localStorage.setItem('gt_trades', JSON.stringify(TRADES))
       if(typeof renderTrades === 'function') renderTrades()
     if(typeof updateTmRiskSummary === 'function') updateTmRiskSummary()
+    if(typeof updateRiskMeter === 'function') updateRiskMeter()
     }
     // 10-Bagger watchlist
     if(data.tenx && Array.isArray(data.tenx)) {
@@ -4555,6 +4559,53 @@ function syncRiskBudget(){var rb=+document.getElementById("risk-budget")?.value|
 function calcRiskFromPct(){var a=+document.getElementById("acct").value||350000,r=+document.getElementById("riskpct").value||6,rb=Math.round(a*r/100);var el=document.getElementById("risk-pct-calc");if(el)el.textContent="$"+rb.toLocaleString();var rbEl=document.getElementById("risk-budget");if(rbEl){rbEl.value=rb;syncRiskBudget()}calc()}
 function setAtrStop(mult){window.GT_ATR_MULT=mult;["half","1","2"].forEach(function(k){var b=document.getElementById("atr-btn-"+k);if(b){b.style.background="";b.style.color="";b.style.border=""}});var key=mult===0.5?"half":String(mult);var a=document.getElementById("atr-btn-"+key);if(a){a.style.background="#1a2332";a.style.color="#f0c040";a.style.border="1px solid #f0c040"}renderPortfolioRisk();updateTmRiskSummary()}
 function updateTmRiskSummary(){var rb=+localStorage.getItem("gt_risk_budget")||+document.getElementById("risk-budget")?.value||21000;var mult=window.GT_ATR_MULT||1;var delta=+document.getElementById("delta")?.value||0.80;var open=TRADES.filter(function(t){return t.status==="open"});var dep=open.reduce(function(s,t){var d=(t.isStock||t.type==="Stock")?1:delta;return s+(t.atr||0)*mult*d*100*(t.cts||1)},0);var avail=Math.max(0,rb-dep);var b=document.getElementById("tm-budget-total");if(b)b.textContent="$"+Math.round(rb).toLocaleString();var d2=document.getElementById("tm-deployed");if(d2)d2.textContent=dep>0?"-$"+Math.round(dep).toLocaleString():"$0";var a=document.getElementById("tm-available");if(a){a.textContent="$"+Math.round(avail).toLocaleString();a.style.color=avail>0?"#00d68f":"#ff4560"}}
+async function autoSetDeltaFromChain(sym) {
+  try {
+    var eR=await fetch('https://yahoo-proxy.sgoglanian.workers.dev/tradier/expirations?symbol='+sym)
+    var eD=await eR.json();var exps=eD?.expirations?.date||[]
+    var today=new Date()
+    var exp=exps.find(function(e){var d=Math.round((new Date(e)-today)/864e5);return d>=21&&d<=45})
+    if(!exp) return
+    var cR=await fetch('https://yahoo-proxy.sgoglanian.workers.dev/tradier/options?symbol='+sym+'&expiration='+exp)
+    var cD=await cR.json()
+    var calls=(cD?.options?.option||[]).filter(function(o){return o.option_type==='call'&&o.greeks?.delta&&o.greeks.delta>0.5&&o.greeks.delta<1.0})
+    if(!calls.length) return
+    var near80=calls.sort(function(a,b){return Math.abs(a.greeks.delta-0.80)-Math.abs(b.greeks.delta-0.80)})[0]
+    if(near80?.greeks?.delta){var el=document.getElementById('delta');if(el){el.value=near80.greeks.delta.toFixed(2);calc()}}
+  } catch(e){}
+}
+function updateRiskMeter() {
+  var rb=+localStorage.getItem('gt_risk_budget')||+document.getElementById('risk-budget')?.value||21000
+  var mult=window.GT_ATR_MULT||1
+  var delta=+document.getElementById('delta')?.value||0.80
+  var open=TRADES.filter(function(t){return t.status==='open'})
+  var dep=open.reduce(function(s,t){var d=(t.isStock||t.type==='Stock')?1:delta;return s+(t.atr||0)*mult*d*100*(t.cts||1)},0)
+  var avail=Math.max(0,rb-dep),pct=rb>0?Math.min(100,Math.round(dep/rb*100)):0
+  var col=pct>90?'#ff4560':pct>70?'#ff8c42':'#00d68f'
+  var bar=document.getElementById('risk-meter-bar');if(bar){bar.style.width=pct+'%';bar.style.background=col}
+  var pEl=document.getElementById('risk-meter-pct');if(pEl){pEl.textContent=pct+'%';pEl.style.color=col}
+  var dEl=document.getElementById('risk-deployed');if(dEl)dEl.textContent='$'+Math.round(dep).toLocaleString()
+  var aEl=document.getElementById('risk-available');if(aEl)aEl.textContent='$'+Math.round(avail).toLocaleString()
+  var b2=document.getElementById('tm-budget-total');if(b2)b2.textContent='$'+Math.round(rb).toLocaleString()
+  var d2=document.getElementById('tm-deployed');if(d2)d2.textContent=dep>0?'-$'+Math.round(dep).toLocaleString():'$0'
+  var a2=document.getElementById('tm-available');if(a2){a2.textContent='$'+Math.round(avail).toLocaleString();a2.style.color=avail>0?'#00d68f':'#ff4560'}
+  if(!window._sessionStartRisk)window._sessionStartRisk=dep
+  var freed=Math.max(0,window._sessionStartRisk-dep)
+  var fEl=document.getElementById('risk-freed-today');if(fEl)fEl.textContent=freed>100?'🟢 Freed this session: $'+Math.round(freed).toLocaleString():''
+  window._riskDeployed=dep;window._riskAvailable=avail
+}
+function checkCanTakeTrade(perTrade) {
+  var ind=document.getElementById('trade-ok-indicator');if(!ind||!perTrade)return
+  var avail=window._riskAvailable!==undefined?window._riskAvailable:21000
+  ind.style.display='block'
+  if(perTrade<=avail){
+    ind.style.cssText='display:block;padding:7px 10px;border-radius:6px;font-size:12px;font-weight:700;text-align:center;margin-bottom:6px;background:#0d2e1a;border:1px solid #00d68f;color:#00d68f'
+    ind.innerHTML='✅ CAN TAKE THIS TRADE<br><small style="font-weight:400">Need $'+Math.round(perTrade).toLocaleString()+' • Have $'+Math.round(avail).toLocaleString()+'</small>'
+  } else {
+    ind.style.cssText='display:block;padding:7px 10px;border-radius:6px;font-size:12px;font-weight:700;text-align:center;margin-bottom:6px;background:#2e0d0d;border:1px solid #ff4560;color:#ff4560'
+    ind.innerHTML='❌ OVER BUDGET<br><small style="font-weight:400">Need $'+Math.round(perTrade).toLocaleString()+' • Short $'+Math.round(perTrade-avail).toLocaleString()+'</small>'
+  }
+}
 function calc() {
   saveRiskSettings()
   const rb      = +document.getElementById('risk-budget')?.value || +localStorage.getItem('gt_risk_budget') || 21000
@@ -4590,6 +4641,8 @@ function calc() {
   renderLevels(entry, atr)
   renderPortfolioRisk()
   updateTmRiskSummary()
+  updateRiskMeter()
+  checkCanTakeTrade(perTrade)
 }
 
 function renderLevels(entry, atr) {
