@@ -2951,8 +2951,9 @@ async function saveAllToFirebase() {
     ov_data:     { ov: OV, importedAt: new Date().toISOString() },
     trades:      TRADES,
     reb_accounts:REB_ACCOUNTS,
-    risk:        { acct: localStorage.getItem('gt_acct'), riskpct: localStorage.getItem('gt_riskpct') },
-    turbo:       JSON.parse(localStorage.getItem('gt_turbo_state') || '{}'),
+    risk: { acct: localStorage.getItem('gt_acct'), riskpct: localStorage.getItem('gt_riskpct'), budget: localStorage.getItem('gt_risk_budget'), n_trades: localStorage.getItem('gt_risk_n_trades'), delta: localStorage.getItem('gt_risk_delta'), atr_mult: window.GT_ATR_MULT||1 },
+    watchlist: JSON.parse(localStorage.getItem('gt_scr_watchlist') || '[]'),
+    turbo:       JSON.parse(localStorage.getItem('gt_turbo_state') || '{}')
     savedAt:     Date.now()
   }
   const ok = await fbSave('platform', payload)
@@ -3024,10 +3025,20 @@ async function loadFromFirebase() {
     }
 
     // Risk settings
-    if(data.risk) {
-      if(data.risk.acct) { const v=+data.risk.acct; if(v>0&&v<=2000000) { localStorage.setItem('gt_acct', data.risk.acct); const el = document.getElementById('acct'); if(el) el.value = data.risk.acct } }
-      if(data.risk.riskpct) { localStorage.setItem('gt_riskpct', data.risk.riskpct); const el = document.getElementById('riskpct'); if(el) el.value = data.risk.riskpct }
-    }
+  // Risk settings
+  if(data.risk) {
+    var rb = data.risk.budget || data.risk.acct_risk
+    if(rb) { localStorage.setItem('gt_risk_budget', rb); var el=document.getElementById('risk-budget'); if(el) el.value=rb }
+    if(data.risk.n_trades) { localStorage.setItem('gt_risk_n_trades', data.risk.n_trades); var el2=document.getElementById('risk-n-trades'); if(el2) el2.value=data.risk.n_trades }
+    if(data.risk.delta) { localStorage.setItem('gt_risk_delta', data.risk.delta); var el3=document.getElementById('delta'); if(el3) el3.value=data.risk.delta }
+    if(data.risk.atr_mult) window.GT_ATR_MULT = data.risk.atr_mult
+    if(data.risk.acct) { localStorage.setItem('gt_acct', data.risk.acct); var el4=document.getElementById('acct'); if(el4) el4.value=data.risk.acct }
+    if(data.risk.riskpct) { localStorage.setItem('gt_riskpct', data.risk.riskpct); var el5=document.getElementById('riskpct'); if(el5) el5.value=data.risk.riskpct }
+  }
+  // Watchlist
+  if(data.watchlist && Array.isArray(data.watchlist)) {
+    localStorage.setItem('gt_scr_watchlist', JSON.stringify(data.watchlist))
+  }
 
     setApi('Loaded from Firebase ✓ (' + new Date(data.savedAt).toLocaleTimeString() + ')', 'ok')
     console.log('Firebase: loaded data saved at', new Date(data.savedAt).toLocaleString())
@@ -3141,17 +3152,30 @@ function goSize(t) {
 let rollHistory = []
 
 function saveRiskSettings() {
-  const a = document.getElementById('acct').value
-  const r = document.getElementById('riskpct').value
-  if(a) localStorage.setItem('gt_acct', a)
-  if(r) localStorage.setItem('gt_riskpct', r)
+  var rb = document.getElementById('risk-budget')?.value
+  var n  = document.getElementById('risk-n-trades')?.value
+  var d  = document.getElementById('delta')?.value
+  var a  = document.getElementById('acct')?.value
+  var r  = document.getElementById('riskpct')?.value
+  if(rb) localStorage.setItem('gt_risk_budget', rb)
+  if(n)  localStorage.setItem('gt_risk_n_trades', n)
+  if(d)  localStorage.setItem('gt_risk_delta', d)
+  if(a)  localStorage.setItem('gt_acct', a)
+  if(r)  localStorage.setItem('gt_riskpct', r)
+}
 }
 function loadRiskSettings() {
-  const rb=localStorage.getItem('gt_risk_budget');if(rb){var el=document.getElementById('risk-budget');if(el)el.value=rb}else{localStorage.setItem('gt_risk_budget','21000')}
-  const a = localStorage.getItem('gt_acct')
-  const r = localStorage.getItem('gt_riskpct')
-  if(a) { const el = document.getElementById('acct'); if(el) el.value = a }
-  if(r) { const el = document.getElementById('riskpct'); if(el) el.value = r }
+  var rb = localStorage.getItem('gt_risk_budget')
+  var n  = localStorage.getItem('gt_risk_n_trades')
+  var d  = localStorage.getItem('gt_risk_delta')
+  var a  = localStorage.getItem('gt_acct')
+  var r  = localStorage.getItem('gt_riskpct')
+  if(rb) { var el=document.getElementById('risk-budget'); if(el) el.value=rb }
+  else { localStorage.setItem('gt_risk_budget','21000') }
+  if(n)  { var el2=document.getElementById('risk-n-trades'); if(el2) el2.value=n }
+  if(d)  { var el3=document.getElementById('delta'); if(el3) el3.value=d }
+  if(a)  { var el4=document.getElementById('acct'); if(el4) el4.value=a }
+  if(r)  { var el5=document.getElementById('riskpct'); if(el5) el5.value=r }
 }
 // ── TRADE MANAGER TAB SWITCHING ───────────────────────────────────────────────
 function tmShowTab(tab) {
