@@ -145,7 +145,7 @@ tr:hover td{background:#171b22;cursor:pointer}
       if(userInfo) userInfo.style.display = 'flex'
       if(userName) userName.textContent = user.displayName || user.email || 'Signed in'
       if(overlay) overlay.style.display = 'none'
-      setApi('Firebase \u00b7 ' + (user.displayName || user.email || 'connected'), 'ok')
+      if(typeof setApi==='function') setApi('Firebase \u00b7 ' + (user.displayName || user.email || 'connected'), 'ok')
       if(typeof loadFromFirebase === 'function') loadFromFirebase()
       try {
         const pendingRef = ref(db, 'pending_ov')
@@ -199,6 +199,6 @@ tr:hover td{background:#171b22;cursor:pointer}
     </button>
     <div style="color:#555c6e;font-size:11px;text-align:center;max-width:260px">Uses your Google account — same data across all your devices</div>
   </div>
-  <script src="app.js?v=5"></script>
+  <script src="app.js?v=6"></script>
 </body>
 </html>
