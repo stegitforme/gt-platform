@@ -551,6 +551,7 @@ tr:hover td{background:#171b22;cursor:pointer}
     <div style="background:#1e2d3d;border-radius:4px;height:10px;overflow:hidden;margin-bottom:6px">
       <div id="pl-meter" style="height:100%;width:0%;background:#00d68f;border-radius:4px;transition:width .4s,background .4s"></div>
     </div>
+    <div id="pl-intel-panel" style="margin-top:10px;padding-top:10px;border-top:1px solid #1e2d3d"></div>
     <div style="display:flex;justify-content:space-between;font-size:11px;color:#555c6e">
       <span><b id="pl-open-count">0</b> open trades &bull; <b id="pl-cand-count">0</b> candidates</span>
       <span id="pl-verdict" style="font-weight:700"></span>
@@ -592,7 +593,7 @@ tr:hover td{background:#171b22;cursor:pointer}
       <input type="number" id="pl-default-risk" value="5500" step="100" style="width:80px;font-size:12px;padding:3px 6px" oninput="plannerCalc()">
       <span style="font-size:11px;color:#555c6e">Delta</span>
       <input type="number" id="pl-default-delta" value="0.80" step="0.01" min="0.01" max="1" style="width:55px;font-size:12px;padding:3px 6px" oninput="plannerCalc()">
-      <button onclick="refreshCandidateATRs()" class="btn btn-ghost" style="font-size:11px;padding:3px 10px">↻ Refresh ATR</button> <span id="pl-atr-updated" style="font-size:10px;color:#555c6e"></span>
+      <button onclick="refreshCandidateATRs()" class="btn btn-ghost" style="font-size:11px;padding:3px 10px">↻ Refresh ATR</button> <button onclick="rankCandidates();renderCandidateTable()" class="btn btn-ghost" style="font-size:11px;padding:3px 10px">↕ Rank</button> <span id="pl-atr-updated" style="font-size:10px;color:#555c6e"></span> <span id="pl-atr-updated" style="font-size:10px;color:#555c6e"></span>
     </div>
   </div>
   <div class="card-body" style="padding:0">
@@ -611,6 +612,8 @@ tr:hover td{background:#171b22;cursor:pointer}
           <th style="padding:6px 4px;text-align:right">Risk $</th>
           <th style="padding:6px 4px;text-align:right">Cts</th>
           <th style="padding:6px 4px;text-align:right">Capital</th>
+          <th style="padding:6px 4px;text-align:right">Signal%</th>
+          <th style="padding:6px 4px;text-align:right">F&G</th>
           <th style="padding:6px 4px;text-align:center">Status</th>
           <th style="padding:6px 4px"></th>
         </tr></thead>
@@ -4651,6 +4654,7 @@ function updateRiskMeter() {
   var freed=Math.max(0,window._sessionStartRisk-dep)
   var fEl=document.getElementById('risk-freed-today');if(fEl)fEl.textContent=freed>100?'🟢 Freed this session: $'+Math.round(freed).toLocaleString():''
   window._riskDeployed=dep;window._riskAvailable=avail
+  if(typeof renderRiskIntelligence==='function') renderRiskIntelligence()
 }
 function checkCanTakeTrade(perTrade) {
   var ind=document.getElementById('trade-ok-indicator');if(!ind||!perTrade)return
@@ -4699,6 +4703,7 @@ async function initPlanner() {
   plannerCalc()
   // Auto-fetch ATRs for candidates
   fetchAllCandidateATRs()
+  if(typeof renderRiskIntelligence==='function') renderRiskIntelligence()
 }
 
 function savePlannerCandidates() {
@@ -4832,7 +4837,7 @@ function renderCandidateTable() {
       "<td style='padding:5px 4px;text-align:right'><input type='number' value='"+Math.round(riskAlloc)+"' step='100' style='width:65px;font-size:11px;padding:2px 4px;text-align:right' onchange='updateCandidateRisk("+idx+",this.value)'></td>"+
       "<td style='padding:5px 4px;text-align:right;font-weight:700;color:#f0c040'>"+(cts>0?cts:"—")+"</td>"+
       "<td style='padding:5px 4px;text-align:right;color:#555c6e'>"+(capital>0?"$"+Math.round(capital).toLocaleString():"—")+"</td>"+
-      "<td style='padding:5px 4px;text-align:center'>"+statusHtml+"</td>"+
+      function() { var ov=OV[sym]||{}; return "<td style='padding:5px 4px;text-align:right;font-size:11px;color:#8b91a0'>"+(ov.r?Math.round(ov.r)+"%":"—")+"</td><td style='padding:5px 4px;text-align:right;font-size:11px;color:#8b91a0'>"+(ov.fg||"—")+"</td>" }()+"<td style='padding:5px 4px;text-align:center'>"+statusHtml+"</td>"+
       "<td style='padding:5px 4px;text-align:center'><button onclick='removeCandidate("+idx+")' style='background:none;border:none;color:#555c6e;cursor:pointer;font-size:14px' title='Remove'>✕</button></td>"+
       "</tr>"
   })
@@ -4985,6 +4990,75 @@ function toggleQuickSize() {
   var open=body.style.display!=="none"
   body.style.display=open?"none":"block"
   if(icon)icon.textContent=open?"▼ expand":"▲ collapse"
+}
+// ── CLUSTER / CORRELATION AWARENESS ──────────────────────────────────────────
+var CLUSTER_MAP = {'Tech':'AI/Tech','Communication':'AI/Tech','NVDA':'AI/Tech','AMD':'AI/Tech','AVGO':'AI/Tech','TSM':'AI/Tech','CLS':'AI/Tech','LRCX':'AI/Tech','SMCI':'AI/Tech','VRT':'AI/Tech','GLW':'AI/Tech','Financials':'Rates/Finance','HOOD':'Rates/Finance','BCS':'Rates/Finance','SKM':'Rates/Finance','GS':'Rates/Finance','JPM':'Rates/Finance','Energy':'Oil/Energy','XOM':'Oil/Energy','CVX':'Oil/Energy','Healthcare':'Healthcare','Industrials':'Industrial','EMBJ':'Industrial','Discretionary':'Consumer','AMZN':'Consumer','Space':'Space/Defense','LUNR':'Space/Defense','Staples':'Defensive','Utilities':'Defensive','REIT':'Defensive'}
+function getCluster(sym) { return CLUSTER_MAP[sym] || CLUSTER_MAP[getSector(sym)] || getSector(sym) || "Other" }
+function calcClusterRisk() {
+  var open=TRADES.filter(function(t){return t.status==="open"})
+  var clusters={},total=0
+  open.forEach(function(t){var sym=rootTicker(t.ticker);var cl=getCluster(sym);var d=t.delta||0.80;var risk=(t.atr||0)*d*100*(t.cts||1);clusters[cl]=(clusters[cl]||0)+risk;total+=risk})
+  return {clusters,total}
+}
+function calcCandClusterRisk(sym,tradeRisk) {
+  var cl=getCluster(sym);var e=calcClusterRisk();var cur=e.clusters[cl]||0
+  var newT=e.total+tradeRisk;var newC=cur+tradeRisk
+  return {cluster:cl,newClusterPct:newT>0?newC/newT*100:0}
+}
+function getRiskIntelligence() {
+  var budget=+localStorage.getItem("gt_risk_budget")||21000
+  var deployed=calcDeployed();var available=Math.max(0,budget-deployed)
+  var cr=calcClusterRisk();var clusters=cr.clusters;var total=cr.total
+  var defaultRisk=+document.getElementById("pl-default-risk")?.value||5500
+  var intel={warnings:[],suggestions:[],clusters:[]}
+  // Cluster bars
+  Object.entries(clusters).sort(function(a,b){return b[1]-a[1]}).forEach(function(e){
+    var pct=total>0?Math.round(e[1]/total*100):0
+    intel.clusters.push({name:e[0],risk:Math.round(e[1]),pct})
+    if(pct>=50) intel.warnings.push({level:"high",msg:"⚠️ "+e[0]+": "+pct+"% of portfolio — very concentrated"})
+    else if(pct>=35) intel.warnings.push({level:"medium",msg:"⚠️ "+e[0]+": "+pct+"% — elevated concentration"})
+  })
+  // Suggested sizing
+  var candCount=PLANNER_CANDIDATES.length
+  if(available>0&&candCount>0){var sug=Math.floor(available/candCount);intel.suggestions.push("💡 $"+Math.round(available).toLocaleString()+" available ÷ "+candCount+" candidates = ~$"+sug.toLocaleString()+"/trade suggested")}
+  else if(available<=0) intel.suggestions.push("🔴 No budget remaining — reduce or close positions first")
+  // Ticker concentration
+  var tickerRisks={}
+  TRADES.filter(function(t){return t.status==="open"}).forEach(function(t){var sym=rootTicker(t.ticker);var d=t.delta||0.80;tickerRisks[sym]=(tickerRisks[sym]||0)+(t.atr||0)*d*100*(t.cts||1)})
+  Object.entries(tickerRisks).forEach(function(e){var pct=total>0?Math.round(e[1]/total*100):0;if(pct>=20)intel.warnings.push({level:"medium",msg:"⚠️ "+e[0]+": "+pct+"% single-name concentration"})})
+  return intel
+}
+function renderRiskIntelligence() {
+  var panel=document.getElementById("pl-intel-panel");if(!panel)return
+  var intel=getRiskIntelligence();var html=""
+  if(intel.clusters.length){
+    html+='<div style="font-size:10px;color:#555c6e;font-weight:600;letter-spacing:.08em;margin-bottom:6px">CLUSTER EXPOSURE</div>'
+    intel.clusters.forEach(function(c){
+      var col=c.pct>=50?"#ff4560":c.pct>=35?"#ff8c42":"#00d68f"
+      var warn=c.pct>=50?" ⚠️ HIGH":c.pct>=35?" ⚠️ ELEVATED":""
+      html+='<div style="margin-bottom:5px"><div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px"><span style="color:#e8eaf0">'+c.name+warn+'</span><span style="color:'+col+';font-weight:700">$'+c.risk.toLocaleString()+' ('+c.pct+'%)</span></div><div style="background:#1e2d3d;border-radius:2px;height:5px"><div style="width:'+Math.min(c.pct,100)+'%;height:100%;background:'+col+';border-radius:2px;transition:width .4s"></div></div></div>'
+    })
+  }
+  if(intel.suggestions.length) intel.suggestions.forEach(function(s){html+='<div style="font-size:12px;color:#4da6ff;padding:4px 0;border-top:1px solid #1e2d3d;margin-top:6px">'+s+'</div>'})
+  if(intel.warnings.length) intel.warnings.forEach(function(w){var col=w.level==="high"?"#ff4560":"#ff8c42";html+='<div style="font-size:11px;color:'+col+';padding:2px 0">'+w.msg+'</div>'})
+  panel.innerHTML=html||'<div style="font-size:11px;color:#555c6e">✅ No concentration warnings</div>'
+}
+function getCandidateStatus(sym,tradeRisk,deployed,budget) {
+  var available=Math.max(0,budget-deployed)
+  var cc=calcCandClusterRisk(sym,tradeRisk)
+  var fits=tradeRisk<=available,heavy=cc.newClusterPct>=45
+  if(!fits) return {html:'<span style="color:#ff4560;font-size:11px" title="Exceeds available risk budget">❌ over budget</span>',score:0}
+  if(heavy) return {html:'<span style="color:#ff8c42;font-size:11px" title="'+cc.cluster+' cluster ≥45%">⚠️ '+cc.cluster+' heavy</span>',score:1}
+  return {html:'<span style="color:#00d68f;font-size:11px">✅ fits</span>',score:2}
+}
+function rankCandidates() {
+  PLANNER_CANDIDATES.sort(function(a,b){
+    var ovA=OV[a.sym]||{},ovB=OV[b.sym]||{}
+    var sA=(ovA.gt||0)*0.4+(ovA.r||0)*0.001+(ovA.fg||0)*0.3
+    var sB=(ovB.gt||0)*0.4+(ovB.r||0)*0.001+(ovB.fg||0)*0.3
+    return sB-sA
+  })
+  savePlannerCandidates()
 }
 // ── END PLANNER ───────────────────────────────────────────────────────────────
 function calc() {
