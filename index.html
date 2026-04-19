@@ -411,90 +411,63 @@ tr:hover td{background:#171b22;cursor:pointer}
 
 <!-- &#9552;&#9552;&#9552; SCREENER &#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552; -->
 <div id="screener" class="page">
-  <!-- OVTLYR Data Refresh Panel -->
-  <div class="card" style="margin-bottom:12px">
-    <div class="card-head">
-      <span class="card-title">OVTLYR Data Refresh</span>
-      <span id="ov-last-update" style="font-size:10px;color:#555c6e"></span>
-    </div>
-    <div class="card-body" style="padding:12px 16px">
-      <div style="display:grid;grid-template-columns:1fr auto;gap:12px;align-items:start">
-        <div>
-          <div style="font-size:12px;color:#8b91a0;margin-bottom:8px;line-height:1.6">
-            <b style="color:#e8eaf0">Option A — OVTLYR API:</b> If you have an OVTLYR API key, enter it below and click <b style="color:#f0c040">Auto-Fetch</b>.<br>
-            <b style="color:#e8eaf0">Option B — Manual paste:</b> Go to <a href="https://console.ovtlyr.com/stocks-etfs" target="_blank" style="color:#4da6ff">console.ovtlyr.com</a> → F12 → Console → paste script → copy result → paste below → Import.<br>
-            <b style="color:#e8eaf0">Option C — Ask Claude:</b> Ask Claude in Chrome to "refresh OVTLYR data in GOGO" — it scrapes and imports directly.
-          </div>
-          <textarea id="ov-paste" rows="3" placeholder='Paste OVTLYR JSON here... {"NVDA":{"r":752,"fg":33.9},...}' style="width:100%;background:#0a0c0f;border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:8px;font-size:11px;color:#e8eaf0;font-family:monospace;resize:vertical;outline:none;box-sizing:border-box"></textarea>
-          <div id="ov-import-status" style="font-size:11px;margin-top:5px;min-height:14px"></div>
-          <div id="bookmarklet-help" style="display:none;margin-top:10px;padding:10px;background:#0a0c0f;border-radius:6px;font-size:11px;color:#8b91a0;line-height:1.8">
-            <b style="color:#f0c040">One-time bookmarklet setup:</b><br>
-            1. Click "Copy Script" button<br>
-            2. Chrome bookmarks bar -> right-click -> "Add page..."<br>
-            3. Name: <b style="color:#e8eaf0">GT Scrape</b> . URL: paste the copied code<br>
-            4. Save -- the bookmark now lives in your bar<br><br>
-            <b style="color:#f0c040">Daily refresh (takes ~10 seconds):</b><br>
-            1. Open <a href="https://console.ovtlyr.com" target="_blank" style="color:#4da6ff">console.ovtlyr.com</a> Screener and wait for data to load<br>
-            2. Click the GT Scrape bookmark — data sends directly to GOGO<br>
-            3. Switch to GOGO — it auto-updates! No paste needed
-          </div>
-        </div>
-        <div style="display:flex;flex-direction:column;gap:7px;min-width:145px">
-          <button class="btn btn-gold" style="font-size:11px" onclick="importOVData()">Import data</button>
-          <button class="btn btn-ghost" style="font-size:11px" onclick="fetchOVTLYRApi()" title="Auto-fetch if you have an OVTLYR API key">Auto-Fetch ⚡</button>
-          <div style="display:flex;align-items:center;gap:5px;margin-top:2px">
-            <input type="password" id="gh-token-input" placeholder="GitHub token" title="Enter GitHub token for cross-device cloud sync"
-              style="flex:1;background:#0a0c0f;border:1px solid rgba(255,255,255,.08);border-radius:4px;padding:4px 7px;font-size:10px;color:#8b91a0;outline:none;min-width:0"
-              oninput="localStorage.setItem('gt_github_token',this.value);document.getElementById('cloud-sync-status').textContent=this.value?'cloud on':'not set'">
-            <span id="cloud-sync-status" style="font-size:9px;color:#555c6e;white-space:nowrap;flex-shrink:0">not set</span>
-          </div>
-          <button class="btn btn-ghost" style="font-size:11px" onclick="copyBookmarklet()">Copy Script</button>
-          <button class="btn btn-ghost" style="font-size:11px" onclick="showBookmarkletHelp()">Install extension</button>
-        </div>
-      </div>
-    </div>
+<!-- OVTLYR Data Refresh — collapsed by default -->
+<div style="margin-bottom:10px">
+  <div onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'" style="display:flex;align-items:center;gap:8px;padding:6px 12px;background:#0d1117;border-radius:6px;cursor:pointer;border:1px solid #1e2d3d">
+    <span style="font-size:11px;color:#555c6e;font-weight:600;letter-spacing:.06em">OVTLYR DATA SYNC</span>
+    <span style="font-size:10px;color:#555c6e">▼ expand</span>
+    <span id="ov-last-update" style="font-size:10px;color:#555c6e;margin-left:auto"></span>
   </div>
-
-  <div class="card">
-    <div class="card-head">
-      <span class="card-title">Filters</span>
-      <div style="display:flex;gap:7px">
-        <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:4px"><span style="font-size:10px;color:#555c6e;align-self:center">Presets:</span><button class="btn btn-ghost" style="font-size:10px;padding:2px 7px" onclick="loadPreset('highConv')" title="Signal>200%, F&G 30-70, no earnings">High Conv</button><button class="btn btn-ghost" style="font-size:10px;padding:2px 7px" onclick="loadPreset('safe')" title="Signal>50%, no earnings, no wide spreads">Safe</button><button class="btn btn-ghost" style="font-size:10px;padding:2px 7px" onclick="loadPreset('bull')" title="Bull sectors, F&G 40-75">Bullish</button><button class="btn btn-ghost" style="font-size:10px;padding:2px 7px;color:#f0c040" onclick="saveCurrentPreset()" title="Save current filters">★ Save</button></div><button class="btn btn-ghost" style="font-size:11px;padding:4px 10px" onclick="resetFilters()">Reset</button>
-        <button class="btn btn-gold" style="width:auto;margin:0;font-size:11px;padding:4px 13px" onclick="runFilter()">Apply</button>
-      </div>
+  <div style="display:none;border:1px solid #1e2d3d;border-top:none;border-radius:0 0 6px 6px;padding:12px;background:#090d13">
+    <textarea id="ov-paste" rows="2" placeholder='Paste OVTLYR JSON here...' style="width:100%;font-size:11px;padding:6px;margin-bottom:8px;background:#0d1117;border:1px solid #1e2d3d;color:#e8eaf0;border-radius:4px"></textarea>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <button class="btn btn-gold" style="font-size:11px" onclick="importOVData()">Import JSON</button>
+      <button class="btn btn-ghost" style="font-size:11px" onclick="fetchOVTLYRApi()">↻ API Refresh</button>
+      <button class="btn btn-ghost" style="font-size:11px" onclick="copyBookmarklet()">Copy Bookmarklet</button>
+      <input type="password" id="gh-token-input" placeholder="GitHub token (optional)" style="font-size:11px;padding:3px 8px;flex:1;min-width:120px;background:#0d1117;border:1px solid #1e2d3d;color:#e8eaf0;border-radius:4px">
     </div>
-    <div class="card-body">
-      <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:9px">
-        <div class="field" style="margin:0"><label>Min signal %</label><input type="number" id="f-sig" value="0" oninput="debouncedFilter()"></div>
-        <div class="field" style="margin:0"><label>F&G min</label><input type="number" id="f-fg-min" value="0" oninput="debouncedFilter()"></div>
-        <div class="field" style="margin:0"><label>F&G max</label><input type="number" id="f-fg-max" value="100" oninput="debouncedFilter()"></div>
-        <div class="field" style="margin:0">
-  <label style="display:flex;align-items:center;gap:4px">
-    Max spread
-    <span id="f-spread-type" onclick="toggleSpreadType()" style="cursor:pointer;background:#171b22;border:1px solid rgba(255,255,255,.15);border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700;color:#f0c040;user-select:none">$</span>
-  </label>
-  <input type="number" id="f-spread" value="0.50" step="0.05" oninput="debouncedFilter()">
+    <div id="ov-import-status" style="font-size:11px;color:#555c6e;margin-top:6px"></div>
+  </div>
 </div>
-        <div class="field" style="margin:0;display:none"><label>Min OI</label><input type="number" id="f-oi" value="0"></div>
-        <div class="field" style="margin:0"><label>Min 30D vol</label><input type="number" id="f-vol" value="0"></div>
-      </div>
-      <div style="display:flex;gap:16px;margin-top:10px;padding-top:9px;border-top:1px solid rgba(255,255,255,.06)">
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;text-transform:none;font-size:12px;color:#8b91a0;margin:0"><input type="checkbox" id="f-earn" onchange="debouncedFilter()" checked style="accent-color:#f0c040;width:13px;height:13px;margin:0"> No earnings <=21d</label>
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;text-transform:none;font-size:12px;color:#8b91a0;margin:0"><input type="checkbox" id="f-bull" onchange="debouncedFilter()" style="accent-color:#f0c040;width:13px;height:13px;margin:0"> Bullish sector only</label>
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;text-transform:none;font-size:12px;color:#8b91a0;margin:0"><input type="checkbox" id="f-wide" onchange="debouncedFilter()" checked style="accent-color:#f0c040;width:13px;height:13px;margin:0"> Exclude wide spreads</label>
-      </div>
+<!-- Compact Filters -->
+<div style="margin-bottom:10px;padding:10px 14px;background:#0d1117;border-radius:8px;border:1px solid #1e2d3d">
+  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+    <div style="flex:0 0 auto"><div style="font-size:10px;color:#555c6e;margin-bottom:3px">MIN SIGNAL %</div><input type="number" id="f-sig" value="0" step="50" min="0" style="width:72px;padding:4px 6px;font-size:12px" oninput="debouncedFilter()"></div>
+    <div style="flex:0 0 auto"><div style="font-size:10px;color:#555c6e;margin-bottom:3px">F&G MIN</div><input type="number" id="f-fg-min" value="0" step="5" min="0" max="100" style="width:56px;padding:4px 6px;font-size:12px" oninput="debouncedFilter()"></div>
+    <div style="flex:0 0 auto"><div style="font-size:10px;color:#555c6e;margin-bottom:3px">F&G MAX</div><input type="number" id="f-fg-max" value="100" step="5" min="0" max="100" style="width:56px;padding:4px 6px;font-size:12px" oninput="debouncedFilter()"></div>
+    <div style="flex:0 0 auto"><div style="font-size:10px;color:#555c6e;margin-bottom:3px">MAX SPREAD <span id="f-spread-type" onclick="toggleSpreadType()" style="cursor:pointer;color:#4da6ff;font-weight:700">$</span></div><input type="number" id="f-spread" value="0.50" step="0.05" style="width:60px;padding:4px 6px;font-size:12px" oninput="debouncedFilter()"></div>
+    <div style="flex:0 0 auto"><div style="font-size:10px;color:#555c6e;margin-bottom:3px">MIN 30D VOL</div><input type="number" id="f-vol" value="0" step="500000" min="0" style="width:80px;padding:4px 6px;font-size:12px" oninput="debouncedFilter()"></div>
+    <div style="flex:0 0 auto;display:flex;flex-direction:column;gap:4px">
+      <label style="font-size:11px;color:#8b91a0;display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="f-earn" onchange="debouncedFilter()"> No earnings ≤21d</label>
+      <label style="font-size:11px;color:#8b91a0;display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="f-wide" onchange="debouncedFilter()"> Exclude wide spreads</label>
+      <label style="font-size:11px;color:#8b91a0;display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="f-bull" onchange="debouncedFilter()"> Bullish sectors only</label>
+    </div>
+    <div style="display:flex;gap:4px;margin-left:auto;align-items:flex-end">
+      <button onclick="resetFilters()" class="btn btn-ghost" style="font-size:11px;padding:4px 10px">Reset</button>
+      <button onclick="runFilter()" class="btn btn-gold" style="font-size:11px;padding:4px 12px">Apply</button>
     </div>
   </div>
-  <div class="card">
-    <div class="card-head">
-      <span class="card-title">Ranked Results</span>
-      <div style="display:flex;align-items:center;gap:10px">
-        <span id="scr-count" style="font-size:11px;color:#555c6e;font-family:\'SF Mono\',monospace">0 tickers</span>
-        <span id="scr-loading" style="font-size:10px;color:#ff8c42;display:none">fetching prices...</span>
-        <button class="btn btn-ghost" style="font-size:11px;padding:3px 9px" onclick="var tickers=Object.keys(OV);fetchScreenerPrices(tickers).then(()=>runFilter())">Fetch prices + OI</button>
-        <button id="gt-score-btn" class="btn btn-ghost" style="font-size:11px;padding:3px 9px;color:#f0c040;border-color:rgba(240,192,64,.3)" onclick="runGTScores()">Run GT Scores &#9654;</button>
-      </div>
+</div>
+<div class="card">
+  <!-- Command Bar -->
+  <div style="display:flex;gap:8px;align-items:center;padding:10px 14px;border-bottom:1px solid #1e2d3d;flex-wrap:wrap">
+    <span style="font-size:12px;font-weight:700;color:#e8eaf0">SCREENER</span>
+    <button onclick="runFilter()" class="btn btn-gold" style="font-size:11px;padding:4px 12px">↻ Run GT Scores</button>
+    <button onclick="fetchScreenerPricesAll()" class="btn btn-ghost" style="font-size:11px;padding:4px 10px">⚡ Fetch Prices</button>
+    <span id="scr-count" style="font-size:11px;color:#555c6e;margin-left:4px">--</span>
+    <div style="margin-left:auto;display:flex;gap:4px">
+      <span style="font-size:10px;color:#555c6e;align-self:center">Sort:</span>
+      <button onclick="scrSort('score')" class="btn btn-ghost" style="font-size:10px;padding:3px 8px">GT ↕</button>
+      <button onclick="scrSort('sig')" class="btn btn-ghost" style="font-size:10px;padding:3px 8px">Signal ↕</button>
+      <button onclick="scrSort('fg')" class="btn btn-ghost" style="font-size:10px;padding:3px 8px">F&G ↕</button>
+      <button onclick="scrSort('vol')" class="btn btn-ghost" style="font-size:10px;padding:3px 8px">Vol ↕</button>
     </div>
+  </div>
+  <!-- Top Setups Strip -->
+  <div id="scr-top-strip" style="display:none;padding:8px 14px;border-bottom:1px solid #1e2d3d;background:#090d13">
+    <span style="font-size:10px;color:#555c6e;font-weight:600;letter-spacing:.06em;margin-right:12px">TOP SETUPS</span>
+    <span id="scr-top-chips" style="display:inline-flex;gap:6px;flex-wrap:wrap"></span>
+  </div>
     <div style="overflow-x:auto">
       <table>
         <thead><tr>
@@ -2615,6 +2588,24 @@ async function loadOVFromCloud() {
 }
 
 // -- SCREENER ======================================
+
+function renderTopStrip(scored) {
+  var strip = document.getElementById('scr-top-strip')
+  var chips = document.getElementById('scr-top-chips')
+  if(!strip||!chips||!scored.length) { if(strip) strip.style.display='none'; return }
+  var top = scored.slice(0,5)
+  chips.innerHTML = top.map(function(s) {
+    var sc = Math.round(s.score)
+    var col = sc>=85?'#00d68f':sc>=65?'#f0c040':'#ff8c42'
+    return '<span onclick="goSize(\'' + s.t + '\')" style="cursor:pointer;background:#0d1117;border:1px solid '+col+';border-radius:4px;padding:3px 8px;font-size:11px;display:inline-flex;gap:6px;align-items:center">'
+      +'<b style="color:'+col+'">'+s.t+'</b>'
+      +'<span style="color:#555c6e">'+sc+'</span>'
+      +'<span style="color:#8b91a0;font-size:10px">'+Math.round(s.d.r||0)+'%</span>'
+      +'<span style="font-size:10px;color:#555c6e">'+(s.d.s||'')+'</span>'
+      +'</span>'
+  }).join('')
+  strip.style.display = 'block'
+}
 function runFilter() {
   const minSig  = +document.getElementById('f-sig').value || 0
   const fgMin   = +document.getElementById('f-fg-min').value || 0
@@ -2654,7 +2645,8 @@ function runFilter() {
     if(typeof SCR_SORT === 'undefined' || !SCR_SORT) return b.score - a.score
     const col = SCR_SORT.col, dir = SCR_SORT.dir
     if(col === 'gt')    return dir * ((GT_SCORES[b.t]?.score||0) - (GT_SCORES[a.t]?.score||0))
-    if(col === 'sig')   return dir * (b.d.r - a.d.r)
+    if(col === 'sig')   return dir * ((b.d.r||0) - (a.d.r||0))
+    if(col === 'vol')    return dir * ((b.d.v||0) - (a.d.v||0))
     if(col === 'fg')    return dir * (b.d.fg - a.d.fg)
     return dir * (b.score - a.score)  // default: score
   })
@@ -2670,44 +2662,60 @@ function runFilter() {
   const PAGE_SIZE=75,display=scored.slice(0,PAGE_SIZE)
   if(scored.length>PAGE_SIZE)document.getElementById('scr-count').textContent='Top '+PAGE_SIZE+' of '+scored.length+' — tighten filters'
   tbody.innerHTML = display.map((s, i) => {
-    // F&G color: 15-65 is Golden Ticket sweet spot
-    // Suspicious values (<=5 or >100) shown in grey
-    const fgSuspect = s.d.fg <= 5 || s.d.fg > 100
-    const fgc = fgSuspect ? '#333a4a'
-              : s.d.fg < 15 ? '#ff4560'
-              : s.d.fg <= 35 ? '#4da6ff'
-              : s.d.fg <= 65 ? '#00d68f'
-              : s.d.fg <= 80 ? '#ff8c42'
-              : '#ff4560'
-    const spLbl = s.spreadOk ? '<span class="g">&#10003;</span>' : '<span class="r">&#10007;</span>'
-    // DTE = days until May-15 expiry (from sizer) or next monthly expiry
-    const eLbl  = s.earnOk   ? '<span class="g">&#10003;</span>' : '<span class="o">&#9888;</span>'
-    // Signal bar: r is now a percentage value (0-200+). Scale so 100%=full bar, cap at 100
-    const bw = s.d.r > 100 ? 100 : Math.max(2, s.d.r)
-    const scoreBar = Math.round(s.score)
-    const isWatched = (typeof SCR_WATCHLIST !== 'undefined') && SCR_WATCHLIST.includes(s.t)
-    return '<tr onclick="goSize(\'' + s.t + '\')">' +
-      '<td style="width:24px;text-align:center" onclick="event.stopPropagation();scrToggleWatch(\'' + s.t + '\')">' +
-        '<span style="cursor:pointer;font-size:14px;line-height:1;color:'+(isWatched?'#f0c040':'#333a4a')+';transition:color .15s" title="'+(isWatched?'Remove from watchlist':'Add to watchlist')+'">'+(isWatched?'★':'☆')+'</span>' +
-      '</td>' +
-      '<td class="dim" style="width:28px">' + (i+1) + '</td>' +
-      '<td style="font-family:\'SF Mono\',monospace;font-weight:600">' + s.t + '<div style="font-size:10px;color:#555c6e">' + s.d.s + '</div></td>' +
-      '<td id="price-' + s.t + '" style="font-family:\'SF Mono\',monospace;color:#555c6e;font-size:11px">--</td>' +
-      '<td><div style="display:flex;align-items:center;gap:5px"><div style="width:48px;height:3px;background:#1e2330;border-radius:2px;overflow:hidden"><div style="width:' + bw + '%;height:100%;background:#f0c040;border-radius:2px"></div></div><span class="gold" style="font-family:\'SF Mono\',monospace;font-size:12px">' + s.d.r + '%</span></div></td>' +
-      '<td style="font-family:\'SF Mono\',monospace;color:' + fgc + ';font-size:11px">' + (fgSuspect ? '<span style="color:#333a4a">?</span>' : s.d.fg.toFixed(0)) + '</td>' +
-      '<td class="dim" style="font-size:11px">' + s.d.s + '</td>' +
-      '<td>' + spLbl + '</td>' +
-      '<td>' + eLbl + '</td>' +
-      '<td id="gt-' + s.t + '" style="font-family:\'SF Mono\',monospace;font-size:11px;min-width:52px">' +
-        (GT_SCORES[s.t] ? '<span style="color:' + (GT_SCORES[s.t].score>=8?'#00d68f':GT_SCORES[s.t].score>=6?'#f0c040':GT_SCORES[s.t].score>=4?'#ff8c42':'#ff4560') + ';font-weight:700">' + GT_SCORES[s.t].score + '</span><div style="font-size:9px;color:#555c6e">T:'+GT_SCORES[s.t].trend+' M:'+GT_SCORES[s.t].mom+' RS:'+GT_SCORES[s.t].rs+'</div>' : '--') + '</td>' +
-      '<td style="font-family:\'SF Mono\',monospace;font-size:11px;color:#555c6e">' + scoreBar + '</td>' +
-      '<td><button class="btn btn-ghost" style="font-size:10px;padding:2px 7px" onclick="event.stopPropagation();goSize(\'' + s.t + '\')">Size -></button></td>' +
+  // GT score visuals
+  var sc = Math.round(s.score)
+  var scCol = sc>=85?'#00d68f':sc>=65?'#f0c040':sc>=45?'#ff8c42':'#ff4560'
+  var scBar = '<div style="display:flex;align-items:center;gap:5px"><span style="font-size:14px;font-weight:700;color:'+scCol+'">'+sc+'</span><div style="flex:1;background:#1e2d3d;border-radius:2px;height:4px;width:40px"><div style="width:'+sc+'%;height:100%;background:'+scCol+';border-radius:2px"></div></div></div>'
+  // Signal bar
+  var sig = Math.round(s.d.r||0)
+  var sigCol = sig>=500?'#00d68f':sig>=200?'#f0c040':sig>=100?'#ff8c42':'#e8eaf0'
+  var sigStr = '<span style="color:'+sigCol+';font-weight:600">'+sig+'%</span>'
+  // F&G colored
+  var fg = s.d.fg||0
+  var fgc = fg<=5||fg>100?'#333a4a':fg<15?'#ff4560':fg<=35?'#4da6ff':fg<=65?'#00d68f':fg<=80?'#ff8c42':'#ff4560'
+  var fgStr = fg<=5||fg>100?'<span style="color:#333a4a">—</span>':'<span style="font-weight:600;color:'+fgc+'">'+Math.round(fg)+'</span>'
+  // Cluster label (subtle)
+  var cluster = typeof getCluster==='function' ? getCluster(s.t) : (s.d.s||'')
+  var clusterStr = '<span style="font-size:10px;color:#555c6e;background:#0d1117;padding:1px 5px;border-radius:3px">'+cluster+'</span>'
+  // Flags — only show problems, not normal states
+  var flags = []
+  var earn = (typeof hasEarnings==='function') ? hasEarnings(s.t) : (s.d.earn)
+  if(earn) flags.push('<span style="color:#ff8c42;font-size:10px">⚠️ earn</span>')
+  var lp = LIVE_PRICES[s.t]
+  if(lp && lp.bid && lp.ask) {
+    var sp = lp.ask-lp.bid
+    if(sp > 0.50) flags.push('<span style="color:#ff4560;font-size:10px">⚠️ wide</span>')
+  }
+  var flagStr = flags.length ? flags.join(' ') : '<span style="color:#1e2d3d;font-size:10px">·</span>'
+  // Price
+  var priceStr = lp && lp.price ? '<span style="font-size:11px;color:#8b91a0">$'+lp.price.toFixed(2)+'</span>' : '<span style="color:#1e2d3d;font-size:10px">—</span>'
+  // Star
+  var wl = JSON.parse(localStorage.getItem('gt_scr_watchlist')||'[]')
+  var starred = wl.includes(s.t)
+  var starBtn = '<button onclick="event.stopPropagation();toggleStar(\'' + s.t + '\')" style="background:none;border:none;cursor:pointer;font-size:14px;padding:0 2px" title="Add to Planner">'+(starred?'⭐':'☆')+'</button>'
+  // Plan Trade button
+  var planBtn = '<button onclick="event.stopPropagation();goSize(\'' + s.t + '\')" class="btn btn-gold" style="font-size:10px;padding:3px 8px;white-space:nowrap">Plan Trade →</button>'
+  return '<tr style="cursor:pointer" onclick="goSize(\'' + s.t + '\')">' +
+    '<td class="dim" style="width:24px;font-size:10px">' + (i+1) + '</td>' +
+    '<td style="font-weight:700">' + s.t + '</td>' +
+    '<td>' + scBar + '</td>' +
+    '<td>' + sigStr + '</td>' +
+    '<td>' + fgStr + '</td>' +
+    '<td>' + clusterStr + '</td>' +
+    '<td>' + priceStr + '</td>' +
+    '<td>' + flagStr + '</td>' +
+    '<td style="white-space:nowrap">' + starBtn + planBtn + '</td>' +
     '</tr>'
-  }).join('')
+}).join('')
 
   // Prices load on explicit 'Fetch prices' button click only (saves API quota)
+  renderTopStrip(scored)
 }
 
+function fetchScreenerPricesAll() {
+  var tickers = Object.keys(OV).slice(0,50)
+  fetchScreenerPrices(tickers)
+}
 async function fetchScreenerPrices(tickers) {
   const loader = document.getElementById('scr-loading')
   loader.style.display = 'inline'
