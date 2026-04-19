@@ -411,6 +411,16 @@ tr:hover td{background:#171b22;cursor:pointer}
 
 <!-- &#9552;&#9552;&#9552; SCREENER &#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552; -->
 <div id="screener" class="page">
+<!-- Screener Mode Toggle -->
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:8px 12px;background:#090d13;border-radius:8px;border:1px solid #1e2d3d">
+  <span style="font-size:11px;color:#555c6e;font-weight:600;letter-spacing:.06em">DATA SOURCE:</span>
+  <button id="mode-ovtlyr" onclick="setScreenerMode('ovtlyr')" class="btn btn-gold" style="font-size:11px;padding:4px 14px">OVTLYR</button>
+  <button id="mode-internal" onclick="setScreenerMode('internal')" class="btn btn-ghost" style="font-size:11px;padding:4px 14px">INTERNAL</button>
+  <span id="mode-label" style="font-size:10px;color:#555c6e;margin-left:4px">OVTLYR-derived universe</span>
+  <span id="internal-status" style="font-size:10px;color:#555c6e;margin-left:auto"></span>
+</div>
+<!-- OVTLYR panel (shown in ovtlyr mode) -->
+<div id="screener-ovtlyr-panel">
 <!-- OVTLYR Data Refresh — collapsed by default -->
 <div style="margin-bottom:10px">
   <div onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'" style="display:flex;align-items:center;gap:8px;padding:6px 12px;background:#0d1117;border-radius:6px;cursor:pointer;border:1px solid #1e2d3d">
@@ -506,6 +516,62 @@ tr:hover td{background:#171b22;cursor:pointer}
 
 </div>
 
+</div><!-- end screener-ovtlyr-panel -->
+<div id="screener-internal-panel" style="display:none">
+  <!-- Internal Command Bar -->
+  <div style="display:flex;gap:8px;align-items:center;padding:10px 14px;background:#0d1117;border-radius:8px;border:1px solid #1e2d3d;margin-bottom:10px;flex-wrap:wrap">
+    <span style="font-size:12px;font-weight:700;color:#4da6ff">INTERNAL SCREENER</span>
+    <span style="font-size:10px;color:#555c6e">Independent universe · Transparent scoring</span>
+    <button onclick="runInternalScreen()" class="btn" style="font-size:11px;padding:4px 14px;background:#1a2d4a;color:#4da6ff;border:1px solid #4da6ff">▶ Run Screen</button>
+    <span id="int-progress" style="font-size:11px;color:#555c6e"></span>
+    <span style="margin-left:auto;font-size:10px;color:#555c6e" id="int-last-run"></span>
+  </div>
+  <!-- Internal Filters (compact) -->
+  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:8px 14px;background:#090d13;border-radius:6px;border:1px solid #1e2d3d;margin-bottom:10px;font-size:11px">
+    <span style="color:#555c6e">Min Score:</span>
+    <input type="number" id="int-f-score" value="40" step="5" min="0" max="100" style="width:50px;padding:3px 5px;font-size:11px">
+    <span style="color:#555c6e">Sector:</span>
+    <select id="int-f-sector" style="font-size:11px;padding:3px 5px;background:#0d1117;color:#e8eaf0;border:1px solid #1e2d3d">
+      <option value="">All</option>
+      <option>Tech</option><option>AI/Tech</option><option>Finance</option>
+      <option>Healthcare</option><option>Industrials</option><option>Consumer</option>
+      <option>Energy</option><option>Communication</option>
+    </select>
+    <label style="display:flex;align-items:center;gap:4px;color:#8b91a0;cursor:pointer">
+      <input type="checkbox" id="int-f-earn"> No earnings
+    </label>
+    <button onclick="runInternalFilter()" class="btn btn-ghost" style="font-size:10px;padding:3px 8px">Apply</button>
+  </div>
+  <!-- Internal Results Table -->
+  <div style="background:#0d1117;border-radius:8px;border:1px solid #1e2d3d;overflow:hidden">
+    <div id="int-top-strip" style="display:none;padding:8px 14px;border-bottom:1px solid #1e2d3d;background:#090d13">
+      <span style="font-size:10px;color:#4da6ff;font-weight:600;letter-spacing:.06em;margin-right:12px">TOP INTERNAL SETUPS</span>
+      <span id="int-top-chips" style="display:inline-flex;gap:6px;flex-wrap:wrap"></span>
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr style="color:#555c6e;font-size:10px;text-transform:uppercase;border-bottom:1px solid #1e2d3d">
+        <th style="padding:6px 10px;text-align:left;width:24px">#</th>
+        <th style="padding:6px 6px;text-align:left">Ticker</th>
+        <th style="padding:6px 6px;text-align:left">Score</th>
+        <th style="padding:6px 6px;text-align:right" title="Momentum (0-40)">Mom</th>
+        <th style="padding:6px 6px;text-align:right" title="Trend structure (0-25)">Trend</th>
+        <th style="padding:6px 6px;text-align:right" title="RSI sentiment (0-15)">Sent</th>
+        <th style="padding:6px 6px;text-align:right" title="Sector strength (0-10)">Sect</th>
+        <th style="padding:6px 6px;text-align:right" title="Execution quality (0-10)">Exec</th>
+        <th style="padding:6px 6px;text-align:left">Sector</th>
+        <th style="padding:6px 6px;text-align:right">20d Ret</th>
+        <th style="padding:6px 6px"></th>
+      </tr></thead>
+      <tbody id="int-body"><tr><td colspan="11" style="padding:20px;text-align:center;color:#555c6e">Click "Run Screen" to score the internal universe</td></tr></tbody>
+    </table>
+    <div id="int-load-bar" style="display:none;padding:12px;text-align:center">
+      <div style="background:#1e2d3d;border-radius:4px;height:6px;overflow:hidden;margin-bottom:6px">
+        <div id="int-bar-fill" style="height:100%;width:0%;background:#4da6ff;border-radius:4px;transition:width .3s"></div>
+      </div>
+      <span id="int-bar-label" style="font-size:11px;color:#555c6e">Fetching data...</span>
+    </div>
+  </div>
+</div>
 <!-- &#9552;&#9552;&#9552; POSITION SIZER &#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552; -->
 <div id="sizer" class="sizer-page">
 <div class="card" style="margin-bottom:12px">
@@ -2989,6 +3055,8 @@ async function saveAllToFirebase() {
     risk: { acct: localStorage.getItem('gt_acct'), riskpct: localStorage.getItem('gt_riskpct'), budget: localStorage.getItem('gt_risk_budget'), n_trades: localStorage.getItem('gt_risk_n_trades'), delta: localStorage.getItem('gt_risk_delta'), atr_mult: window.GT_ATR_MULT||1 },
     watchlist: JSON.parse(localStorage.getItem('gt_scr_watchlist') || '[]'),
     planner_candidates: JSON.parse(localStorage.getItem('gt_planner_candidates') || '[]'),
+    internal_results: INTERNAL_RESULTS.slice(0,150),
+    internal_scored_at: INTERNAL_SCORED_AT,
     turbo:       JSON.parse(localStorage.getItem('gt_turbo_state') || '{}'),
     savedAt:     Date.now()
   }
@@ -3076,6 +3144,7 @@ async function loadFromFirebase() {
   if(data.watchlist && Array.isArray(data.watchlist)) {
     localStorage.setItem('gt_scr_watchlist', JSON.stringify(data.watchlist))
   }
+  if(typeof loadInternalResults==='function') loadInternalResults(data)
   if(data.planner_candidates && Array.isArray(data.planner_candidates)) {
     PLANNER_CANDIDATES = data.planner_candidates
     localStorage.setItem('gt_planner_candidates', JSON.stringify(PLANNER_CANDIDATES))
@@ -5072,6 +5141,315 @@ function rankCandidates() {
   savePlannerCandidates()
 }
 // ── END PLANNER ───────────────────────────────────────────────────────────────
+// ══ INTERNAL SCREENER ══════════════════════════════════════════════════════════
+var SCREENER_MODE = localStorage.getItem('gt_screener_mode') || 'ovtlyr'
+var INTERNAL_RESULTS = JSON.parse(localStorage.getItem('gt_internal_results') || '[]')
+var INTERNAL_SCORED_AT = localStorage.getItem('gt_internal_scored_at') || null
+var INTERNAL_SPY_RET20 = 0 // SPY 20d return for relative strength
+
+// Focused tradable universe ~130 names (S&P 100 + key Nasdaq 100 + liquid options)
+var INTERNAL_UNIVERSE = ['NVDA','AAPL','MSFT','GOOGL','GOOG','META','AMZN','TSLA','AMD','AVGO','TSM','QCOM','ORCL','INTC','CRM','ADBE','NOW','SNPS','CDNS','MU','LRCX','AMAT','KLAC','TXN','PLTR','SNOW','UBER','ABNB','NET','DDOG','ZS','CRWD','PANW','JPM','BAC','GS','MS','WFC','BLK','SCHW','HOOD','JNJ','UNH','LLY','ABBV','PFE','MRK','XOM','CVX','COP','WMT','COST','HD','TGT','NKE','MCD','SBUX','BA','CAT','HON','GE','RTX','LMT','NEE','CLS','VRT','SMCI','LUNR','HIMS','ARM','RKLB','ASTS','HWM','GLW','V','MA','PYPL','COIN','NFLX','DIS','CMCSA','IBKR','GGAL','MELI','DELL','IBM','PG','KO','PEP','AMT','EQIX','IWM','QQQ'].filter(function(s,i,a){return a.indexOf(s)===i}) // dedupe
+
+// Sector ETF map (reused from Planner — see SECTOR_ETFS above)
+var SECTOR_ETFS_INT = {
+  'Tech':'XLK','Communication':'XLC','Financials':'XLF','Finance':'XLF',
+  'Healthcare':'XLV','Industrials':'XLI','Consumer':'XLY','Discretionary':'XLY',
+  'Energy':'XLE','Utilities':'XLU','Materials':'XLB','Real Estate':'XLRE'
+}
+
+// ── MODE TOGGLE ───────────────────────────────────────────────────────────────
+function setScreenerMode(mode) {
+  SCREENER_MODE = mode
+  localStorage.setItem('gt_screener_mode', mode)
+  var ovPanel = document.getElementById('screener-ovtlyr-panel')
+  var intPanel = document.getElementById('screener-internal-panel')
+  var ovBtn = document.getElementById('mode-ovtlyr')
+  var intBtn = document.getElementById('mode-internal')
+  var label = document.getElementById('mode-label')
+  if(mode === 'ovtlyr') {
+    if(ovPanel) ovPanel.style.display = ''
+    if(intPanel) intPanel.style.display = 'none'
+    if(ovBtn) { ovBtn.className='btn btn-gold'; ovBtn.style.cssText='font-size:11px;padding:4px 14px' }
+    if(intBtn) { intBtn.className='btn btn-ghost'; intBtn.style.cssText='font-size:11px;padding:4px 14px' }
+    if(label) label.textContent = 'OVTLYR-derived universe'
+  } else {
+    if(ovPanel) ovPanel.style.display = 'none'
+    if(intPanel) intPanel.style.display = ''
+    if(ovBtn) { ovBtn.className='btn btn-ghost'; ovBtn.style.cssText='font-size:11px;padding:4px 14px' }
+    if(intBtn) { intBtn.className='btn'; intBtn.style.cssText='font-size:11px;padding:4px 14px;background:#1a2d4a;color:#4da6ff;border:1px solid #4da6ff' }
+    if(label) label.textContent = 'Internal independent universe'
+    // Load cached results
+    renderInternalResults(INTERNAL_RESULTS)
+    if(INTERNAL_SCORED_AT) {
+      var el = document.getElementById('int-last-run')
+      if(el) el.textContent = 'Last run: '+new Date(+INTERNAL_SCORED_AT).toLocaleString()
+    }
+  }
+}
+
+// ── INTERNAL SCORING ENGINE ───────────────────────────────────────────────────
+function calcInternalScore(bars, spyBars, sectorBars, quote) {
+  if(!bars || bars.length < 50) return null
+  var closes = bars.map(function(b){return b.c})
+  var n = closes.length
+  var price = closes[n-1]
+
+  // ── EMA helper ──
+  function ema(data, period) {
+    if(data.length < period) return null
+    var k = 2/(period+1)
+    var val = data.slice(0,period).reduce(function(a,b){return a+b},0)/period
+    for(var i=period;i<data.length;i++) val = data[i]*k + val*(1-k)
+    return val
+  }
+
+  var e20  = ema(closes, 20)
+  var e50  = ema(closes, 50)
+  var e200 = ema(closes, 200)
+  // 20 EMA slope (compare to 5 bars ago)
+  var e20_5ago = ema(closes.slice(0,-5), 20)
+  var emaSlope = e20 && e20_5ago ? e20 - e20_5ago : 0
+
+  // ── 1. MOMENTUM (0-40) ────────────────────────────────────────────────────
+  // 20-day return
+  var ret20 = n>20 ? (price - closes[n-21])/closes[n-21]*100 : 0
+  // 60-day return
+  var ret60 = n>60 ? (price - closes[n-61])/closes[n-61]*100 : 0
+  // Relative strength vs SPY
+  var spyRet20 = spyBars && spyBars.length>20 ? (spyBars[spyBars.length-1].c - spyBars[spyBars.length-21].c)/spyBars[spyBars.length-21].c*100 : 0
+  var rsVsSpy = ret20 - spyRet20 // excess return
+  // Distance above 50 MA
+  var abv50 = e50 ? (price-e50)/e50*100 : 0
+
+  var momScore = 0
+  // RS vs SPY: >10% excess=20, >5%=14, >2%=10, >0=6, <0=0
+  momScore += rsVsSpy>=10?20:rsVsSpy>=5?14:rsVsSpy>=2?10:rsVsSpy>=0?6:0
+  // 20d momentum: >20%=10, >10%=7, >5%=4, >0=2
+  momScore += ret20>=20?10:ret20>=10?7:ret20>=5?4:ret20>0?2:0
+  // Distance above 50MA: >10%=10, >5%=7, >2%=4, >0=2
+  momScore += abv50>=10?10:abv50>=5?7:abv50>=2?4:abv50>0?2:0
+  momScore = Math.min(40, momScore)
+
+  // ── 2. TREND (0-25) ──────────────────────────────────────────────────────
+  var trendScore = 0
+  if(e20 && price > e20) trendScore += 8     // Price > 20 EMA
+  if(e20 && e50 && e20 > e50) trendScore += 7  // 20 > 50 EMA
+  if(e50 && e200 && e50 > e200) trendScore += 6 // 50 > 200 EMA
+  if(emaSlope > 0) trendScore += 4             // 20 EMA rising
+  trendScore = Math.min(25, trendScore)
+
+  // ── 3. SENTIMENT / RSI (0-15) ───────────────────────────────────────────
+  // Simple RSI(14)
+  var gains=0, losses=0
+  var rsiPeriod = 14
+  for(var i=n-rsiPeriod;i<n;i++) {
+    var chg = closes[i]-(i>0?closes[i-1]:closes[i])
+    if(chg>0) gains+=chg; else losses+=Math.abs(chg)
+  }
+  var avgGain = gains/rsiPeriod, avgLoss = losses/rsiPeriod
+  var rs2 = avgLoss>0 ? avgGain/avgLoss : 100
+  var rsi = 100 - (100/(1+rs2))
+  // Healthy RSI: 40-70 = best, 30-40 or 70-80 = ok, extremes = bad
+  var sentScore = rsi>=40&&rsi<=70?15 : rsi>=30&&rsi<=80?8 : rsi>80?3 : 0
+  sentScore = Math.min(15, sentScore)
+
+  // ── 4. SECTOR STRENGTH (0-10) ────────────────────────────────────────────
+  var sectScore = 0
+  if(sectorBars && sectorBars.length>20) {
+    var sectRet = (sectorBars[sectorBars.length-1].c - sectorBars[sectorBars.length-21].c)/sectorBars[sectorBars.length-21].c*100
+    sectScore = sectRet > spyRet20 + 3 ? 10 : sectRet > spyRet20 ? 7 : sectRet > spyRet20 - 3 ? 4 : 0
+  } else {
+    sectScore = 5 // neutral if no sector data
+  }
+
+  // ── 5. EXECUTION QUALITY (0-10) ─────────────────────────────────────────
+  var execScore = 0
+  // Volume (use last bar volume vs rough average)
+  var avgVol = bars.slice(-20).reduce(function(s,b){return s+b.v},0)/20
+  var lastVol = bars[n-1].v
+  if(lastVol > 1e6) execScore += 3
+  if(lastVol > 5e6) execScore += 2
+  if(lastVol > 20e6) execScore += 2
+  // Options spread from quote
+  if(quote && quote.bid && quote.ask) {
+    var sp = quote.ask - quote.bid
+    execScore += sp<0.30?3:sp<0.50?2:sp<1?1:0
+  } else {
+    execScore += 2 // neutral if no options data
+  }
+  execScore = Math.min(10, execScore)
+
+  var total = momScore + trendScore + sentScore + sectScore + execScore
+
+  return {
+    total: Math.min(100, Math.round(total)),
+    mom: Math.round(momScore),
+    trend: Math.round(trendScore),
+    sent: Math.round(sentScore),
+    sect: Math.round(sectScore),
+    exec: Math.round(execScore),
+    ret20: ret20.toFixed(1),
+    rsi: Math.round(rsi),
+    rsVsSpy: rsVsSpy.toFixed(1),
+    price: price.toFixed(2),
+    e20: e20?.toFixed(2),
+    e50: e50?.toFixed(2)
+  }
+}
+
+// ── RUN THE INTERNAL SCREEN ───────────────────────────────────────────────────
+async function runInternalScreen() {
+  var tbody = document.getElementById('int-body')
+  var loadBar = document.getElementById('int-load-bar')
+  var barFill = document.getElementById('int-bar-fill')
+  var barLabel = document.getElementById('int-bar-label')
+  var progress = document.getElementById('int-progress')
+  if(!tbody) return
+
+  // Reset UI
+  tbody.innerHTML = ''
+  if(loadBar) loadBar.style.display = 'block'
+
+  // Exclude ETFs from main scoring, keep for reference data
+  var etfs = ['SPY','QQQ','XLK','XLF','XLV','XLE','XLI','XLY','XLC','TLT','IWM','GLD','SLV']
+  var stocks = INTERNAL_UNIVERSE.filter(function(s){return !etfs.includes(s)})
+
+  // Fetch SPY first for relative strength baseline
+  var spyBars = null
+  try { spyBars = await tBars('SPY', 70) } catch(e) {}
+
+  // Fetch sector ETF bars for sector strength
+  var sectorBarCache = {}
+  var keyETFs = ['XLK','XLF','XLV','XLE','XLI','XLY','XLC']
+  for(var ei=0;ei<keyETFs.length;ei++) {
+    try { sectorBarCache[keyETFs[ei]] = await tBars(keyETFs[ei], 30) } catch(e) {}
+  }
+
+  var results = []
+  var total = stocks.length
+  var done = 0
+  var BATCH = 5 // parallel batches
+
+  // Process in batches
+  for(var bi=0; bi<stocks.length; bi+=BATCH) {
+    var batch = stocks.slice(bi, bi+BATCH)
+    var batchResults = await Promise.all(batch.map(async function(sym) {
+      try {
+        var bars = await tBars(sym, 70)
+        if(!bars || bars.length < 20) return null
+        // Get sector for this ticker
+        var sec = getSector(sym)
+        var sectorETF = (typeof SECTOR_ETFS !== 'undefined' ? SECTOR_ETFS : SECTOR_ETFS_INT)[sec]
+        var sectorBars = sectorETF ? sectorBarCache[sectorETF] : null
+        // Score it
+        var score = calcInternalScore(bars, spyBars, sectorBars, null)
+        if(!score) return null
+        return {
+          sym: sym,
+          sector: sec,
+          cluster: getCluster(sym),
+          score: score
+        }
+      } catch(e) { return null }
+    }))
+    done += batch.length
+    var pct = Math.round(done/total*100)
+    if(barFill) barFill.style.width = pct+'%'
+    if(barLabel) barLabel.textContent = 'Scoring '+done+' / '+total+' tickers...'
+    if(progress) progress.textContent = pct+'%'
+    // Add valid results
+    batchResults.filter(Boolean).forEach(function(r){results.push(r)})
+  }
+
+  // Sort by total score
+  results.sort(function(a,b){return b.score.total - a.score.total})
+
+  // Save to Firebase
+  INTERNAL_RESULTS = results
+  INTERNAL_SCORED_AT = Date.now().toString()
+  localStorage.setItem('gt_internal_results', JSON.stringify(results.slice(0,200)))
+  localStorage.setItem('gt_internal_scored_at', INTERNAL_SCORED_AT)
+  fbAutoSave(2000)
+
+  // Update last run
+  var lastRun = document.getElementById('int-last-run')
+  if(lastRun) lastRun.textContent = 'Scored '+results.length+' tickers · '+new Date().toLocaleTimeString()
+
+  // Hide loader, render
+  if(loadBar) loadBar.style.display = 'none'
+  if(progress) progress.textContent = ''
+  renderInternalResults(results)
+}
+
+function runInternalFilter() {
+  var minScore = +document.getElementById('int-f-score')?.value || 0
+  var sector = document.getElementById('int-f-sector')?.value || ''
+  var noEarn = document.getElementById('int-f-earn')?.checked || false
+  var filtered = INTERNAL_RESULTS.filter(function(r) {
+    if(r.score.total < minScore) return false
+    if(sector && r.sector !== sector && r.cluster !== sector) return false
+    return true
+  })
+  renderInternalResults(filtered, true)
+}
+
+function renderInternalResults(results, filtered) {
+  var tbody = document.getElementById('int-body')
+  if(!tbody) return
+  if(!results || !results.length) {
+    tbody.innerHTML = '<tr><td colspan="11" style="padding:20px;text-align:center;color:#555c6e">No results — click "Run Screen" to score tickers</td></tr>'
+    return
+  }
+  var display = results.slice(0, 100)
+  tbody.innerHTML = display.map(function(r, i) {
+    var sc = r.score.total
+    var scCol = sc>=80?'#00d68f':sc>=60?'#f0c040':sc>=40?'#ff8c42':'#ff4560';
+    var scBar = '<div style="display:flex;align-items:center;gap:5px"><span style="font-size:14px;font-weight:700;color:'+scCol+'">'+sc+'</span><div style="flex:1;background:#1e2d3d;border-radius:2px;height:4px;width:36px"><div style="width:'+sc+'%;height:100%;background:'+scCol+';border-radius:2px"></div></div></div>';
+    var ovMatch = OV[r.sym] ? '<span style="font-size:9px;color:#4da6ff;background:#0d1117;padding:1px 4px;border-radius:3px;margin-left:4px" title="Also in OVTLYR">OV</span>' : '';
+    var ret20Col = +r.score.ret20>=10?'#00d68f':+r.score.ret20>=0?'#f0c040':'#ff4560';
+    return '<tr style="border-bottom:1px solid #0d1117;cursor:pointer" onclick="goSize(''+r.sym+'')">'+
+      '<td style="padding:4px 10px;color:#555c6e;font-size:10px">'+(i+1)+'</td>'+
+      '<td style="padding:4px 6px"><b>'+r.sym+'</b>'+ovMatch+'</td>'+
+      '<td style="padding:4px 6px">'+scBar+'</td>'+
+      '<td style="padding:4px 6px;text-align:right;color:#8b91a0;font-size:11px">'+r.score.mom+'</td>'+
+      '<td style="padding:4px 6px;text-align:right;color:#8b91a0;font-size:11px">'+r.score.trend+'</td>'+
+      '<td style="padding:4px 6px;text-align:right;color:#8b91a0;font-size:11px">'+r.score.sent+'</td>'+
+      '<td style="padding:4px 6px;text-align:right;color:#8b91a0;font-size:11px">'+r.score.sect+'</td>'+
+      '<td style="padding:4px 6px;text-align:right;color:#8b91a0;font-size:11px">'+r.score.exec+'</td>'+
+      '<td style="padding:4px 6px;font-size:11px;color:#555c6e">'+r.sector+'</td>'+
+      '<td style="padding:4px 6px;text-align:right;font-size:11px;color:'+ret20Col+'">'+r.score.ret20+'%</td>'+
+      '<td style="padding:4px 6px"><button onclick="event.stopPropagation();goSize(''+r.sym+'')" class="btn btn-gold" style="font-size:10px;padding:2px 8px">Plan →</button></td>'+
+      '</tr>'
+  }).join('')
+
+  // Top strip
+  var topChips = document.getElementById('int-top-chips')
+  var topStrip = document.getElementById('int-top-strip')
+  if(topChips && results.length) {
+    topChips.innerHTML = results.slice(0,5).map(function(r) {
+      var col = r.score.total>=80?'#00d68f':r.score.total>=60?'#f0c040':'#ff8c42'
+      return '<span onclick="goSize(''+r.sym+'')" style="cursor:pointer;background:#0d1117;border:1px solid '+col+';border-radius:4px;padding:3px 8px;font-size:11px;display:inline-flex;gap:6px;align-items:center">'+
+        '<b style="color:'+col+'">'+r.sym+'</b>'+
+        '<span style="color:#555c6e">'+r.score.total+'</span>'+
+        '<span style="color:#8b91a0;font-size:10px">'+r.score.ret20+'%</span>'+
+        '</span>'
+    }).join('')
+    if(topStrip) topStrip.style.display = 'block'
+  }
+}
+
+// ── LOAD INTERNAL RESULTS FROM FIREBASE ──────────────────────────────────────
+function loadInternalResults(data) {
+  if(data && data.internal_results && Array.isArray(data.internal_results)) {
+    INTERNAL_RESULTS = data.internal_results
+    INTERNAL_SCORED_AT = data.internal_scored_at || null
+    localStorage.setItem('gt_internal_results', JSON.stringify(INTERNAL_RESULTS))
+    if(INTERNAL_SCORED_AT) localStorage.setItem('gt_internal_scored_at', INTERNAL_SCORED_AT)
+    if(SCREENER_MODE === 'internal') renderInternalResults(INTERNAL_RESULTS)
+  }
+}
+// ── END INTERNAL SCREENER ══════════════════════════════════════════════════════
+
 function calc() {
   saveRiskSettings()
   const rb      = +document.getElementById('risk-budget')?.value || +localStorage.getItem('gt_risk_budget') || 21000
