@@ -1199,24 +1199,42 @@ function show(id, btn) {
   if(id === 'trades') renderTrades()
   if(id === 'analytics') renderAnalytics()
   if(id === 'sizer') setTimeout(rebSyncSignal, 200)
-  if(id === 'market') initMarket()
+  if(id === 'market') { console.log('[MARKET-PATH] show(market) invoked'); initMarket('tab-switch') }
 }
 
 // Canonical Market-page init. Runs from both initPlatform (fresh page load)
 // and show('market') (tab switch). Each loader guarded so one failure
 // doesn't cascade across the cards.
-function initMarket() {
+function initMarket(source) {
+  source = source || 'unknown'
+  console.log('[MARKET-PATH] initMarket called. source=', source,
+    'inFlight=', !!window._marketInitInFlight,
+    'KEY set=', !!KEY,
+    'readyState=', document.readyState,
+    'market active=', document.getElementById('market')?.classList?.contains('active'),
+    'dom targets:', {
+      'spy-v':                !!document.getElementById('spy-v'),
+      'vix-v':                !!document.getElementById('vix-v'),
+      'sector-body':          !!document.getElementById('sector-body'),
+      'tqqq-body':            !!document.getElementById('tqqq-body'),
+      'official-signal-body': !!document.getElementById('official-signal-body'),
+      'leaps-body':           !!document.getElementById('leaps-body')
+    })
   // Guard against overlapping runs (tab switches hitting while boot is mid-flight).
-  if(window._marketInitInFlight) return
+  if(window._marketInitInFlight) { console.log('[MARKET-PATH] SKIP — in flight. source=', source); return }
   window._marketInitInFlight = true
   // All four loaders are mutually independent — fire in parallel.
-  try { loadMarketData() } catch(e) { console.warn('[MARKET-INIT] loadMarketData', e) }
+  console.log('[MARKET-PATH] calling loadMarketData. source=', source)
+  try { loadMarketData() } catch(e) { console.warn('[MARKET-PATH] loadMarketData error. source=', source, e) }
+  console.log('[MARKET-PATH] calling fetchTQQQSignal. source=', source)
   try {
     const p = fetchTQQQSignal()
     if(p && typeof p.then === 'function') p.then(function(){ setTimeout(rebSyncSignal, 200) }).catch(function(){})
-  } catch(e) { console.warn('[MARKET-INIT] fetchTQQQSignal', e) }
-  try { fetchOfficialSignal() } catch(e) { console.warn('[MARKET-INIT] fetchOfficialSignal', e) }
-  try { fetchLeapsData() } catch(e) { console.warn('[MARKET-INIT] fetchLeapsData', e) }
+  } catch(e) { console.warn('[MARKET-PATH] fetchTQQQSignal error. source=', source, e) }
+  console.log('[MARKET-PATH] calling fetchOfficialSignal. source=', source)
+  try { fetchOfficialSignal() } catch(e) { console.warn('[MARKET-PATH] fetchOfficialSignal error. source=', source, e) }
+  console.log('[MARKET-PATH] calling fetchLeapsData. source=', source)
+  try { fetchLeapsData() } catch(e) { console.warn('[MARKET-PATH] fetchLeapsData error. source=', source, e) }
   // Release the in-flight flag after a short window so tab re-entry works.
   setTimeout(function(){ window._marketInitInFlight = false }, 1500)
 }
@@ -7304,7 +7322,7 @@ function initPlatform() {
     // Canonical Market init — loads SPY/VIX/Sectors/TQQQ/Official/LEAPS
     // through the same entry point used by show('market').
     console.log('[INIT-BOOT] scheduling initMarket (+200ms)')
-    setTimeout(initMarket, 200)
+    setTimeout(function(){ initMarket('boot') }, 200)
     // Start live stock price auto-refresh (every 5 min during market hours)
     console.log('[INIT-BOOT] scheduling startLivePriceRefresh (+1000ms)')
     setTimeout(startLivePriceRefresh, 1000)
