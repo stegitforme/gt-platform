@@ -2779,7 +2779,7 @@ function runFilter() {
   const tbody = document.getElementById('scr-body')
 
   if(!scored.length) {
-    tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:24px;color:#555c6e">No tickers match filters\x3C/td>\x3C/tr>';
+    tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;padding:24px;color:#555c6e">No tickers match filters\x3C/td>\x3C/tr>';
     return
   }
 
@@ -2822,16 +2822,39 @@ function runFilter() {
   var sendBtn = '<button id="send-planner-'+s.t+'" onclick="event.stopPropagation();sendToPlanner(\'' + s.t + '\')" style="background:#1e2d3d;color:#4da6ff;border:1px solid #4da6ff;border-radius:3px;cursor:pointer;font-size:10px;padding:3px 8px;margin-right:4px;white-space:nowrap" title="Send to Planner">→ Planner\x3C/button>'
   // Plan Trade button
   var planBtn = '<button onclick="event.stopPropagation();goSize(\'' + s.t + '\')" class="btn btn-gold" style="font-size:10px;padding:3px 8px;white-space:nowrap">Plan Trade →\x3C/button>';
+  // Spread display (header col 8). Falls back to — when we have no live bid/ask.
+  var spreadStr = '<span style="color:#333a4a;font-size:10px">—\x3C/span>'
+  if(lp && lp.bid && lp.ask) {
+    var sp = +(lp.ask - lp.bid).toFixed(2)
+    var spCol = sp > 0.50 ? '#ff4560' : sp > 0.25 ? '#ff8c42' : '#8b91a0'
+    spreadStr = '<span style="color:'+spCol+';font-size:11px">$'+sp.toFixed(2)+'\x3C/span>'
+  }
+  // Earnings-only pill (header col 9). Wide-spread warning now lives in spreadStr's red color.
+  var earnStr = earn
+    ? '<span style="color:#ff8c42;font-size:10px">⚠️\x3C/span>'
+    : '<span style="color:#1e2d3d;font-size:10px">·\x3C/span>'
+  // GT Score cell placeholder (header col 10). runGTScores replaces innerHTML via
+  // document.getElementById('gt-'+t). Show cached score if available.
+  var gtCached = GT_SCORES[s.t]
+  var gtInitial = '<span style="color:#555c6e;font-size:10px">—\x3C/span>'
+  if(gtCached && typeof gtCached.score === 'number') {
+    var gtCol = gtCached.score >= 8 ? '#00d68f' : gtCached.score >= 6 ? '#f0c040' : gtCached.score >= 4 ? '#ff8c42' : '#ff4560'
+    gtInitial = '<span style="color:'+gtCol+';font-weight:700">'+gtCached.score+'\x3C/span>' +
+      '<div style="font-size:9px;color:#555c6e;white-space:nowrap">T:'+gtCached.trend+' M:'+gtCached.mom+' RS:'+gtCached.rs+' S:'+gtCached.struct+' V:'+gtCached.vol+'\x3C/div>'
+  }
   return '<tr style="cursor:pointer" onclick="goSize(\'' + s.t + '\')">' +
-    '<td class="dim" style="width:24px;font-size:10px">' + (i+1) + '\x3C/td>' +
-    '<td style="font-weight:700">' + s.t + '\x3C/td>' +
-    '<td>' + scBar + '\x3C/td>' +
-    '<td>' + sigStr + '\x3C/td>' +
-    '<td>' + fgStr + '\x3C/td>' +
-    '<td>' + clusterStr + '\x3C/td>' +
-    '<td>' + priceStr + '\x3C/td>' +
-    '<td>' + flagStr + '\x3C/td>' +
-    '<td style="white-space:nowrap">' + starBtn + sendBtn + planBtn + '\x3C/td>' +
+    '<td style="text-align:center;width:28px">' + starBtn + '\x3C/td>' +                         // col  1 ⭐
+    '<td class="dim" style="width:32px;font-size:10px">' + (i+1) + '\x3C/td>' +                   // col  2 #
+    '<td style="font-weight:700">' + s.t + '\x3C/td>' +                                            // col  3 Ticker
+    '<td>' + priceStr + '\x3C/td>' +                                                               // col  4 Live Price
+    '<td>' + sigStr + '\x3C/td>' +                                                                 // col  5 Signal %
+    '<td>' + fgStr + '\x3C/td>' +                                                                  // col  6 F&G
+    '<td>' + clusterStr + '\x3C/td>' +                                                             // col  7 Sector
+    '<td>' + spreadStr + '\x3C/td>' +                                                              // col  8 Spread
+    '<td>' + earnStr + '\x3C/td>' +                                                                // col  9 Earnings
+    '<td id="gt-' + s.t + '">' + gtInitial + '\x3C/td>' +                                          // col 10 GT Score
+    '<td>' + scBar + '\x3C/td>' +                                                                  // col 11 Score (GOGO)
+    '<td style="white-space:nowrap">' + sendBtn + planBtn + '\x3C/td>' +                           // col 12 Actions
     '\x3C/tr>'
 }).join('')
 
