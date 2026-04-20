@@ -4997,17 +4997,23 @@ function renderCandidateTable() {
       "<td style='padding:5px 4px;text-align:right;color:#555c6e'>"+(capital>0?"$"+Math.round(capital).toLocaleString():"—")+"\x3C/td>"+
       function() { var ov=OV[sym]||{}; return "<td style='padding:5px 4px;text-align:right;font-size:11px;color:#8b91a0'>"+(ov.r?Math.round(ov.r)+"%":"—")+"\x3C/td><td style='padding:5px 4px;text-align:right;font-size:11px;color:#8b91a0'>"+(ov.fg||"—")+"\x3C/td>" }()+"<td style='padding:5px 4px;text-align:center'>"+statusHtml+"\x3C/td>"+
       (function(){
-        var lpx = (typeof LIVE_PRICES!=='undefined' && LIVE_PRICES[sym]?.price) || c.price || 0
-        var miss = []
-        if(atr<=0) miss.push('ATR')
-        if(!c.optcost) miss.push('cost')
-        if(!c.strike) miss.push('strike')
-        if(!c.exp) miss.push('exp')
-        if(lpx<=0) miss.push('price')
-        if(cts<1) miss.push('cts')
-        var tradeBtn = miss.length===0
-          ? "<button id='cand-trade-"+idx+"' onclick='convertCandidateToTrade("+idx+")' style='background:#1e2d3d;color:#00d68f;border:1px solid #00d68f;border-radius:3px;cursor:pointer;font-size:10px;padding:2px 7px;margin-right:6px' title='Create open trade in Trade Manager'>→ Trade\x3C/button>"
-          : "<button disabled style='background:transparent;color:#333a4a;border:1px solid #1e2d3d;border-radius:3px;cursor:not-allowed;font-size:10px;padding:2px 7px;margin-right:6px' title='Waiting on: "+miss.join(', ')+"'>→ Trade\x3C/button>"
+        var tradeExists = c.tradeId && TRADES.find(function(t){return t.id===c.tradeId})
+        var tradeBtn
+        if(tradeExists){
+          tradeBtn = "<span style='display:inline-block;color:#00d68f;background:rgba(0,214,143,.08);border-radius:3px;font-size:10px;padding:2px 7px;margin-right:6px;cursor:default' title='Trade #"+c.tradeId+" — created from this candidate'>✓ Trade #"+String(c.tradeId).slice(-4)+"\x3C/span>"
+        } else {
+          var lpx = (typeof LIVE_PRICES!=='undefined' && LIVE_PRICES[sym]?.price) || c.price || 0
+          var miss = []
+          if(atr<=0) miss.push('ATR')
+          if(!c.optcost) miss.push('cost')
+          if(!c.strike) miss.push('strike')
+          if(!c.exp) miss.push('exp')
+          if(lpx<=0) miss.push('price')
+          if(cts<1) miss.push('cts')
+          tradeBtn = miss.length===0
+            ? "<button id='cand-trade-"+idx+"' onclick='convertCandidateToTrade("+idx+")' style='background:#1e2d3d;color:#00d68f;border:1px solid #00d68f;border-radius:3px;cursor:pointer;font-size:10px;padding:2px 7px;margin-right:6px' title='Create open trade in Trade Manager'>→ Trade\x3C/button>"
+            : "<button disabled style='background:transparent;color:#333a4a;border:1px solid #1e2d3d;border-radius:3px;cursor:not-allowed;font-size:10px;padding:2px 7px;margin-right:6px' title='Waiting on: "+miss.join(', ')+"'>→ Trade\x3C/button>"
+        }
         return "<td style='padding:5px 4px;text-align:center;white-space:nowrap'>"+tradeBtn+"<button onclick='removeCandidate("+idx+")' style='background:none;border:none;color:#555c6e;cursor:pointer;font-size:14px' title='Remove'>✕\x3C/button>\x3C/td>"
       })()+
       "\x3C/tr>"
