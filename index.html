@@ -4010,8 +4010,15 @@ function parseFidelityClosedPaste(text) {
     // Skip header row
     if(cols[0].toLowerCase().includes('symbol') || cols[0].toLowerCase().includes('cusip')) continue
 
-    // Strip CUSIP from symbol: AMD260515C220(7971239NH) → AMD260515C220
-    const rawSym = cols[0].replace(/\(.*?\)/g,'').trim()
+    // Fidelity symbol-column shapes:
+    //   "AMD260515C220(7971239NH)"              — option with trailing CUSIP
+    //   "(AMD 7903107.00) ADVANCED MICRO ..."   — stock with leading (TICKER id) and company name
+    //   "DIVO"                                   — plain stock/ETF ticker
+    // For leading-paren case, extract the ticker from inside the parens.
+    // Otherwise, strip trailing parens (option CUSIP suffix).
+    let rawSym = cols[0].trim()
+    const leadingTkr = rawSym.match(/^\(([A-Z]+)[\s\d\.]+\)/)
+    rawSym = leadingTkr ? leadingTkr[1] : rawSym.replace(/\(.*?\)/g,'').trim()
     const parsed = parseOCCSymbol(rawSym)
     // Non-option rows: handle as stock / ETF if the symbol looks clean.
     // Junk rows (blank, header-like, or malformed) still get skipped.
