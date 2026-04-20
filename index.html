@@ -4203,6 +4203,7 @@ async function syncOpenPositionsPaste(text, statusCallback) {
         id:       Date.now() + added,
         occ:      r.occ,
         ticker:   r.display,
+        underlying: r.occ ? ((r.occ.match(/^([A-Z]+)/) || [,''])[1]) : String(r.display || '').split(' ')[0].trim().toUpperCase(),
         strike:   r.strike || 0,
         type:     r.type || (isStock ? 'Stock' : 'Call'),
         isStock:  isStock,
@@ -5333,6 +5334,7 @@ function convertCandidateToTrade(idx) {
   var trade = {
     id:     Date.now(),
     ticker: sym,
+    underlying: occ ? ((occ.match(/^([A-Z]+)/) || [,''])[1]) : String(sym || '').split(' ')[0].trim().toUpperCase(),
     type:   'Call',
     desc:   descStr,
     cts:    cts,
@@ -6275,6 +6277,7 @@ async function runBulkImport() {
     const trade = {
       id:     Date.now() + i,
       ticker: ticker,
+      underlying: String(ticker || '').split(' ')[0].trim().toUpperCase(),
       desc:   expiry,
       cts:    cts,
       cost:   optcost,
@@ -6375,6 +6378,7 @@ function saveTrade() {
     status: 'open',
     rolls:  [],
   }
+  t.underlying = String(t.ticker || '').split(' ')[0].trim().toUpperCase()
   if(!t.ticker || !t.entry || !t.atr) { alert('Ticker, entry price, and ATR are required.'); return }
   TRADES.push(t)
   saveTrades()
@@ -7018,6 +7022,7 @@ function syncOptionsToTrades() {
     const trade = {
       id:     Date.now() + added,
       ticker: p.t,
+      underlying: String(p.t || '').split(' ')[0].trim().toUpperCase(),
       desc:   p.e || '',
       cts:    p.c || 1,
       cost:   p.cost || 0,       // avg cost basis = original premium
