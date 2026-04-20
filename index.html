@@ -3708,10 +3708,9 @@ function updateLivePriceTickers() {
     const px = prices[base] || t.stockPrice || t.entry
     const el = document.getElementById('live-px-' + t.id)
     if(el && px) {
-      el.innerHTML = '<span style="font-size:10px;color:#555c6e">' + base + '\x3C/span> ' +
-        '<span style="font-family:SF Mono,monospace;font-weight:600;color:#4da6ff">'
- + px.toFixed(2) + '\x3C/span>' +
-        (timeStr ? '<span style="font-size:9px;color:#333a4a;margin-left:4px">' + timeStr + '\x3C/span>' : '')
+      el.textContent = timeStr
+        ? `${base} ${px.toFixed(2)} · ${timeStr}`
+        : `${base} ${px.toFixed(2)}`
     }
   })
 }
