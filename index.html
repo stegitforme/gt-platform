@@ -3811,20 +3811,26 @@ function renderPortfolioRisk() {
 
   // Totals
   const halfPct = ((totalHalf / acct) * 100).toFixed(1)
-  document.getElementById('port-total-cts').textContent  = totalCts + ' cts'
-  document.getElementById('port-total-half').textContent = totalHalf > 0 ? '-'
+  const ptcEl = document.getElementById('port-total-cts')
+  if(ptcEl) ptcEl.textContent = totalCts + ' cts'
+  const pthEl = document.getElementById('port-total-half')
+  if(pthEl) pthEl.textContent = totalHalf > 0 ? '-'
  + Math.round(totalHalf).toLocaleString() : '--'
-  document.getElementById('port-total-full').textContent = totalFull > 0 ? '-'
+  const ptfEl = document.getElementById('port-total-full')
+  if(ptfEl) ptfEl.textContent = totalFull > 0 ? '-'
  + Math.round(totalFull).toLocaleString() : '--'
 
   // Budget metrics
   const budgetUsedPct = ((totalHalf / baseRisk) * 100).toFixed(0)
   const budgetLeft    = Math.max(0, baseRisk - totalHalf)
-  document.getElementById('port-budget').textContent      = ''
+  const pbEl = document.getElementById('port-budget')
+  if(pbEl) pbEl.textContent = ''
  + Math.round(baseRisk).toLocaleString() + ' (' + rp + '%)'
-  document.getElementById('port-budget-used').textContent = ''
+  const pbuEl = document.getElementById('port-budget-used')
+  if(pbuEl) pbuEl.textContent = ''
  + Math.round(totalHalf).toLocaleString() + ' (' + budgetUsedPct + '%)'
-  document.getElementById('port-budget-left').textContent = ''
+  const pblEl = document.getElementById('port-budget-left')
+  if(pblEl) pblEl.textContent = ''
  + Math.round(budgetLeft).toLocaleString() + ' remaining'
 }
 
@@ -3838,11 +3844,14 @@ function parseOCCSymbol(raw) {
   // Strip leading dash and whitespace
   const sym = raw.replace(/^[-\s]+/, '').trim()
   // OCC format: TICKER YYMMDD C/P STRIKE (e.g. EMBJ260515C60, NVDA260515C00180000)
-  const m = sym.match(/^([A-Z]+)(\d{2})(\d{2})(\d{2})([CP])(\d+)$/)
+  const m = sym.match(/^([A-Z]+)(\d{2})(\d{2})(\d{2})([CP])(\d+(?:\.\d+)?)$/)
   if(!m) return null
   const [, ticker, yy, mm, dd, cp, strikeRaw] = m
-  // Strike: old format is just digits (60 = $60), new OCC is 8 digits with 3 decimal places
-  const strike = strikeRaw.length === 8 ? parseInt(strikeRaw) / 1000 : parseInt(strikeRaw)
+  // Strike: old format is just digits (60 = $60) or literal decimal (37.5),
+  // padded 8-digit OCC is strike * 1000 (00037500 = $37.50).
+  const strike = strikeRaw.length === 8 && strikeRaw.indexOf('.') < 0
+    ? parseInt(strikeRaw) / 1000
+    : parseFloat(strikeRaw)
   const months = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
   return {
     occ:    sym,
