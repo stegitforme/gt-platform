@@ -4020,7 +4020,7 @@ function parseFidelityClosedPaste(text) {
       const ltGL     = clean(cols[8])
       const totalGL  = stGL + ltGL
       const avgCost  = qty > 0 && costTotal > 0 ? costTotal / qty : 0   // per-share (not /100)
-      const dedupKey = rawSym + '|' + dateAcq
+      const dedupKey = rawSym + '|' + dateAcq + '|' + dateSold + '|' + qty + '|' + costTotal.toFixed(2) + '|' + proceeds.toFixed(2)
 
       results.push({
         occ:       rawSym,
@@ -4055,8 +4055,10 @@ function parseFidelityClosedPaste(text) {
     const totalGL  = stGL + ltGL
     const avgCost  = qty > 0 && costTotal > 0 ? costTotal / qty / 100 : 0
 
-    // Dedup key: OCC + acquired date (different lots on different days)
-    const dedupKey = parsed.occ + '|' + dateAcq
+    // Dedup key: OCC + all lot-identifying fields (different real lots can share
+    // symbol+date; widen to include dateSold/qty/costTotal/proceeds so each
+    // Fidelity row stays distinct).
+    const dedupKey = parsed.occ + '|' + dateAcq + '|' + dateSold + '|' + qty + '|' + costTotal.toFixed(2) + '|' + proceeds.toFixed(2)
 
     results.push({
       occ:       parsed.occ,
@@ -4228,6 +4230,8 @@ async function importClosedTradesPaste(text, statusCallback) {
     if(statusCallback) statusCallback('No closed trades found in pasted data', 'err')
     return
   }
+  const uniqueKeys = new Set(results.map(r => r.dedupKey)).size
+  console.log('[CLOSED-DEBUG] parsed rows:', results.length, 'unique dedupKeys:', uniqueKeys, 'collisions within paste:', results.length - uniqueKeys)
 
   // Only fetch ATRs for NEW tickers not already in CLOSED_TRADES
   const existingTickers = new Set(CLOSED_TRADES.map(t => t.ticker))
