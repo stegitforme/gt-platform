@@ -7241,6 +7241,7 @@ function renderPortfolio() {
 
 // -- INIT ========================================
 function initPlatform() {
+  console.log('[INIT-BOOT] initPlatform entry. readyState=', document.readyState, 'KEY=', !!KEY)
   try {
     // Restore saved account settings
     const savedAcct = localStorage.getItem('gt_acct')
@@ -7262,33 +7263,56 @@ function initPlatform() {
     if(savedRisk) { const el=document.getElementById('riskpct'); if(el) el.value=savedRisk }
     if(savedDelta) { const el=document.getElementById('delta'); if(el) el.value=savedDelta }
     if(!KEY) {
+      console.warn('[INIT-BOOT] missing KEY, returning early')
       const overlay = document.getElementById('setup-overlay')
       if(overlay) overlay.style.display = 'flex';
       return
     }
+    console.log('[INIT-BOOT] before loadPortfolioData')
     loadPortfolioData()
+    console.log('[INIT-BOOT] after loadPortfolioData')
+    console.log('[INIT-BOOT] before loadOVData')
     loadOVData()
-    loadOVFromCloud()  // try cloud sync
+    console.log('[INIT-BOOT] after loadOVData')
+    console.log('[INIT-BOOT] before loadOVFromCloud (fire-and-forget)')
+    loadOVFromCloud()  // try cloud sync — not awaited
+    console.log('[INIT-BOOT] after loadOVFromCloud call (promise in flight)')
     // Populate GitHub token input if saved
     const ghTok = localStorage.getItem('gt_github_token')
     if(ghTok) {
       const ghInp = document.getElementById('gh-token-input')
       if(ghInp) { ghInp.value = ghTok; document.getElementById('cloud-sync-status').textContent = 'token set' }
     }  // try cloud sync
+    console.log('[INIT-BOOT] before loadRiskSettings')
     loadRiskSettings()
+    console.log('[INIT-BOOT] after loadRiskSettings')
+    console.log('[INIT-BOOT] before renderPortfolio')
     renderPortfolio()
+    console.log('[INIT-BOOT] after renderPortfolio')
+    console.log('[INIT-BOOT] before renderTrades')
     renderTrades()
+    console.log('[INIT-BOOT] after renderTrades')
+    console.log('[INIT-BOOT] before runFilter')
     runFilter()
+    console.log('[INIT-BOOT] after runFilter')
     // Render checklist immediately
+    console.log('[INIT-BOOT] before renderChecklist')
     renderChecklist()
+    console.log('[INIT-BOOT] after renderChecklist')
+    console.log('[INIT-BOOT] scheduling rebCalc (+200ms)')
   setTimeout(function(){rebCalc()},200)
+    console.log('[INIT-BOOT] before updateBanner')
     updateBanner(47.7)
+    console.log('[INIT-BOOT] after updateBanner')
     // Canonical Market init — loads SPY/VIX/Sectors/TQQQ/Official/LEAPS
     // through the same entry point used by show('market').
+    console.log('[INIT-BOOT] scheduling initMarket (+200ms)')
     setTimeout(initMarket, 200)
     // Start live stock price auto-refresh (every 5 min during market hours)
+    console.log('[INIT-BOOT] scheduling startLivePriceRefresh (+1000ms)')
     setTimeout(startLivePriceRefresh, 1000)
     // Fetch stock prices immediately on load (snapshot = 1 fast call)
+    console.log('[INIT-BOOT] scheduling fetchStockPricesForTrades (+2000ms)')
     setTimeout(fetchStockPricesForTrades, 2000)
     // Auto-run GT scores if cache empty
     setTimeout(function(){
@@ -7310,6 +7334,7 @@ function initPlatform() {
       }
     }, 800)
   } catch(e) {
+    console.error('[INIT-BOOT-ERROR]', e)
     console.error('GT initPlatform error:', e.message, e.stack)
     // Force checklist render even if something failed
     try { renderChecklist()
