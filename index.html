@@ -7296,7 +7296,7 @@ function initPlatform() {
     const ghTok = localStorage.getItem('gt_github_token')
     if(ghTok) {
       const ghInp = document.getElementById('gh-token-input')
-      if(ghInp) { ghInp.value = ghTok; document.getElementById('cloud-sync-status').textContent = 'token set' }
+      if(ghInp) { ghInp.value = ghTok; const cs = document.getElementById('cloud-sync-status'); if(cs) cs.textContent = 'token set' }
     }  // try cloud sync
     console.log('[INIT-BOOT] before loadRiskSettings')
     loadRiskSettings()
