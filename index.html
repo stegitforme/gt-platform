@@ -2930,19 +2930,9 @@ async function calcGTScore(ticker) {
   const ema20p = calcEMA(closes.slice(0,-5), 20)  // 5 bars ago
   const ema50p = calcEMA(closes.slice(0,-5), 50)
 
-  // ─── 1. TREND (25%) ────────────────────────────────────────────────────────
-  const fullStack  = last > ema20 && ema20 > ema50
-  const slopeUp    = ema20 > ema20p && ema50 > ema50p
-  const pctFrom20  = (last - ema20) / ema20 * 100
-  const extPenalty = Math.min(3, Math.max(0, pctFrom20 - 10) * 0.3)
-
-  let trendRaw = (fullStack ? 5 : (last > ema20 ? 2 : 0))
-               + (slopeUp ? 3 : (ema20 > ema20p ? 1 : 0))
-               - extPenalty
-  const trendScore = Math.max(0, Math.min(10, trendRaw))
-
-  // ─── 2. MOMENTUM (20%) ─────────────────────────────────────────────────────
-  // RSI(14)
+  // ─── Diagnostic values kept for backward compat / detail panels ────────────
+  const pctFrom20 = (last - ema20) / ema20 * 100
+  // RSI(14) — kept as diagnostic, no longer part of momScore
   let gains = 0, losses = 0
   for(let i = n-14; i < n; i++) {
     const d = closes[i] - closes[i-1]
@@ -2950,47 +2940,115 @@ async function calcGTScore(ticker) {
   }
   const rsi = losses === 0 ? 100 : 100 - (100 / (1 + (gains/14)/(losses/14)))
 
-  // MACD (12/26/9)
-  const ema12 = calcEMA(closes, 12)
-  const ema26 = calcEMA(closes, 26)
-  const macdLine = ema12 - ema26
-  const prevBars = closes.slice(0,-1)
-  const prevMacd = calcEMA(prevBars, 12) - calcEMA(prevBars, 26)
+  // ─── 1. TREND QUALITY (30%) ────────────────────────────────────────────────
+  const fullStack   = last > ema20 && ema20 > ema50
+  const ema20Up     = ema20 > ema20p
+  const ema50Up     = ema50 > ema50p
+  const ema50Pct5d  = ema50p > 0 ? (ema50 - ema50p) / ema50p * 100 : 0
+  const ema50Strong = ema50Pct5d > 0.5
+  const bothDown    = ema20 < ema20p && ema50 < ema50p
+  let trendScore
+  if(fullStack && ema20Up && ema50Up && ema50Strong)   trendScore = 10
+  else if(fullStack && ema20Up && ema50Up)             trendScore = 8
+  else if(fullStack && ema20Up)                        trendScore = 6
+  else if(last > ema20 && ema20 <= ema50)              trendScore = 5
+  else if(last > ema20)                                trendScore = 3
+  else if(last < ema20 && last < ema50 && bothDown)    trendScore = 0
+  else                                                  trendScore = 1
 
-  // 10-day ROC
+  // ─── 2. MOMENTUM EXPANSION (25%) — true MACD histogram acceleration ────────
+  // Build MACD line series iteratively (same SMA-seed + k=2/(p+1) recurrence
+  // as calcEMA), then EMA(9) signal, then histogram = line - signal. Scores
+  // off the last 4 histogram values to evaluate "rising N consecutive days."
+  const MACD_FAST = 12, MACD_SLOW = 26, MACD_SIG = 9
+  const kFast = 2/(MACD_FAST+1), kSlow = 2/(MACD_SLOW+1), kSig = 2/(MACD_SIG+1)
+  let emaFastIter = 0, emaSlowIter = 0
+  for(let i = 0; i < MACD_FAST; i++) emaFastIter += closes[i]
+  emaFastIter /= MACD_FAST
+  for(let i = 0; i < MACD_SLOW; i++) emaSlowIter += closes[i]
+  emaSlowIter /= MACD_SLOW
+  const macdLineSeries = []
+  for(let i = MACD_SLOW; i < n; i++) {
+    emaFastIter = (closes[i] - emaFastIter) * kFast + emaFastIter
+    emaSlowIter = (closes[i] - emaSlowIter) * kSlow + emaSlowIter
+    macdLineSeries.push(emaFastIter - emaSlowIter)
+  }
+  const histSeries = []
+  if(macdLineSeries.length >= MACD_SIG + 4) {
+    let sigIter = 0
+    for(let i = 0; i < MACD_SIG; i++) sigIter += macdLineSeries[i]
+    sigIter /= MACD_SIG
+    for(let i = MACD_SIG; i < macdLineSeries.length; i++) {
+      sigIter = (macdLineSeries[i] - sigIter) * kSig + sigIter
+      histSeries.push(macdLineSeries[i] - sigIter)
+    }
+  }
+  const hist0 = histSeries.length >= 1 ? histSeries[histSeries.length - 1] : 0
+  const hist1 = histSeries.length >= 2 ? histSeries[histSeries.length - 2] : 0
+  const hist2 = histSeries.length >= 3 ? histSeries[histSeries.length - 3] : 0
+  const hist3 = histSeries.length >= 4 ? histSeries[histSeries.length - 4] : 0
+  const rising1 = hist0 > hist1
+  const rising2 = rising1 && hist1 > hist2
+  const rising3 = rising2 && hist2 > hist3
   const roc10 = (last - closes[n-11]) / closes[n-11] * 100
+  const roc5  = (last - closes[n-6])  / closes[n-6]  * 100
+  let momScore
+  if(hist0 > 0 && rising3 && roc5 > roc10 && roc10 > 0)        momScore = 10
+  else if(hist0 > 0 && rising2 && roc5 > roc10)                momScore = 8
+  else if(hist0 > 0 && rising1 && roc5 > 0)                    momScore = 6
+  else if(hist0 > 0 && roc10 > 0)                              momScore = 4
+  else if(hist0 <= 0 && hist0 > hist1 && roc5 > 0)             momScore = 3
+  else                                                          momScore = 1
 
-  const rsiScore  = rsi >= 55 && rsi <= 72 ? 10 : rsi >= 50 && rsi < 55 ? 6 :
-                    rsi > 72 && rsi <= 78 ? 5 : rsi >= 45 ? 3 : 1
-  const macdScore = macdLine > 0 && macdLine > prevMacd ? 10 :
-                    macdLine > 0 ? 6 : macdLine > prevMacd ? 4 : 2
-  const rocScore  = roc10 > 5 ? 10 : roc10 > 2 ? 8 : roc10 > 0 ? 6 : roc10 > -2 ? 3 : 1
-  const momScore  = Math.round(rsiScore*0.4 + macdScore*0.3 + rocScore*0.3)
-
-  // ─── 3. RS vs SPY 1-month (20%) ────────────────────────────────────────────
-  // Fetch SPY for same period (cached after first run)
+  // ─── 3. RS vs SPY (20%) ────────────────────────────────────────────────────
   let rsScore = 5  // default if SPY unavailable
   try {
     const spyD = await apiGet('/v2/aggs/ticker/SPY/range/1/day/'+from+'/'+to+'?adjusted=true&sort=asc&limit=100')
     if(spyD && spyD.results && spyD.results.length > 21) {
       const sc = spyD.results.map(b => b.c)
       const sn = sc.length
-      const rs1m  = (last - closes[n-22]) / closes[n-22] * 100 - (sc[sn-1] - sc[sn-22]) / sc[sn-22] * 100
-      const rs1w  = (last - closes[n-6])  / closes[n-6]  * 100 - (sc[sn-1] - sc[sn-6])  / sc[sn-6]  * 100
-      const rs1ms = rs1m > 5 ? 10 : rs1m > 2 ? 8 : rs1m > 0 ? 6 : rs1m > -2 ? 3 : 1
-      const rs1ws = rs1w > 2 ? 10 : rs1w > 0 ? 7 : rs1w > -1 ? 4 : 1
-      rsScore = Math.min(10, Math.round(rs1ms*0.65 + rs1ws*0.35))
+      const rs1m = (last - closes[n-22])/closes[n-22]*100 - (sc[sn-1]-sc[sn-22])/sc[sn-22]*100
+      const rs1w = (last - closes[n-6]) /closes[n-6] *100 - (sc[sn-1]-sc[sn-6]) /sc[sn-6] *100
+      if(rs1m > 5 && rs1w > 2)      rsScore = 10
+      else if(rs1m > 3 && rs1w > 1) rsScore = 8
+      else if(rs1m > 0 && rs1w > 0) rsScore = 6
+      else if(rs1m > -2)            rsScore = 4
+      else                          rsScore = 1
     }
   } catch(e) {}
 
-  // ─── 4. VOLUME (15%) ───────────────────────────────────────────────────────
+  // ─── 4. STRUCTURE QUALITY (15%) — low chop + breakout-ready ────────────────
+  let reversals = 0, prevDir = 0
+  for(let i = n-20; i < n; i++) {
+    const diff = closes[i] - closes[i-1]
+    const dir = diff > 0 ? 1 : diff < 0 ? -1 : 0
+    if(prevDir !== 0 && dir !== 0 && dir !== prevDir) reversals++
+    if(dir !== 0) prevDir = dir
+  }
+  const subA = reversals <= 5 ? 5 : reversals <= 7 ? 3 : reversals <= 9 ? 1 : 0
+  const high20 = Math.max.apply(null, bars.slice(-20).map(b => b.h))
+  const distHigh = (high20 - last) / last * 100
+  const emaSpreadNow = ema50 > 0 ? (ema20 - ema50) / ema50 * 100 : 0
+  const ema20_10 = closes.length > 30 ? calcEMA(closes.slice(0,-10), 20) : ema20
+  const ema50_10 = closes.length > 60 ? calcEMA(closes.slice(0,-10), 50) : ema50
+  const emaSpread10 = ema50_10 > 0 ? (ema20_10 - ema50_10) / ema50_10 * 100 : 0
+  const spreadExpanding = emaSpreadNow > emaSpread10
+  let subB
+  if(distHigh <= 3 && spreadExpanding)       subB = 5
+  else if(distHigh <= 5 && spreadExpanding)  subB = 4
+  else if(distHigh <= 8)                     subB = 3
+  else if(distHigh <= 12)                    subB = 2
+  else                                        subB = 0
+  const structScore = subA + subB
+
+  // ─── 5. VOLUME CONVICTION (10%) — unchanged logic, reweighted ──────────────
   let upVol = 0, dnVol = 0, upDays = 0, dnDays = 0
   for(let i = n-20; i < n; i++) {
     if(closes[i] >= opens[i]) { upVol += vols[i]; upDays++ }
     else { dnVol += vols[i]; dnDays++ }
   }
-  const avgUp  = upDays  > 0 ? upVol/upDays  : 0
-  const avgDn  = dnDays  > 0 ? dnVol/dnDays  : 1
+  const avgUp  = upDays > 0 ? upVol/upDays : 0
+  const avgDn  = dnDays > 0 ? dnVol/dnDays : 1
   const ratio  = avgUp / Math.max(avgDn, 1)
   const avg20v = vols.slice(-20).reduce((a,b)=>a+b,0) / 20
   let recUpVol = 0, recUpDays = 0
@@ -2999,35 +3057,38 @@ async function calcGTScore(ticker) {
   const ratioS = ratio >= 2 ? 10 : ratio >= 1.5 ? 8 : ratio >= 1.2 ? 6 : ratio >= 1 ? 4 : 2
   const volScore = Math.min(10, ratioS + (volSurge ? 2 : 0))
 
-  // ─── 5. ATR% (10%) ─────────────────────────────────────────────────────────
+  // ─── Diagnostic-only (kept for backward compat; NOT in final score) ────────
   const atrVal  = calcATR(bars)
   const atrPct  = atrVal ? atrVal / last * 100 : 5
   const atrOld  = calcATR(bars.slice(0,-10))
   const atrScore = Math.min(10,
     (atrPct < 1.5 ? 10 : atrPct < 2.5 ? 8 : atrPct < 3.5 ? 6 : atrPct < 5 ? 4 : 2)
     + (atrVal && atrOld && atrVal < atrOld ? 1 : 0))
-
-  // ─── 6. NOT EXTENDED (10%) ─────────────────────────────────────────────────
   const notExtScore = pctFrom20 >= -2 && pctFrom20 <= 5  ? 10 :
                       pctFrom20 >= -5 && pctFrom20 <= 8  ? 8  :
                       pctFrom20 >= -8 && pctFrom20 <= 12 ? 6  :
                       pctFrom20 >= -12 && pctFrom20 <= 18 ? 4 :
                       pctFrom20 > 18 ? 2 : 3
 
-  // ─── FINAL SCORE ───────────────────────────────────────────────────────────
+  // ─── FINAL SCORE (v1.1 weights: 30/25/20/15/10) ────────────────────────────
   const gtScore = Math.round(
-    trendScore  * 0.25 +
-    momScore    * 0.20 +
+    trendScore  * 0.30 +
+    momScore    * 0.25 +
     rsScore     * 0.20 +
-    volScore    * 0.15 +
-    atrScore    * 0.10 +
-    notExtScore * 0.10)
+    structScore * 0.15 +
+    volScore    * 0.10)
 
-  const result = { score: gtScore, trend: Math.round(trendScore), mom: momScore,
-                   rs: rsScore, vol: Math.round(volScore), atr: atrScore,
-                   ext: notExtScore, rsi: Math.round(rsi*10)/10,
+  const result = { score: gtScore,
+                   trend: Math.round(trendScore), mom: momScore, rs: rsScore,
+                   struct: Math.round(structScore), vol: Math.round(volScore),
+                   atr: atrScore, ext: notExtScore,
+                   rsi: Math.round(rsi*10)/10,
                    atrPct: Math.round(atrPct*10)/10,
-                   pct20: Math.round(pctFrom20*10)/10, ts: Date.now() }
+                   pct20: Math.round(pctFrom20*10)/10,
+                   reversals: reversals,
+                   distHigh: Math.round(distHigh*10)/10,
+                   hist: Math.round(hist0*1000)/1000,
+                   ts: Date.now() }
   GT_SCORES[ticker] = result
   return result
 }
@@ -3064,7 +3125,7 @@ async function runGTScores() {
         if(cell) {
           const col = result.score >= 8 ? '#00d68f' : result.score >= 6 ? '#f0c040' : result.score >= 4 ? '#ff8c42' : '#ff4560'
           cell.innerHTML = '<span style="color:' + col + ';font-weight:700">' + result.score + '\x3C/span>' +
-            '<div style="font-size:9px;color:#555c6e">T:' + result.trend + ' M:' + result.mom + ' RS:' + result.rs + '\x3C/div>'
+            '<div style="font-size:9px;color:#555c6e;white-space:nowrap">T:' + result.trend + ' M:' + result.mom + ' RS:' + result.rs + ' S:' + result.struct + ' V:' + result.vol + '\x3C/div>'
         }
       }
     } catch(e) { done++ }
