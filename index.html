@@ -4050,7 +4050,7 @@ function parseFidelityClosedPaste(text) {
         cost:      +avgCost.toFixed(2),
         costTotal: +costTotal.toFixed(2),
         proceeds:  +proceeds.toFixed(2),
-        pnl:       +totalGL.toFixed(2),
+        pnl:       totalGL,  // full precision for accurate aggregation; rounded only at display
         pnlPct:    costTotal > 0 ? +((totalGL/costTotal)*100).toFixed(2) : 0,
         dateAcq:   parseDate(dateAcq),
         dateSold:  parseDate(dateSold),
@@ -4088,7 +4088,7 @@ function parseFidelityClosedPaste(text) {
       cost:      +avgCost.toFixed(2),
       costTotal: +costTotal.toFixed(2),
       proceeds:  +proceeds.toFixed(2),
-      pnl:       +totalGL.toFixed(2),
+      pnl:       totalGL,  // full precision for accurate aggregation; rounded only at display
       pnlPct:    costTotal > 0 ? +((totalGL/costTotal)*100).toFixed(2) : 0,
       dateAcq:   parseDate(dateAcq),
       dateSold:  parseDate(dateSold),
@@ -4317,6 +4317,8 @@ async function importClosedTradesPaste(text, statusCallback) {
   if(updated) parts.push(updated + ' updated')
   if(skipped) parts.push(skipped + ' unchanged')
   const msg = parts.length ? parts.join(', ') + ' — ' + CLOSED_TRADES.length + ' total' : 'No changes — all trades already up to date';
+  const rawTotal = CLOSED_TRADES.reduce((s,t) => s + (t.pnl || 0), 0)
+  console.log('[CLOSED-TOTAL-DEBUG] rawTotalPnl:', rawTotal.toFixed(4), 'displayedTotalPnl:', Math.round(rawTotal))
   if(statusCallback) statusCallback(msg, 'ok')
   setApi(msg + ' ✓', 'ok')
 }
