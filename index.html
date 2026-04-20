@@ -2951,8 +2951,6 @@ async function fetchScreenerPrices(tickers) {
       const expTo = new Date(Date.now()+60*864e5).toISOString().split('T')[0]
       const oiPath = '/v3/snapshot/options/'+t+'?expiration_date.gte='+today+'&expiration_date.lte='+expTo+'&limit=250';
       const oiCached = API_CACHE[oiPath] && (Date.now()-API_CACHE[oiPath].ts < 5*60*1000)
-      // Only wait between calls if the price fetch was uncached
-      if(!cached) await new Promise(r => setTimeout(r, 13000))
       const oiData = await apiGet(oiPath)
       if(oiData && oiData.results) {
         const totalOI = oiData.results.reduce((sum,r)=>sum+(r.open_interest||0),0)
@@ -2961,12 +2959,9 @@ async function fetchScreenerPrices(tickers) {
         OV[t] && (OV[t].oi = totalOI)
         const oiCell = document.getElementById('oi-'+t)
         if(oiCell) oiCell.textContent = totalOI > 1e6 ? (totalOI/1e6).toFixed(1)+'M' : totalOI > 1000 ? Math.round(totalOI/1000)+'K' : totalOI
-        // If OI was not cached, wait before moving to next ticker
-        if(!oiCached) await new Promise(r => setTimeout(r, 13000))
       }
     } catch(e) {
-      // OI failed - still do price delay
-      if(!cached) await new Promise(r => setTimeout(r, 13000))
+      // OI failed — no-op; move to next ticker
     }
   }
 
