@@ -6619,28 +6619,18 @@ async function refreshAllPnL() {
   setApi('Fetching live prices for ' + trades.length + ' trades...', 'loading')
   if(btn) { btn.textContent = 'Updating...'; btn.disabled = true }
 
-  const to = new Date().toISOString().split('T')[0]
-  const from = new Date(Date.now()-3*864e5).toISOString().split('T')[0]
+  // Batch-refresh live stock prices via the canonical path
+  // (fetchStockPricesForTrades → updateLivePriceTickers → #live-px-<id>).
+  // Replaces the old per-trade Polygon aggs call that wrote to the
+  // now-nonexistent #sp-<id> selector.
+  await fetchStockPricesForTrades()
+
   let updated = 0, totalPnL = 0
 
   for(const t of trades) {
     try {
-      // Try to get current option price via snapshot
-      // Build OCC symbol from trade data if we have expiry + strike
+      // Option price via OCC snapshot (preferred) or expiry+strike search.
       let price = null
-
-      // First try: fetch underlying stock price to estimate option value
-      const stockData = await apiGet('/v2/aggs/ticker/'+t.ticker+'/range/1/day/'+from+'/'+to+'?adjusted=true&sort=desc&limit=1')
-      if(stockData && stockData.results && stockData.results.length) {
-        const stockPrice = stockData.results[0].c
-        // Update stock price display on card
-        const spEl = document.getElementById('sp-' + t.id)
-        if(spEl) spEl.textContent = ''
- + stockPrice.toFixed(2)
-      }
-
-      // Try options snapshot — t.desc holds expiry like "May-15-2026"
-      // Try OCC symbol first (most direct)
       const baseTicker = t.ticker ? t.ticker.split(' ')[0].replace(/[^A-Z]/g,'') : '';
       const strikeVal  = t.strike || 0
       const expRaw     = t.desc || t.expiry || '';
