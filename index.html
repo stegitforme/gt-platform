@@ -3253,7 +3253,7 @@ async function loadFromFirebase() {
     } catch(ovErr) { console.warn('OV direct load error:', ovErr.message) }
     // Trades
     if(data.trades && Array.isArray(data.trades)) {
-      TRADES = data.trades.map(t => ({...t, rolls: Array.isArray(t.rolls) ? t.rolls : []}))
+      TRADES = data.trades.map(t => (typeof normalizeUnderlying==='function' ? normalizeUnderlying({...t, rolls: Array.isArray(t.rolls) ? t.rolls : []}) : {...t, rolls: Array.isArray(t.rolls) ? t.rolls : []}))
       localStorage.setItem('gt_trades', JSON.stringify(TRADES))
       if(typeof renderTrades === 'function') renderTrades()
     if(typeof updateTmRiskSummary === 'function') updateTmRiskSummary()
@@ -3631,7 +3631,7 @@ async function fetchStockPricesForTrades() {
   // Build unique ticker → trade ids map
   const tickerMap = {}
   openTrades.forEach(t => {
-    const base = t.occ && t.occ.match(/^([A-Z]+)\d/) ? t.occ.match(/^([A-Z]+)/)[1] : t.ticker.split(' ')[0]
+    const base = t.underlying || (t.occ && t.occ.match(/^([A-Z]+)\d/) ? t.occ.match(/^([A-Z]+)/)[1] : t.ticker.split(' ')[0])
     if(!tickerMap[base]) tickerMap[base] = []
     tickerMap[base].push(t.id)
   })
@@ -3704,13 +3704,13 @@ function updateLivePriceTickers() {
   const at = window._livePricesAt
   const timeStr = at ? at.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}) : ''
   TRADES.filter(t=>t.status==='open').forEach(t => {
-    const base = t.occ && t.occ.match(/^([A-Z]+)\d/) ? t.occ.match(/^([A-Z]+)/)[1] : t.ticker.split(' ')[0]
+    const base = t.underlying || (t.occ && t.occ.match(/^([A-Z]+)\d/) ? t.occ.match(/^([A-Z]+)/)[1] : t.ticker.split(' ')[0])
     const px = prices[base] || t.stockPrice || t.entry
     const el = document.getElementById('live-px-' + t.id)
     if(el && px) {
-      el.textContent = timeStr
-        ? `${base} ${px.toFixed(2)} · ${timeStr}`
-        : `${base} ${px.toFixed(2)}`
+      el.innerHTML = timeStr
+        ? `<span style="font-size:10px;color:#555c6e">${base}</span> <span style="font-family:SF Mono,monospace;font-weight:600;color:#4da6ff">${px.toFixed(2)}</span><span style="font-size:9px;color:#333a4a"> · ${timeStr}</span>`
+        : `<span style="font-size:10px;color:#555c6e">${base}</span> <span style="font-family:SF Mono,monospace;font-weight:600;color:#4da6ff">${px.toFixed(2)}</span>`
     }
   })
 }
@@ -6311,8 +6311,20 @@ function goSaveAsTrade() {
 }
 
 // -- TRADE MANAGER =================================
+function normalizeUnderlying(t) {
+  if(!t || t.underlying) return t
+  let u = ''
+  if(t.occ) {
+    const m = t.occ.match(/^([A-Z]+)/)
+    if(m) u = m[1]
+  }
+  if(!u && t.ticker) u = String(t.ticker).split(' ')[0]
+  u = (u || '').trim().toUpperCase()
+  if(u) t.underlying = u
+  return t
+}
 let TRADES = []
-try { TRADES = JSON.parse(localStorage.getItem('gt_trades') || '[]').map(t => ({...t, rolls: Array.isArray(t.rolls) ? t.rolls : []})) } catch(e) { TRADES = [] }
+try { TRADES = JSON.parse(localStorage.getItem('gt_trades') || '[]').map(t => normalizeUnderlying({...t, rolls: Array.isArray(t.rolls) ? t.rolls : []})) } catch(e) { TRADES = [] }
 let CLOSED_TRADES = []
 try { CLOSED_TRADES = JSON.parse(localStorage.getItem('gt_closed_trades') || '[]') } catch(e) { CLOSED_TRADES = [] }
 function saveClosedTrades() {
