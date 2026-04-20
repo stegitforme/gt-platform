@@ -3624,6 +3624,9 @@ function renderClosedTrades() {
 
 // ── FETCH LIVE STOCK PRICES FOR OPEN TRADES ───────────────────────────────────
 // Sets entry price = current stock price so ATR levels are meaningful
+function getTradeUnderlying(t) {
+  return (t && t.underlying) || (t && t.occ && (t.occ.match(/^([A-Z]+)/) || [,''])[1]) || String((t && t.ticker) || '').split(' ')[0].trim().toUpperCase()
+}
 async function fetchStockPricesForTrades() {
   const openTrades = TRADES.filter(t => t.status === 'open')
   if(!openTrades.length) return
@@ -3631,7 +3634,7 @@ async function fetchStockPricesForTrades() {
   // Build unique ticker → trade ids map
   const tickerMap = {}
   openTrades.forEach(t => {
-    const base = t.underlying || (t.occ && t.occ.match(/^([A-Z]+)\d/) ? t.occ.match(/^([A-Z]+)/)[1] : t.ticker.split(' ')[0])
+    const base = getTradeUnderlying(t)
     if(!tickerMap[base]) tickerMap[base] = []
     tickerMap[base].push(t.id)
   })
@@ -3704,7 +3707,7 @@ function updateLivePriceTickers() {
   const at = window._livePricesAt
   const timeStr = at ? at.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}) : ''
   TRADES.filter(t=>t.status==='open').forEach(t => {
-    const base = t.underlying || (t.occ && t.occ.match(/^([A-Z]+)\d/) ? t.occ.match(/^([A-Z]+)/)[1] : t.ticker.split(' ')[0])
+    const base = getTradeUnderlying(t)
     const px = prices[base] || t.stockPrice || t.entry
     const el = document.getElementById('live-px-' + t.id)
     if(el && px) {
