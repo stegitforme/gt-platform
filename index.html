@@ -497,8 +497,7 @@ tr:hover td{background:#171b22;cursor:pointer}
           <th>Sector</th>
           <th>Spread</th>
           <th>Earnings</th>
-          <th onclick="scrSort('gt')" style="cursor:pointer;user-select:none" title="Sort by GT Score">GT Score <span id="sort-gt"></span></th>
-          <th onclick="scrSort('score')" style="cursor:pointer;user-select:none" title="Sort by GOGO Score">Score <span id="sort-score">&#9660;</span></th>
+          <th onclick="scrSort('gt')" style="cursor:pointer;user-select:none" title="Sort by GT Score">GT Score <span id="sort-gt">&#9660;</span></th>
           <th></th>
         </tr></thead>
         <tbody id="scr-body"></tbody>
@@ -1397,7 +1396,7 @@ setTimeout(function() { if(isMarketHours()) startAutoRefresh() }, 3000)
 
 let _filterDebounce = null
 function debouncedFilter(){ clearTimeout(_filterDebounce); _filterDebounce = setTimeout(runFilter, 300) }
-let SCR_SORT = (function(){ try { return JSON.parse(localStorage.getItem('gt_scr_sort')) || { col: 'score', dir: -1 } } catch(e) { return { col: 'score', dir: -1 } } })()
+let SCR_SORT = (function(){ try { return JSON.parse(localStorage.getItem('gt_scr_sort')) || { col: 'gt', dir: -1 } } catch(e) { return { col: 'gt', dir: -1 } } })()
 const WIDE_SPREADS = new Set(['AMAT','ATI','CAT','DE','GS','COHR','TT','MOD','WSM'])
 const BULL_SECTORS = new Set(['Financials','Materials','Real Estate','Industrials'])
 
@@ -2768,7 +2767,7 @@ function runFilter() {
   }).filter(Boolean).sort((a,b) => {
     if(typeof SCR_SORT === 'undefined' || !SCR_SORT) return b.score - a.score
     const col = SCR_SORT.col, dir = SCR_SORT.dir
-    if(col === 'gt')    return dir * ((GT_SCORES[b.t]?.score||0) - (GT_SCORES[a.t]?.score||0))
+    if(col === 'gt')    { const gDiff = (GT_SCORES[b.t]?.score||0) - (GT_SCORES[a.t]?.score||0); return gDiff !== 0 ? dir * gDiff : (b.score||0) - (a.score||0) }
     if(col === 'sig')   return dir * ((b.d.r||0) - (a.d.r||0))
     if(col === 'vol')    return dir * ((b.d.v||0) - (a.d.v||0))
     if(col === 'fg')    return dir * (b.d.fg - a.d.fg)
@@ -2779,17 +2778,13 @@ function runFilter() {
   const tbody = document.getElementById('scr-body')
 
   if(!scored.length) {
-    tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;padding:24px;color:#555c6e">No tickers match filters\x3C/td>\x3C/tr>';
+    tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:24px;color:#555c6e">No tickers match filters\x3C/td>\x3C/tr>';
     return
   }
 
   const PAGE_SIZE=75,display=scored.slice(0,PAGE_SIZE)
   if(scored.length>PAGE_SIZE)document.getElementById('scr-count').textContent='Top '+PAGE_SIZE+' of '+scored.length+' — tighten filters'
   tbody.innerHTML = display.map((s, i) => {
-  // GT score visuals
-  var sc = Math.round(s.score)
-  var scCol = sc>=85?'#00d68f':sc>=65?'#f0c040':sc>=45?'#ff8c42':'#ff4560';
-  var scBar = '<div style="display:flex;align-items:center;gap:5px"><span style="font-size:14px;font-weight:700;color:'+scCol+'">'+sc+'\x3C/span><div style="flex:1;background:#1e2d3d;border-radius:2px;height:4px;width:40px"><div style="width:'+sc+'%;height:100%;background:'+scCol+';border-radius:2px">\x3C/div>\x3C/div>\x3C/div>'
   // Signal bar
   var sig = Math.round(s.d.r||0)
   var sigCol = sig>=500?'#00d68f':sig>=200?'#f0c040':sig>=100?'#ff8c42':'#e8eaf0';
@@ -2853,8 +2848,7 @@ function runFilter() {
     '<td>' + spreadStr + '\x3C/td>' +                                                              // col  8 Spread
     '<td>' + earnStr + '\x3C/td>' +                                                                // col  9 Earnings
     '<td id="gt-' + s.t + '">' + gtInitial + '\x3C/td>' +                                          // col 10 GT Score
-    '<td>' + scBar + '\x3C/td>' +                                                                  // col 11 Score (GOGO)
-    '<td style="white-space:nowrap">' + sendBtn + planBtn + '\x3C/td>' +                           // col 12 Actions
+    '<td style="white-space:nowrap">' + sendBtn + planBtn + '\x3C/td>' +                           // col 11 Actions
     '\x3C/tr>'
 }).join('')
 
@@ -2904,6 +2898,8 @@ async function fetchScreenerPrices(tickers) {
             '<div style="font-size:10px;color:'+cc+'">'+(chg>=0?'+':'')+(chg*100).toFixed(1)+'%'+(spreadPct?' | sp:'+spreadPct+'%':'')+'\x3C/div>'
         }
         fetched++
+        // Re-render the rows so the new Live Price and Spread cells paint immediately.
+        if(typeof runFilter === 'function') runFilter()
       }
     } catch(e) {}
 
@@ -3325,7 +3321,7 @@ function scrSort(col) {
   localStorage.setItem('gt_scr_sort', JSON.stringify(SCR_SORT))
   }
   // Update header indicators
-  var cols = ['sig','fg','score','gt']
+  var cols = ['sig','fg','gt']
   cols.forEach(function(c) {
     var el = document.getElementById('sort-'+c)
     if(!el) return
@@ -3391,8 +3387,11 @@ function resetFilters() {
 }
 
 function goSize(t) {
-  document.getElementById('tkr').value = t
+  var tkrInput = document.getElementById('tkr')
+  if(tkrInput) tkrInput.value = t
+  // Nav layout is [0]Market [1]Screener [2]Planner — index 2 is the Planner button.
   show('sizer', document.querySelectorAll('.nav button')[2])
+  if(typeof initPlanner === 'function') initPlanner()
   fetchTicker(t)
   // Auto-populate notes with OV signal data if available
   var ovData = typeof OV !== 'undefined' && OV[t]
@@ -5901,16 +5900,14 @@ function doRoll() {
 async function fetchTicker(ticker) {
   if(!ticker || ticker.length < 1) return
   const st = document.getElementById('tkr-st')
-  st.textContent = 'Fetching ' + ticker + '...'
-  st.style.color = '#ff8c42'
+  if(st) { st.textContent = 'Fetching ' + ticker + '...'; st.style.color = '#ff8c42' }
 
   const to   = new Date().toISOString().split('T')[0]
   const from = new Date(Date.now()-100*864e5).toISOString().split('T')[0]
   const d = await apiGet('/v2/aggs/ticker/'+ticker+'/range/1/day/'+from+'/'+to+'?adjusted=true&sort=asc&limit=75')
 
   if(!d || !d.results || d.results.length < 15) {
-    st.textContent = 'No data for ' + ticker + ' -- check ticker symbol'
-    st.style.color = '#ff4560';
+    if(st) { st.textContent = 'No data for ' + ticker + ' -- check ticker symbol'; st.style.color = '#ff4560' }
     return
   }
 
@@ -5923,10 +5920,10 @@ async function fetchTicker(ticker) {
   const e50    = closes.length >= 50 ? calcEMA(closes, 50) : null
   const emaOk  = !!(e10 && e20 && e50 && e10 > e20 && e20 > e50 && price > e50)
 
-  if(!document.getElementById('entry').value) {
-    document.getElementById('entry').value = price.toFixed(2)
-  }
-  document.getElementById('atr').value = atr
+  const entryInput = document.getElementById('entry')
+  if(entryInput && !entryInput.value) entryInput.value = price.toFixed(2)
+  const atrInput = document.getElementById('atr')
+  if(atrInput) atrInput.value = atr
 
   setCheck('stk-ema', emaOk)
   renderChecklist()
@@ -5935,15 +5932,17 @@ async function fetchTicker(ticker) {
   const e50str = e50 ? e50.toFixed(2) : '(need 50+ bars)';
   const emaCol = emaOk ? '#00d68f' : '#ff4560';
   const emaLbl = emaOk ? '&#10003; Bullish stack' : '&#10007; Not aligned'
-  st.innerHTML =
-    '<span style="color:#00d68f">&#10003; ' + ticker + '\x3C/span>' +
-    ' &nbsp;.&nbsp; ATR: <span style="color:#e8eaf0">'
+  if(st) {
+    st.innerHTML =
+      '<span style="color:#00d68f">&#10003; ' + ticker + '\x3C/span>' +
+      ' &nbsp;.&nbsp; ATR: <span style="color:#e8eaf0">'
  + atr + '\x3C/span>' +
-    ' &nbsp;.&nbsp; Price: <span style="color:#e8eaf0">'
+      ' &nbsp;.&nbsp; Price: <span style="color:#e8eaf0">'
  + price.toFixed(2) + '\x3C/span><br>' +
-    'EMA10: ' + (e10||'--') + ' &nbsp;.&nbsp; EMA20: ' + (e20||'--') + ' &nbsp;.&nbsp; EMA50: ' + e50str +
-    ' &nbsp;.&nbsp; <span style="color:' + emaCol + '">' + emaLbl + '\x3C/span>'
-  st.style.color = ''
+      'EMA10: ' + (e10||'--') + ' &nbsp;.&nbsp; EMA20: ' + (e20||'--') + ' &nbsp;.&nbsp; EMA50: ' + e50str +
+      ' &nbsp;.&nbsp; <span style="color:' + emaCol + '">' + emaLbl + '\x3C/span>'
+    st.style.color = ''
+  }
 
   setApi(ticker + ' loaded . ATR'
  + atr + ' . Price'
