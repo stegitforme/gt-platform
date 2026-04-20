@@ -7262,11 +7262,13 @@ function initPlatform() {
     }
     if(savedRisk) { const el=document.getElementById('riskpct'); if(el) el.value=savedRisk }
     if(savedDelta) { const el=document.getElementById('delta'); if(el) el.value=savedDelta }
+    // Show setup overlay for user to enter key, but do NOT bail — Polygon-
+    // dependent functions each have their own try/catch and the rest of boot
+    // should still run.
     if(!KEY) {
-      console.warn('[INIT-BOOT] missing KEY, returning early')
+      console.warn('[INIT-BOOT] missing Polygon KEY — showing setup overlay, continuing boot')
       const overlay = document.getElementById('setup-overlay')
       if(overlay) overlay.style.display = 'flex';
-      return
     }
     console.log('[INIT-BOOT] before loadPortfolioData')
     loadPortfolioData()
