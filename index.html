@@ -1206,15 +1206,72 @@ function show(id, btn) {
 // and show('market') (tab switch). Each loader guarded so one failure
 // doesn't cascade across the cards.
 function initMarket() {
-  try { loadMarketData() } catch(e) { console.warn('[MARKET-INIT] loadMarketData', e) }
+  console.log('[MARKET-BOOT] initMarket start. readyState=', document.readyState,
+    'market active=', document.getElementById('market')?.classList?.contains('active'),
+    'dom targets:', {
+      'spy-v':                 !!document.getElementById('spy-v'),
+      'vix-v':                 !!document.getElementById('vix-v'),
+      'sector-body':           !!document.getElementById('sector-body'),
+      'tqqq-body':             !!document.getElementById('tqqq-body'),
+      'official-signal-body':  !!document.getElementById('official-signal-body'),
+      'leaps-body':            !!document.getElementById('leaps-body'),
+      'bull-sectors-val':      !!document.getElementById('bull-sectors-val')
+    },
+    'fns:', {
+      loadMarketData:      typeof loadMarketData,
+      fetchTQQQSignal:     typeof fetchTQQQSignal,
+      fetchOfficialSignal: typeof fetchOfficialSignal,
+      fetchLeapsData:      typeof fetchLeapsData,
+      fetchVIX:            typeof fetchVIX,
+      fetchSectorData:     typeof fetchSectorData
+    })
+  // Guard against overlapping runs (tab switches hitting while boot is mid-flight).
+  if(window._marketInitInFlight) { console.log('[MARKET-BOOT] already in flight — skipping'); return }
+  window._marketInitInFlight = true
+
+  console.log('[MARKET-BOOT] loadMarketData start')
+  try {
+    const p0 = loadMarketData()
+    if(p0 && typeof p0.then === 'function') {
+      p0.then(function(){ console.log('[MARKET-BOOT] loadMarketData done') })
+        .catch(function(e){ console.warn('[MARKET-BOOT] loadMarketData error', e) })
+    } else { console.log('[MARKET-BOOT] loadMarketData done (sync)') }
+  } catch(e) { console.warn('[MARKET-BOOT] loadMarketData error', e) }
+
   setTimeout(function(){
+    console.log('[MARKET-BOOT] fetchTQQQSignal start')
     try {
       const p = fetchTQQQSignal()
-      if(p && typeof p.then === 'function') p.then(function(){ setTimeout(rebSyncSignal, 200) }).catch(function(){})
-    } catch(e) { console.warn('[MARKET-INIT] fetchTQQQSignal', e) }
+      if(p && typeof p.then === 'function') {
+        p.then(function(){ console.log('[MARKET-BOOT] fetchTQQQSignal done'); setTimeout(rebSyncSignal, 200) })
+         .catch(function(e){ console.warn('[MARKET-BOOT] fetchTQQQSignal error', e) })
+      } else { console.log('[MARKET-BOOT] fetchTQQQSignal done (sync)') }
+    } catch(e) { console.warn('[MARKET-BOOT] fetchTQQQSignal error', e) }
   }, 1500)
-  setTimeout(function(){ try { fetchOfficialSignal() } catch(e) { console.warn('[MARKET-INIT] fetchOfficialSignal', e) } }, 2500)
-  setTimeout(function(){ try { fetchLeapsData() } catch(e) { console.warn('[MARKET-INIT] fetchLeapsData', e) } }, 3500)
+
+  setTimeout(function(){
+    console.log('[MARKET-BOOT] fetchOfficialSignal start')
+    try {
+      const p = fetchOfficialSignal()
+      if(p && typeof p.then === 'function') {
+        p.then(function(){ console.log('[MARKET-BOOT] fetchOfficialSignal done') })
+         .catch(function(e){ console.warn('[MARKET-BOOT] fetchOfficialSignal error', e) })
+      } else { console.log('[MARKET-BOOT] fetchOfficialSignal done (sync)') }
+    } catch(e) { console.warn('[MARKET-BOOT] fetchOfficialSignal error', e) }
+  }, 2500)
+
+  setTimeout(function(){
+    console.log('[MARKET-BOOT] fetchLeapsData start')
+    try {
+      const p = fetchLeapsData()
+      if(p && typeof p.then === 'function') {
+        p.then(function(){ console.log('[MARKET-BOOT] fetchLeapsData done') })
+         .catch(function(e){ console.warn('[MARKET-BOOT] fetchLeapsData error', e) })
+      } else { console.log('[MARKET-BOOT] fetchLeapsData done (sync)') }
+    } catch(e) { console.warn('[MARKET-BOOT] fetchLeapsData error', e) }
+    // Release the in-flight flag after the last scheduled loader starts
+    setTimeout(function(){ window._marketInitInFlight = false; console.log('[MARKET-BOOT] initMarket sequence scheduled complete') }, 500)
+  }, 3500)
 }
 
 // -- CLOCK ========================================
@@ -1600,10 +1657,11 @@ function updateMorningPanel() {
 }
 
 async function loadMarketData() {
+  console.log('[MARKET-BOOT] loadMarketData entered. marketDataLoaded=', marketDataLoaded, 'KEY set=', !!KEY)
   renderSectors()
   updateBanner(47.7)
   // Skip re-fetch if already loaded this session
-  if(marketDataLoaded) { renderChecklist()
+  if(marketDataLoaded) { console.log('[MARKET-BOOT] loadMarketData SHORT-CIRCUIT (marketDataLoaded=true)'); renderChecklist()
   setTimeout(function(){rebCalc()},200); setApi('Ready (cached)', 'ok'); return }
   setApi('Loading SPY data...', 'loading')
   try {
@@ -1635,8 +1693,20 @@ async function loadMarketData() {
     setApi('Using cached market data', 'err')
   }
   // Fetch VIX and sector data with short delays
-  setTimeout(fetchVIX, 3000)
-  setTimeout(fetchSectorData, 6000)
+  setTimeout(function(){
+    console.log('[MARKET-BOOT] fetchVIX start')
+    try {
+      const p = fetchVIX()
+      if(p && typeof p.then === 'function') p.then(function(){ console.log('[MARKET-BOOT] fetchVIX done') }).catch(function(e){ console.warn('[MARKET-BOOT] fetchVIX error', e) })
+    } catch(e) { console.warn('[MARKET-BOOT] fetchVIX error', e) }
+  }, 3000)
+  setTimeout(function(){
+    console.log('[MARKET-BOOT] fetchSectorData start')
+    try {
+      const p = fetchSectorData()
+      if(p && typeof p.then === 'function') p.then(function(){ console.log('[MARKET-BOOT] fetchSectorData done') }).catch(function(e){ console.warn('[MARKET-BOOT] fetchSectorData error', e) })
+    } catch(e) { console.warn('[MARKET-BOOT] fetchSectorData error', e) }
+  }, 6000)
 }
 
 async function fetchTQQQSignal() {
