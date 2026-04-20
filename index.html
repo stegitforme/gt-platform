@@ -1199,6 +1199,22 @@ function show(id, btn) {
   if(id === 'trades') renderTrades()
   if(id === 'analytics') renderAnalytics()
   if(id === 'sizer') setTimeout(rebSyncSignal, 200)
+  if(id === 'market') initMarket()
+}
+
+// Canonical Market-page init. Runs from both initPlatform (fresh page load)
+// and show('market') (tab switch). Each loader guarded so one failure
+// doesn't cascade across the cards.
+function initMarket() {
+  try { loadMarketData() } catch(e) { console.warn('[MARKET-INIT] loadMarketData', e) }
+  setTimeout(function(){
+    try {
+      const p = fetchTQQQSignal()
+      if(p && typeof p.then === 'function') p.then(function(){ setTimeout(rebSyncSignal, 200) }).catch(function(){})
+    } catch(e) { console.warn('[MARKET-INIT] fetchTQQQSignal', e) }
+  }, 1500)
+  setTimeout(function(){ try { fetchOfficialSignal() } catch(e) { console.warn('[MARKET-INIT] fetchOfficialSignal', e) } }, 2500)
+  setTimeout(function(){ try { fetchLeapsData() } catch(e) { console.warn('[MARKET-INIT] fetchLeapsData', e) } }, 3500)
 }
 
 // -- CLOCK ========================================
@@ -7260,17 +7276,13 @@ function initPlatform() {
     renderChecklist()
   setTimeout(function(){rebCalc()},200)
     updateBanner(47.7)
-    // Load market data after 200ms
-    setTimeout(function() {
-      try { loadMarketData() } catch(e) { console.error('loadMarketData error:', e) }
-    }, 200)
+    // Canonical Market init — loads SPY/VIX/Sectors/TQQQ/Official/LEAPS
+    // through the same entry point used by show('market').
+    setTimeout(initMarket, 200)
     // Start live stock price auto-refresh (every 5 min during market hours)
     setTimeout(startLivePriceRefresh, 1000)
     // Fetch stock prices immediately on load (snapshot = 1 fast call)
     setTimeout(fetchStockPricesForTrades, 2000)
-    // Auto-fetch TQQQ signal on startup so rebalancer can sync
-    setTimeout(async function(){ try{await fetchTQQQSignal(); setTimeout(rebSyncSignal,200)}catch(e){} }, 5000)
-    setTimeout(function(){ try{fetchOfficialSignal()}catch(e){} }, 6000)
     // Auto-run GT scores if cache empty
     setTimeout(function(){
       try{
