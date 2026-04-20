@@ -151,19 +151,24 @@ tr:hover td{background:#171b22;cursor:pointer}
         const pendingRef = ref(db, 'pending_ov')
         onValue(pendingRef, function(snap) {
           try {
+            console.log('[OV-DEBUG] listener fired. exists=', snap && snap.exists(), 'uid=', window.FBUID)
             if(!snap || !snap.exists()) return
             const d = snap.val()
+            console.log('[OV-DEBUG] payload received. savedAt=', d && d.savedAt, 'count=', d && d.ov ? Object.keys(d.ov).length : 0, 'importedAt=', d && d.importedAt)
             if(!d || !d.ov || !d.importedAt) return
             const lastSavedAt = parseInt(localStorage.getItem('gt_ov_last_savedAt') || '0')
+            console.log('[OV-DEBUG] dedup check. incoming.savedAt=', d.savedAt, 'lastSeen=', lastSavedAt, 'willSkip=', (d.savedAt && d.savedAt <= lastSavedAt))
             if(d.savedAt && d.savedAt <= lastSavedAt) return
             localStorage.setItem('gt_ov_last_savedAt', String(d.savedAt || Date.now()))
             const cnt = Object.keys(d.ov).length
             console.log('GOGO: OVTLYR sync \u2014 ' + cnt + ' tickers')
+            console.log('[OV-DEBUG] merging into OV. before=', typeof OV !== 'undefined' ? Object.keys(OV).length : 'OV undefined', 'incoming=', cnt)
             Object.entries(d.ov).forEach(function(kv){ if(typeof OV !== 'undefined') OV[kv[0]] = kv[1] })
             localStorage.setItem('gt_ov_data', JSON.stringify(d))
             const ovEl = document.getElementById('ov-last-update')
             if(ovEl) ovEl.textContent = 'Last import: ' + new Date(d.importedAt).toLocaleString() + ' (' + cnt + ' tickers)'
             if(typeof runFilter === 'function') runFilter()
+            console.log('[OV-DEBUG] runFilter complete. OV size now=', typeof OV !== 'undefined' ? Object.keys(OV).length : 'undef', 'visible rows=', document.querySelectorAll('#scr-body tr').length)
             if(typeof setApi === 'function') typeof setApi==="function"&&setApi('OVTLYR synced \u2014 ' + cnt + ' tickers \u2713', 'ok')
             if(typeof fbAutoSave === 'function') fbAutoSave(1000)
             var toast = document.getElementById('ov-sync-toast')
@@ -2720,17 +2725,21 @@ function renderTopStrip(scored) {
   strip.style.display = 'block'
 }
 function runFilter() {
-  const minSig  = +document.getElementById('f-sig').value || 0
-  const fgMin   = +document.getElementById('f-fg-min').value || 0
-  const fgMax   = +document.getElementById('f-fg-max').value || 100
+  // Defensive: Firebase auth/listener can fire before the Screener DOM is parsed,
+  // and the OVTLYR panel may be swapped out in internal-screener mode. Bail if
+  // the body isn't there, and optional-chain every filter input read.
+  if(!document.getElementById('scr-body')) return
+  const minSig  = +document.getElementById('f-sig')?.value || 0
+  const fgMin   = +document.getElementById('f-fg-min')?.value || 0
+  const fgMax   = +document.getElementById('f-fg-max')?.value || 100
   const spreadType = document.getElementById('f-spread-type')?.textContent?.trim() || ''
 ;
-  const maxSp   = +document.getElementById('f-spread').value || 999
-  const minOI   = +document.getElementById('f-oi').value || 0
-  const minVol  = +document.getElementById('f-vol').value || 0
-  const noEarn  = document.getElementById('f-earn').checked
-  const bullOnly= document.getElementById('f-bull').checked
-  const noWide  = document.getElementById('f-wide').checked
+  const maxSp   = +document.getElementById('f-spread')?.value || 999
+  const minOI   = +document.getElementById('f-oi')?.value || 0
+  const minVol  = +document.getElementById('f-vol')?.value || 0
+  const noEarn  = document.getElementById('f-earn')?.checked
+  const bullOnly= document.getElementById('f-bull')?.checked
+  const noWide  = document.getElementById('f-wide')?.checked
 
   const scored = Object.entries(OV).map(([t, d]) => {
     // Spread check: use live bid/ask if available, else WIDE_SPREADS fallback
