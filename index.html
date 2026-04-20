@@ -2864,7 +2864,7 @@ function fetchScreenerPricesAll() {
 async function fetchScreenerPrices(tickers) {
   console.log('[PRICE-DEBUG] fetchScreenerPrices entered with', tickers.length, 'tickers')
   const loader = document.getElementById('scr-loading')
-  loader.style.display = 'inline';
+  if(loader) loader.style.display = 'inline';
   const to = new Date().toISOString().split('T')[0]
   const from = new Date(Date.now()-3*864e5).toISOString().split('T')[0]
   let fetched = 0
@@ -2934,7 +2934,7 @@ async function fetchScreenerPrices(tickers) {
     }
   }
 
-  loader.style.display = 'none'
+  if(loader) loader.style.display = 'none'
   setApi('Prices loaded: ' + fetched + ' tickers', 'ok')
 }
 
@@ -6012,7 +6012,7 @@ async function fetchEarnings(ticker) {
 
 async function fetchOptions(ticker) {
   const ol = document.getElementById('opt-live')
-  ol.textContent = 'Fetching options chain...'
+  if(ol) ol.textContent = 'Fetching options chain...'
   
   // Get current price from the price display (already fetched by fetchTicker)
   const priceEl = document.getElementById('lp')
@@ -6043,7 +6043,7 @@ async function fetchOptions(ticker) {
 
     const d = await apiGet(url)
     if(!d || !d.results || !d.results.length) {
-      ol.textContent = 'No options found for ' + ticker + ' ' + expiryISO + '. Verify expiry date or check Options plan.';
+      if(ol) ol.textContent = 'No options found for ' + ticker + ' ' + expiryISO + '. Verify expiry date or check Options plan.';
       return
     }
 
@@ -6061,12 +6061,12 @@ async function fetchOptions(ticker) {
       const withOI = d.results.filter(c => c.open_interest > 0)
       if(withOI.length) {
         best = withOI.reduce((a,b) => (a.open_interest||0) > (b.open_interest||0) ? a : b)
-        ol.textContent = 'Greeks not available for this expiry -- showing highest OI contract. Options plan may be needed for greeks.'
+        if(ol) ol.textContent = 'Greeks not available for this expiry -- showing highest OI contract. Options plan may be needed for greeks.'
       }
     }
 
     if(!best) {
-      ol.innerHTML = 'No contracts with data found near ATM. Try a different expiry.';
+      if(ol) ol.innerHTML = 'No contracts with data found near ATM. Try a different expiry.';
       return
     }
 
@@ -6087,7 +6087,7 @@ async function fetchOptions(ticker) {
       : '<span style="color:'+sc+'">Spread: ~'
 +spread.toFixed(2)+' '+(spreadOk?'&#10003;':'&#10007;')+'\x3C/span>'
 
-    ol.innerHTML =
+    if(ol) ol.innerHTML =
       'Strike:'
 +strike+
       ' . OI: '+oi.toLocaleString()+
@@ -6109,7 +6109,7 @@ async function fetchOptions(ticker) {
     window._optData = { strike, oi, delta, iv, bid, ask, spread, ticker, expiry: expiryISO }
 
   } catch(e) {
-    ol.textContent = 'Options fetch error: ' + e.message
+    if(ol) ol.textContent = 'Options fetch error: ' + e.message
     console.error('fetchOptions:', e)
   }
 }
