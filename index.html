@@ -4996,7 +4996,20 @@ function renderCandidateTable() {
       "<td style='padding:5px 4px;text-align:right;font-weight:700;color:#f0c040'>"+(cts>0?cts:"—")+"\x3C/td>"+
       "<td style='padding:5px 4px;text-align:right;color:#555c6e'>"+(capital>0?"$"+Math.round(capital).toLocaleString():"—")+"\x3C/td>"+
       function() { var ov=OV[sym]||{}; return "<td style='padding:5px 4px;text-align:right;font-size:11px;color:#8b91a0'>"+(ov.r?Math.round(ov.r)+"%":"—")+"\x3C/td><td style='padding:5px 4px;text-align:right;font-size:11px;color:#8b91a0'>"+(ov.fg||"—")+"\x3C/td>" }()+"<td style='padding:5px 4px;text-align:center'>"+statusHtml+"\x3C/td>"+
-      "<td style='padding:5px 4px;text-align:center'><button onclick='removeCandidate("+idx+")' style='background:none;border:none;color:#555c6e;cursor:pointer;font-size:14px' title='Remove'>✕\x3C/button>\x3C/td>"+
+      (function(){
+        var lpx = (typeof LIVE_PRICES!=='undefined' && LIVE_PRICES[sym]?.price) || c.price || 0
+        var miss = []
+        if(atr<=0) miss.push('ATR')
+        if(!c.optcost) miss.push('cost')
+        if(!c.strike) miss.push('strike')
+        if(!c.exp) miss.push('exp')
+        if(lpx<=0) miss.push('price')
+        if(cts<1) miss.push('cts')
+        var tradeBtn = miss.length===0
+          ? "<button id='cand-trade-"+idx+"' onclick='convertCandidateToTrade("+idx+")' style='background:#1e2d3d;color:#00d68f;border:1px solid #00d68f;border-radius:3px;cursor:pointer;font-size:10px;padding:2px 7px;margin-right:6px' title='Create open trade in Trade Manager'>→ Trade\x3C/button>"
+          : "<button disabled style='background:transparent;color:#333a4a;border:1px solid #1e2d3d;border-radius:3px;cursor:not-allowed;font-size:10px;padding:2px 7px;margin-right:6px' title='Waiting on: "+miss.join(', ')+"'>→ Trade\x3C/button>"
+        return "<td style='padding:5px 4px;text-align:center;white-space:nowrap'>"+tradeBtn+"<button onclick='removeCandidate("+idx+")' style='background:none;border:none;color:#555c6e;cursor:pointer;font-size:14px' title='Remove'>✕\x3C/button>\x3C/td>"
+      })()+
       "\x3C/tr>"
   })
   tbody.innerHTML = rows.join("")
@@ -5065,6 +5078,70 @@ function sendToPlanner(sym) {
   var btn = document.getElementById('send-planner-'+sym)
   if(btn){ var orig=btn.textContent; btn.textContent='✓ Sent'; btn.disabled=true; setTimeout(function(){btn.textContent=orig;btn.disabled=false},1500) }
 }
+function convertCandidateToTrade(idx) {
+  var c = PLANNER_CANDIDATES[idx]
+  if(!c) return
+  var sym = c.sym
+  var lp = (typeof LIVE_PRICES!=='undefined' && LIVE_PRICES[sym]) || {}
+  var entry = lp.price || c.price || 0
+  var defaultRisk  = +document.getElementById("pl-default-risk")?.value  || 5500
+  var defaultDelta = +document.getElementById("pl-default-delta")?.value || 0.80
+  var delta = c.delta || defaultDelta
+  var risk  = c.riskOverride || defaultRisk
+  var atr   = c.atr || 0
+  var rpc   = atr * delta * 100
+  var cts   = rpc > 0 ? Math.floor(risk / rpc) : 0
+  var missing = []
+  if(atr<=0)        missing.push('ATR')
+  if(!c.optcost)    missing.push('option cost')
+  if(!c.strike)     missing.push('strike')
+  if(!c.exp)        missing.push('expiry')
+  if(entry<=0)      missing.push('stock price')
+  if(cts<1)         missing.push('contracts')
+  if(missing.length){ alert('Cannot create trade — missing: '+missing.join(', ')); return }
+  if(c.tradeId && !confirm('Already created Trade #'+c.tradeId+' from this candidate. Create another?')) return
+  // YYYY-MM-DD → Mon-DD-YYYY (matches DTE parser)
+  var months = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+  var em = (c.exp||'').match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  var descStr = em ? months[+em[2]]+'-'+em[3]+'-'+em[1] : (c.exp||'')
+  var todayStr = new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}).replace(',','')
+  // Build OCC matching Fidelity 22-char format so later imports dedup cleanly
+  function buildOCC(s, e, k) {
+    if(!s || !e || !k) return null
+    var m = e.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+    if(!m) return null
+    var ticker = s.toUpperCase().replace(/[^A-Z]/g,'')
+    var strikePadded = String(Math.round(k * 1000)).padStart(8,'0')
+    return ticker + m[1].slice(2) + m[2] + m[3] + 'C' + strikePadded
+  }
+  var occ = buildOCC(c.sym, c.exp, c.strike)
+  var trade = {
+    id:     Date.now(),
+    ticker: sym,
+    type:   'Call',
+    desc:   descStr,
+    cts:    cts,
+    cost:   c.optcost,
+    entry:  entry,
+    atr:    atr,
+    strike: c.strike,
+    date:   todayStr,
+    notes:  'From Planner',
+    status: 'open',
+    rolls:  []
+  }
+  if(occ) trade.occ = occ
+  TRADES.push(trade)
+  c.tradeId = trade.id
+  saveTrades()
+  savePlannerCandidates()
+  if(typeof renderTrades==='function') renderTrades()
+  if(typeof renderPortfolioRisk==='function') renderPortfolioRisk()
+  renderCandidateTable()
+  fbAutoSave(1000)
+  var btn = document.getElementById('cand-trade-'+idx)
+  if(btn){ var orig=btn.textContent; btn.textContent='✓ #'+String(trade.id).slice(-4); setTimeout(function(){btn.textContent=orig},2000) }
+}
 function updateCandidateDelta(idx, val) {
   PLANNER_CANDIDATES[idx].delta = +val
   savePlannerCandidates()
@@ -5082,7 +5159,12 @@ function updateCandidateRisk(idx, val) {
 async function fetchCandidateATR(sym) {
   if(PLANNER_ATR_CACHE[sym]) {
     var c=PLANNER_CANDIDATES.find(function(x){return x.sym===sym})
-    if(c){c.atr=PLANNER_ATR_CACHE[sym].atr;c.optcost=PLANNER_ATR_CACHE[sym].optcost}
+    if(c){
+      c.atr     = PLANNER_ATR_CACHE[sym].atr
+      c.optcost = PLANNER_ATR_CACHE[sym].optcost
+      if(PLANNER_ATR_CACHE[sym].strike) c.strike = PLANNER_ATR_CACHE[sym].strike
+      if(PLANNER_ATR_CACHE[sym].exp)    c.exp    = PLANNER_ATR_CACHE[sym].exp
+    }
     renderCandidateTable();plannerCalc();return
   }
   try {
@@ -5103,14 +5185,17 @@ async function fetchCandidateATR(sym) {
         if(calls.length){
           var near80=calls.sort(function(a,b){return Math.abs(a.greeks.delta-0.80)-Math.abs(b.greeks.delta-0.80)})[0]
           optcost=near80?.ask||near80?.last||null
-          // Also update delta
           var cand=PLANNER_CANDIDATES.find(function(x){return x.sym===sym})
-          if(cand&&near80?.greeks?.delta) cand.delta=+near80.greeks.delta.toFixed(2)
+          if(cand){
+            if(near80?.greeks?.delta) cand.delta  = +near80.greeks.delta.toFixed(2)
+            if(near80?.strike)        cand.strike = +near80.strike
+            if(exp)                   cand.exp    = exp
+          }
         }
       }
     } catch(e2){}
-    PLANNER_ATR_CACHE[sym]={atr,optcost}
     var cand=PLANNER_CANDIDATES.find(function(x){return x.sym===sym})
+    PLANNER_ATR_CACHE[sym]={atr:atr, optcost:optcost, strike:cand?.strike||null, exp:cand?.exp||null}
     if(cand){cand.atr=atr;if(optcost)cand.optcost=optcost}
     savePlannerCandidates()
     renderCandidateTable()
