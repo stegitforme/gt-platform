@@ -3635,6 +3635,10 @@ async function fetchStockPricesForTrades() {
   const tickerMap = {}
   openTrades.forEach(t => {
     const base = getTradeUnderlying(t)
+    if(!base) {
+      console.warn('Missing underlying for trade', t)
+      return
+    }
     if(!tickerMap[base]) tickerMap[base] = []
     tickerMap[base].push(t.id)
   })
