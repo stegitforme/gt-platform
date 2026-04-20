@@ -2858,9 +2858,11 @@ function runFilter() {
 
 function fetchScreenerPricesAll() {
   var tickers = Object.keys(OV).slice(0,50)
+  console.log('[PRICE-DEBUG] button clicked. OV size=', Object.keys(OV).length, 'tickers to fetch=', tickers.length, 'first 5:', tickers.slice(0,5))
   fetchScreenerPrices(tickers)
 }
 async function fetchScreenerPrices(tickers) {
+  console.log('[PRICE-DEBUG] fetchScreenerPrices entered with', tickers.length, 'tickers')
   const loader = document.getElementById('scr-loading')
   loader.style.display = 'inline';
   const to = new Date().toISOString().split('T')[0]
@@ -2868,12 +2870,14 @@ async function fetchScreenerPrices(tickers) {
   let fetched = 0
 
   for(const t of tickers) {
+    console.log('[PRICE-DEBUG] fetching ticker', t)
     // Check if already cached before counting toward rate limit
     const path = '/v2/aggs/ticker/'+t+'/range/1/day/'+from+'/'+to+'?adjusted=true&sort=desc&limit=2';
     const cached = API_CACHE[path] && (Date.now() - API_CACHE[path].ts < 5*60*1000)
 
     try {
       const d = await apiGet(path)
+      console.log('[PRICE-DEBUG] response for', t, 'results=', d?.results?.length, 'hasData=', !!(d && d.results && d.results.length))
       if(d && d.results && d.results.length) {
         const bar  = d.results[0]
         const prev = d.results.length > 1 ? d.results[1].c : bar.o
@@ -2889,6 +2893,7 @@ async function fetchScreenerPrices(tickers) {
           LIVE_PRICES[t].bid = +(bar.c - spread/2).toFixed(2)
           LIVE_PRICES[t].ask = +(bar.c + spread/2).toFixed(2)
         }
+        console.log('[PRICE-DEBUG] LIVE_PRICES updated for', t, 'price=', LIVE_PRICES[t].price, 'bid=', LIVE_PRICES[t].bid, 'ask=', LIVE_PRICES[t].ask)
         const cell = document.getElementById('price-'+t)
         if(cell) {
           const cc = chg >= 0 ? '#00d68f' : '#ff4560';
@@ -2898,10 +2903,11 @@ async function fetchScreenerPrices(tickers) {
             '<div style="font-size:10px;color:'+cc+'">'+(chg>=0?'+':'')+(chg*100).toFixed(1)+'%'+(spreadPct?' | sp:'+spreadPct+'%':'')+'\x3C/div>'
         }
         fetched++
+        console.log('[PRICE-DEBUG] rerender called after', t)
         // Re-render the rows so the new Live Price and Spread cells paint immediately.
         if(typeof runFilter === 'function') runFilter()
       }
-    } catch(e) {}
+    } catch(e) { console.log('[PRICE-DEBUG] fetch error for', t, ':', e.message) }
 
     // Fetch OI from options snapshot - check cache first
     try {
@@ -3387,10 +3393,14 @@ function resetFilters() {
 }
 
 function goSize(t) {
+  console.log('[SIZE-DEBUG] goSize called with:', t)
   var tkrInput = document.getElementById('tkr')
+  console.log('[SIZE-DEBUG] #tkr exists:', !!tkrInput)
   if(tkrInput) tkrInput.value = t
+  console.log('[SIZE-DEBUG] #tkr value after set:', tkrInput ? tkrInput.value : 'n/a')
   // Nav layout is [0]Market [1]Screener [2]Planner — index 2 is the Planner button.
   show('sizer', document.querySelectorAll('.nav button')[2])
+  console.log('[SIZE-DEBUG] show(sizer) done. #sizer.active=', document.getElementById('sizer')?.classList?.contains('active'))
   if(typeof initPlanner === 'function') initPlanner()
   fetchTicker(t)
   // Auto-populate notes with OV signal data if available
@@ -4954,6 +4964,7 @@ function getSector(sym) {
 
 // ── PLANNER INIT ─────────────────────────────────────────────────────────────
 async function initPlanner() {
+  console.log('[PLANNER-DEBUG] initPlanner called. PLANNER_CANDIDATES:', PLANNER_CANDIDATES.map(function(c){return c.sym}), 'count:', PLANNER_CANDIDATES.length)
   // Merge watchlist stars into candidates
   var wl = JSON.parse(localStorage.getItem("gt_scr_watchlist") || "[]")
   wl.forEach(function(sym) {
@@ -4964,6 +4975,7 @@ async function initPlanner() {
   savePlannerCandidates()
   renderOpenTable()
   renderCandidateTable()
+  console.log('[PLANNER-DEBUG] initPlanner render done. #pl-cand-body children:', document.getElementById('pl-cand-body')?.children?.length)
   plannerCalc()
   // Auto-fetch ATRs for candidates
   fetchAllCandidateATRs()
@@ -5173,6 +5185,7 @@ function removeCandidate(idx) {
   plannerCalc()
 }
 function sendToPlanner(sym) {
+  console.log('[PLANNER-DEBUG] sendToPlanner called:', sym)
   sym = (sym||"").toUpperCase().trim()
   if(!sym) return
   var lp = (typeof LIVE_PRICES!=='undefined' && LIVE_PRICES[sym]) || {}
@@ -5186,6 +5199,7 @@ function sendToPlanner(sym) {
   }
   if(ov.s) meta.sector = ov.s
   var existing = PLANNER_CANDIDATES.find(function(c){return c.sym===sym})
+  console.log('[PLANNER-DEBUG] existing candidate?', !!existing, 'current count:', PLANNER_CANDIDATES.length)
   if(existing) {
     existing.price   = meta.price
     existing.gtScore = meta.gtScore
@@ -5198,8 +5212,11 @@ function sendToPlanner(sym) {
       meta
     ))
   }
+  console.log('[PLANNER-DEBUG] PLANNER_CANDIDATES after write:', PLANNER_CANDIDATES.map(function(c){return c.sym}))
   savePlannerCandidates()
+  console.log('[PLANNER-DEBUG] savePlannerCandidates done. localStorage has:', (JSON.parse(localStorage.getItem('gt_planner_candidates')||'[]')).length, 'entries')
   renderCandidateTable()
+  console.log('[PLANNER-DEBUG] renderCandidateTable done. #pl-cand-body children:', document.getElementById('pl-cand-body')?.children?.length)
   plannerCalc()
   if(!existing) fetchCandidateATR(sym)
   var btn = document.getElementById('send-planner-'+sym)
@@ -5898,15 +5915,19 @@ function doRoll() {
 
 // -- LIVE TICKER FETCH =============================
 async function fetchTicker(ticker) {
+  console.log('[SIZE-DEBUG] fetchTicker started:', ticker)
   if(!ticker || ticker.length < 1) return
   const st = document.getElementById('tkr-st')
+  console.log('[SIZE-DEBUG] #tkr-st exists:', !!st)
   if(st) { st.textContent = 'Fetching ' + ticker + '...'; st.style.color = '#ff8c42' }
 
   const to   = new Date().toISOString().split('T')[0]
   const from = new Date(Date.now()-100*864e5).toISOString().split('T')[0]
   const d = await apiGet('/v2/aggs/ticker/'+ticker+'/range/1/day/'+from+'/'+to+'?adjusted=true&sort=asc&limit=75')
+  console.log('[SIZE-DEBUG] fetchTicker response for', ticker, 'results=', d?.results?.length, 'hasData=', !!(d && d.results && d.results.length >= 15))
 
   if(!d || !d.results || d.results.length < 15) {
+    console.log('[SIZE-DEBUG] fetchTicker bailing — insufficient data for', ticker)
     if(st) { st.textContent = 'No data for ' + ticker + ' -- check ticker symbol'; st.style.color = '#ff4560' }
     return
   }
@@ -5920,6 +5941,7 @@ async function fetchTicker(ticker) {
   const e50    = closes.length >= 50 ? calcEMA(closes, 50) : null
   const emaOk  = !!(e10 && e20 && e50 && e10 > e20 && e20 > e50 && price > e50)
 
+  console.log('[SIZE-DEBUG] fetchTicker writing inputs for', ticker, 'price=', price.toFixed(2), 'atr=', atr, 'entryInputExists=', !!document.getElementById('entry'), 'atrInputExists=', !!document.getElementById('atr'))
   const entryInput = document.getElementById('entry')
   if(entryInput && !entryInput.value) entryInput.value = price.toFixed(2)
   const atrInput = document.getElementById('atr')
