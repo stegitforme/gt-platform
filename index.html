@@ -2790,7 +2790,9 @@ function runFilter() {
   // Star
   var wl = JSON.parse(localStorage.getItem('gt_scr_watchlist')||'[]')
   var starred = wl.includes(s.t)
-  var starBtn = '<button onclick="event.stopPropagation();toggleStar(\'' + s.t + '\')" style="background:none;border:none;cursor:pointer;font-size:14px;padding:0 2px" title="Add to Planner">'+(starred?'⭐':'☆')+'\x3C/button>'
+  var starBtn = '<button onclick="event.stopPropagation();scrToggleWatch(\'' + s.t + '\')" style="background:none;border:none;cursor:pointer;font-size:14px;padding:0 2px" title="Add to Planner">'+(starred?'⭐':'☆')+'\x3C/button>'
+  // Send to Planner button
+  var sendBtn = '<button id="send-planner-'+s.t+'" onclick="event.stopPropagation();sendToPlanner(\'' + s.t + '\')" style="background:#1e2d3d;color:#4da6ff;border:1px solid #4da6ff;border-radius:3px;cursor:pointer;font-size:10px;padding:3px 8px;margin-right:4px;white-space:nowrap" title="Send to Planner">→ Planner\x3C/button>'
   // Plan Trade button
   var planBtn = '<button onclick="event.stopPropagation();goSize(\'' + s.t + '\')" class="btn btn-gold" style="font-size:10px;padding:3px 8px;white-space:nowrap">Plan Trade →\x3C/button>';
   return '<tr style="cursor:pointer" onclick="goSize(\'' + s.t + '\')">' +
@@ -2802,7 +2804,7 @@ function runFilter() {
     '<td>' + clusterStr + '\x3C/td>' +
     '<td>' + priceStr + '\x3C/td>' +
     '<td>' + flagStr + '\x3C/td>' +
-    '<td style="white-space:nowrap">' + starBtn + planBtn + '\x3C/td>' +
+    '<td style="white-space:nowrap">' + starBtn + sendBtn + planBtn + '\x3C/td>' +
     '\x3C/tr>'
 }).join('')
 
@@ -5029,6 +5031,39 @@ function removeCandidate(idx) {
   savePlannerCandidates()
   renderCandidateTable()
   plannerCalc()
+}
+function sendToPlanner(sym) {
+  sym = (sym||"").toUpperCase().trim()
+  if(!sym) return
+  var lp = (typeof LIVE_PRICES!=='undefined' && LIVE_PRICES[sym]) || {}
+  var ov = (typeof OV!=='undefined' && OV[sym]) || {}
+  var gt = (typeof GT_SCORES!=='undefined' && GT_SCORES[sym]) || {}
+  var meta = {
+    price:   lp.price   || null,
+    gtScore: gt.score   || null,
+    source:  'ovtlyr',
+    addedAt: Date.now()
+  }
+  if(ov.s) meta.sector = ov.s
+  var existing = PLANNER_CANDIDATES.find(function(c){return c.sym===sym})
+  if(existing) {
+    existing.price   = meta.price
+    existing.gtScore = meta.gtScore
+    existing.source  = meta.source
+    existing.addedAt = meta.addedAt
+    if(meta.sector) existing.sector = meta.sector
+  } else {
+    PLANNER_CANDIDATES.push(Object.assign(
+      {sym:sym, delta:0.80, riskOverride:null, atr:null, optcost:null},
+      meta
+    ))
+  }
+  savePlannerCandidates()
+  renderCandidateTable()
+  plannerCalc()
+  if(!existing) fetchCandidateATR(sym)
+  var btn = document.getElementById('send-planner-'+sym)
+  if(btn){ var orig=btn.textContent; btn.textContent='✓ Sent'; btn.disabled=true; setTimeout(function(){btn.textContent=orig;btn.disabled=false},1500) }
 }
 function updateCandidateDelta(idx, val) {
   PLANNER_CANDIDATES[idx].delta = +val
