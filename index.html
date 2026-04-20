@@ -1209,19 +1209,16 @@ function initMarket() {
   // Guard against overlapping runs (tab switches hitting while boot is mid-flight).
   if(window._marketInitInFlight) return
   window._marketInitInFlight = true
+  // All four loaders are mutually independent — fire in parallel.
   try { loadMarketData() } catch(e) { console.warn('[MARKET-INIT] loadMarketData', e) }
-  setTimeout(function(){
-    try {
-      const p = fetchTQQQSignal()
-      if(p && typeof p.then === 'function') p.then(function(){ setTimeout(rebSyncSignal, 200) }).catch(function(){})
-    } catch(e) { console.warn('[MARKET-INIT] fetchTQQQSignal', e) }
-  }, 1500)
-  setTimeout(function(){ try { fetchOfficialSignal() } catch(e) { console.warn('[MARKET-INIT] fetchOfficialSignal', e) } }, 2500)
-  setTimeout(function(){
-    try { fetchLeapsData() } catch(e) { console.warn('[MARKET-INIT] fetchLeapsData', e) }
-    // Release the in-flight flag after the last scheduled loader starts
-    setTimeout(function(){ window._marketInitInFlight = false }, 500)
-  }, 3500)
+  try {
+    const p = fetchTQQQSignal()
+    if(p && typeof p.then === 'function') p.then(function(){ setTimeout(rebSyncSignal, 200) }).catch(function(){})
+  } catch(e) { console.warn('[MARKET-INIT] fetchTQQQSignal', e) }
+  try { fetchOfficialSignal() } catch(e) { console.warn('[MARKET-INIT] fetchOfficialSignal', e) }
+  try { fetchLeapsData() } catch(e) { console.warn('[MARKET-INIT] fetchLeapsData', e) }
+  // Release the in-flight flag after a short window so tab re-entry works.
+  setTimeout(function(){ window._marketInitInFlight = false }, 1500)
 }
 
 // -- CLOCK ========================================
@@ -1641,9 +1638,9 @@ async function loadMarketData() {
   } catch(e) {
     setApi('Using cached market data', 'err')
   }
-  // Fetch VIX and sector data with short delays
-  setTimeout(fetchVIX, 3000)
-  setTimeout(fetchSectorData, 6000)
+  // VIX and Sector are independent of SPY — fire both immediately in parallel.
+  try { fetchVIX() } catch(e) { console.warn('[MARKET-INIT] fetchVIX', e) }
+  try { fetchSectorData() } catch(e) { console.warn('[MARKET-INIT] fetchSectorData', e) }
 }
 
 async function fetchTQQQSignal() {
@@ -2363,10 +2360,11 @@ async function fetchSectorData() {
   const from = new Date(Date.now()-30*864e5).toISOString().split('T')[0]
   let updated = 0
 
-  for(const [sector, etf] of Object.entries(SECTOR_ETFS)) {
+  // Paid Polygon plan — run all 10 ETFs in parallel.
+  await Promise.all(Object.entries(SECTOR_ETFS).map(async ([sector, etf]) => {
     try {
       const d = await apiGet('/v2/aggs/ticker/'+etf+'/range/1/day/'+from+'/'+to+'?adjusted=true&sort=asc&limit=22')
-      if(!d || !d.results || d.results.length < 11) continue
+      if(!d || !d.results || d.results.length < 11) return
       const closes = d.results.map(b => b.c)
       const e10     = calcEMA(closes, 10)
       const e10prev = calcEMA(closes.slice(0, -1), 10)
@@ -2378,10 +2376,7 @@ async function fetchSectorData() {
       const si = SECTORS.findIndex(s => s.n === sector)
       if(si >= 0) { SECTORS[si].c = +chg.toFixed(2); SECTORS[si].bull = bull; updated++ }
     } catch(e) { console.log('Sector error', etf, e) }
-    // 13s gap to stay under 5 req/min -- use cache for subsequent calls
-    // Only throttle if result wasn't cached (real network call)
-    // No rate limiting needed on paid Polygon plan
-  }
+  }))
 
   renderSectors()
   // Rebuild BULL_SECTORS from live data
