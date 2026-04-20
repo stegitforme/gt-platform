@@ -2383,6 +2383,7 @@ function showBreadthUpdate() {
 
 // -- EARNINGS CALENDAR =============================
 const LIVE_EARNINGS = {}   // populated by fetchEarningsCalendar()
+const LIVE_EARNINGS_DATE = {}  // ISO 'YYYY-MM-DD' per ticker, populated alongside LIVE_EARNINGS
 
 async function fetchOVTLYRApi() {
   const key = localStorage.getItem('gt_ovtlyr_api_key') || prompt('Enter your OVTLYR API key:')
@@ -2408,26 +2409,29 @@ async function fetchOVTLYRApi() {
 
 
 async function fetchEarningsCalendar() {
-  // Fetch upcoming earnings for all OV tickers using Polygon /vX/reference/earnings
-  // This endpoint is available on paid plans
+  // Fetch upcoming earnings for all OV tickers from the Tradier worker.
+  // Worker response: { earnings: { TICKER: 'YYYY-MM-DD', ... } }
   try {
-    const today = new Date().toISOString().split('T')[0]
-    const future = new Date(Date.now() + 30*864e5).toISOString().split('T')[0]
-    const tickers = Object.keys(OV).join(',')
-    const d = await apiGet('/vX/reference/earnings?ticker.any_of=' + tickers +
-      '&period_of_report_date.gte=' + today +
-      '&period_of_report_date.lte=' + future +
-      '&limit=50', false, true)  // skipCache=false, silent=true: /vX/ needs Business plan
-    if(d && d.results && d.results.length) {
-      d.results.forEach(e => {
-        if(e.tickers) e.tickers.forEach(t => { LIVE_EARNINGS[t] = true })
-        else if(e.ticker) LIVE_EARNINGS[e.ticker] = true
+    const tickers = Object.keys(OV)
+    if(!tickers.length) return
+    const CHUNK = 50
+    let total = 0
+    for(let i = 0; i < tickers.length; i += CHUNK) {
+      const batch = tickers.slice(i, i+CHUNK).join(',')
+      const r = await fetch('https://yahoo-proxy.sgoglanian.workers.dev/tradier/earnings?symbols=' + batch)
+      const d = await r.json()
+      const entries = (d && d.earnings) || {}
+      Object.keys(entries).forEach(t => {
+        const ed = entries[t]
+        if(ed) { LIVE_EARNINGS[t] = true; LIVE_EARNINGS_DATE[t] = ed; total++ }
       })
-      console.log('Earnings loaded: ' + Object.keys(LIVE_EARNINGS).length + ' tickers with upcoming earnings')
+    }
+    if(total > 0) {
+      console.log('Earnings loaded: ' + total + ' tickers from Tradier')
       runFilter()
     }
   } catch(e) {
-    // Silently fall back to hardcoded OV earn flags
+    // Silently fall back to hardcoded OV earn flags (Screener boolean still works via OV.earn)
   }
 }
 
@@ -2435,6 +2439,20 @@ function hasEarnings(ticker) {
   // Live API data takes precedence over hardcoded OV flags
   if(LIVE_EARNINGS[ticker]) return true
   return !!(OV[ticker] && OV[ticker].earn)
+}
+function earningsBucket(ticker) {
+  // Methodology: 0-5d=red (high risk), 6-14d=yellow (caution), 15+d=green (acceptable),
+  // flagged-no-date=flagged, nothing known=none.
+  const ed = LIVE_EARNINGS_DATE[ticker]
+  if(ed) {
+    const days = Math.round((new Date(ed) - new Date()) / 864e5)
+    if(days < 0) return 'none'
+    if(days <= 5) return 'red'
+    if(days <= 14) return 'yellow'
+    return 'green'
+  }
+  if(LIVE_EARNINGS[ticker] || (OV[ticker] && OV[ticker].earn)) return 'flagged'
+  return 'none'
 }
 
 // -- OVTLYR DATA REFRESH ==========================
@@ -5836,24 +5854,33 @@ async function fetchTicker(ticker) {
 
 async function fetchEarnings(ticker) {
   try {
-    const d = await apiGet('/v3/reference/tickers/' + ticker)
-    if(d && d.results) {
-      const ed = d.results.next_earnings_date
-      const st = document.getElementById('tkr-st')
-      if(ed) {
-        const days = Math.round((new Date(ed) - new Date()) / 864e5)
-        const safe = days > 21 || new Date(ed) > new Date('2026-05-15')
-        setCheck('no-earn', safe)
-        renderChecklist()
-  setTimeout(function(){rebCalc()},200)
-        const col = safe ? '#00d68f' : '#ff8c42';
-        const lbl = safe ? '&#10003; Earnings: ' + ed + ' (' + days + 'd -- safe)' : '&#9888; Earnings: ' + ed + ' (' + days + 'd -- within window!)'
-        st.innerHTML = st.innerHTML + '<br><span style="color:' + col + '">' + lbl + '\x3C/span>'
-      } else {
-        setCheck('no-earn', true)
-        renderChecklist()
-  setTimeout(function(){rebCalc()},200)
-      }
+    const r = await fetch('https://yahoo-proxy.sgoglanian.workers.dev/tradier/earnings?symbols=' + ticker)
+    const d = await r.json()
+    const ed = d && d.earnings ? d.earnings[ticker] : null
+    const st = document.getElementById('tkr-st')
+    if(ed) {
+      LIVE_EARNINGS[ticker] = true
+      LIVE_EARNINGS_DATE[ticker] = ed
+      const days = Math.round((new Date(ed) - new Date()) / 864e5)
+      // Gating: PRESERVED — same expression as before, drives setCheck('no-earn', ...)
+      const safe = days > 21 || new Date(ed) > new Date('2026-05-15')
+      setCheck('no-earn', safe)
+      renderChecklist()
+      setTimeout(function(){rebCalc()},200)
+      // Display only: new tier wording/colors (does not affect gating)
+      const col = days < 0 ? '#00d68f' : days <= 5 ? '#ff4560' : days <= 14 ? '#f0c040' : '#00d68f'
+      const lbl = days < 0
+        ? '&#10003; Earnings: ' + ed + ' (passed)'
+        : days <= 5
+          ? '&#9888; Earnings: ' + ed + ' (' + days + 'd -- HIGH RISK)'
+          : days <= 14
+            ? '&#9888; Earnings: ' + ed + ' (' + days + 'd -- caution)'
+            : '&#10003; Earnings: ' + ed + ' (' + days + 'd -- safe)'
+      if(st) st.innerHTML = st.innerHTML + '<br><span style="color:' + col + '">' + lbl + '\x3C/span>'
+    } else {
+      setCheck('no-earn', true)
+      renderChecklist()
+      setTimeout(function(){rebCalc()},200)
     }
   } catch(e) {}
 }
