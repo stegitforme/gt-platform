@@ -1537,7 +1537,7 @@ function updateMorningPanel() {
   // Open trades from localStorage
   const mmTrades = document.getElementById('mm-trades')
   if(mmTrades) {
-    const trades = loadTrades().filter(t => t.status === 'open')
+    const trades = TRADES.filter(t => t.status === 'open')
     if(!trades.length) {
       mmTrades.innerHTML = '<span style="color:#555c6e">No open trades\x3C/span>'
     } else {
@@ -6611,12 +6611,13 @@ function toggleChart(id) {
 }
 
 async function refreshAllPnL() {
-  const trades = loadTrades().filter(t => t.status === 'open')
+  const btn = document.getElementById('pnl-refresh-btn')
+  try {
+  const trades = TRADES.filter(t => t.status === 'open')
   if(!trades.length) { setApi('No open trades', 'ok'); return }
-  
+
   setApi('Fetching live prices for ' + trades.length + ' trades...', 'loading')
-  document.getElementById('pnl-refresh-btn').textContent = 'Updating...'
-  document.getElementById('pnl-refresh-btn').disabled = true
+  if(btn) { btn.textContent = 'Updating...'; btn.disabled = true }
 
   const to = new Date().toISOString().split('T')[0]
   const from = new Date(Date.now()-3*864e5).toISOString().split('T')[0]
@@ -6678,10 +6679,10 @@ async function refreshAllPnL() {
         totalPnL += pnl
 
         // Update the trade in storage
-        const allTrades = loadTrades()
+        const allTrades = TRADES
         const tr = allTrades.find(x => x.id === t.id)
         if(tr) { tr.currentPrice = price; tr.pnl = pnl; tr.pnlPct = pnlPct }
-        saveTrades(allTrades)
+        saveTrades()
 
         // Update DOM directly
         const pnlEl = document.getElementById('pnl-' + t.id)
@@ -6710,9 +6711,13 @@ async function refreshAllPnL() {
 )+Math.abs(Math.round(totalPnL)).toLocaleString()+'\x3C/span>'
   }
 
-  document.getElementById('pnl-refresh-btn').textContent = 'Refresh P&L'
-  document.getElementById('pnl-refresh-btn').disabled = false
   setApi('P&L updated: ' + updated + '/' + trades.length + ' trades . last ' + new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}), 'ok')
+  } catch(e) {
+    console.error('[PRICE-REFRESH-ERROR]', e)
+    setApi('P&L refresh failed: ' + e.message, 'err')
+  } finally {
+    if(btn) { btn.textContent = 'Refresh P&L'; btn.disabled = false }
+  }
 }
 
 // -- PORTFOLIO ========================================
