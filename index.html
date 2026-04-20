@@ -3660,6 +3660,17 @@ async function fetchStockPricesForTrades() {
       } catch(e) {}
     }
 
+    // Final fallback: Tradier quotes (works when Polygon fails entirely —
+    // no API key, rate limit, or plan mismatch). Uses the same worker already
+    // proxying Tradier for bars / options / earnings.
+    const stillMissing = tickers.filter(t => !prices[t])
+    if(stillMissing.length && typeof tQuotes === 'function') {
+      try {
+        const qs = await tQuotes(stillMissing.join(','))
+        qs.forEach(q => { if(q.symbol && q.last) prices[q.symbol] = q.last })
+      } catch(e) { console.warn('Tradier quote fallback failed:', e.message) }
+    }
+
     // Update trades
     let updated = 0
     Object.entries(prices).forEach(([ticker, price]) => {
@@ -3993,7 +4004,46 @@ function parseFidelityClosedPaste(text) {
     // Strip CUSIP from symbol: AMD260515C220(7971239NH) → AMD260515C220
     const rawSym = cols[0].replace(/\(.*?\)/g,'').trim()
     const parsed = parseOCCSymbol(rawSym)
-    if(!parsed) continue  // skip non-options (ETFs, stocks)
+    // Non-option rows: handle as stock / ETF if the symbol looks clean.
+    // Junk rows (blank, header-like, or malformed) still get skipped.
+    if(!parsed) {
+      const tkrOnly = rawSym.replace(/\./g,'')  // tolerate BRK.B-style dots
+      if(!tkrOnly || tkrOnly.length > 7 || /[a-z]/.test(tkrOnly) || /\s/.test(tkrOnly)) continue
+      if(/^(TOTAL|SUBTOTAL|SYMBOL|CUSIP|GRAND)/i.test(rawSym)) continue
+
+      const dateAcq  = cols[2]?.trim()
+      const dateSold = cols[3]?.trim()
+      const qty      = Math.abs(clean(cols[4])) || 1
+      const costTotal= clean(cols[5])
+      const proceeds = clean(cols[6])
+      const stGL     = clean(cols[7])
+      const ltGL     = clean(cols[8])
+      const totalGL  = stGL + ltGL
+      const avgCost  = qty > 0 && costTotal > 0 ? costTotal / qty : 0   // per-share (not /100)
+      const dedupKey = rawSym + '|' + dateAcq
+
+      results.push({
+        occ:       rawSym,
+        dedupKey:  dedupKey,
+        ticker:    rawSym,
+        strike:    0,
+        type:      'Stock',
+        expiry:    '',
+        display:   rawSym,
+        cts:       qty,
+        cost:      +avgCost.toFixed(2),
+        costTotal: +costTotal.toFixed(2),
+        proceeds:  +proceeds.toFixed(2),
+        pnl:       +totalGL.toFixed(2),
+        pnlPct:    costTotal > 0 ? +((totalGL/costTotal)*100).toFixed(2) : 0,
+        dateAcq:   parseDate(dateAcq),
+        dateSold:  parseDate(dateSold),
+        dateAcqISO:toISO(dateAcq),
+        isStock:   true,
+        status:    'closed'
+      })
+      continue
+    }
 
     const dateAcq  = cols[2]?.trim()
     const dateSold = cols[3]?.trim()
