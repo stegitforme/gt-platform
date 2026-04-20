@@ -5004,8 +5004,19 @@ function renderCandidateTable() {
         : fits && concentrated
           ? "<span style='color:#ff8c42;font-size:11px'>⚠️ sector\x3C/span>"
           : "<span style='color:#ff4560;font-size:11px'>❌ over\x3C/span>";
+    var eData = (function(){
+      var b = (typeof earningsBucket === 'function') ? earningsBucket(sym) : 'none'
+      var ed = LIVE_EARNINGS_DATE[sym]
+      if(ed && (b==='red' || b==='yellow' || b==='green')) {
+        var days = Math.round((new Date(ed) - new Date()) / 864e5)
+        if(days < 0) return { txt:'E: —', col:'#333a4a', title:'No earnings data' }
+        return { txt:'E: '+days+'d', col: b==='red'?'#ff4560':b==='yellow'?'#f0c040':'#8b91a0', title:'Earnings: '+ed }
+      }
+      if(b === 'flagged') return { txt:'E: \u26a0', col:'#f0c040', title:'Earnings flagged — no date available' }
+      return { txt:'E: —', col:'#333a4a', title:'No earnings data' }
+    })()
     return "<tr style='border-bottom:1px solid #0d1117'>"+
-      "<td style='padding:5px 10px;font-weight:600'>"+sym+"\x3C/td>"+
+      "<td style='padding:5px 10px;font-weight:600'>"+sym+" <span style='font-size:10px;font-weight:400;color:"+eData.col+";margin-left:4px' title='"+eData.title+"'>"+eData.txt+"\x3C/span>\x3C/td>"+
       "<td style='padding:5px 4px;color:#8b91a0;font-size:11px'>"+sector+"\x3C/td>"+
       "<td style='padding:5px 4px;text-align:right'>"+(atr>0?"$"+atr.toFixed(2):"—")+"\x3C/td>"+
       "<td style='padding:5px 4px;text-align:right'><input type='number' value='"+delta.toFixed(2)+"' step='0.01' min='0.1' max='1' style='width:50px;font-size:11px;padding:2px 4px;text-align:right' onchange='updateCandidateDelta("+idx+",this.value)'>\x3C/td>"+
