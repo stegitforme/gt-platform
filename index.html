@@ -7375,8 +7375,8 @@ async function refreshAllPnL() {
   const probeTrade = trades.find(x => x.occ)
   if(probeTrade) {
     const probeTicker = (probeTrade.ticker || '').split(' ')[0].replace(/[^A-Z]/g,'')
-    const probePath = '/v3/snapshot/options/'+probeTicker+'?ticker=O:'+probeTrade.occ
-    const probeUrl  = API + probePath + (KEY ? ('&apiKey=' + KEY.slice(0,4) + '…' + KEY.slice(-4)) : '(NO KEY)')
+    const probePath = '/v3/snapshot/options/'+probeTicker+'/O:'+probeTrade.occ
+    const probeUrl  = API + probePath + (KEY ? ('?apiKey=' + KEY.slice(0,4) + '…' + KEY.slice(-4)) : '?(NO KEY)')
     console.info('[PNL-REFRESH-PROBE] test trade', {
       id: probeTrade.id, ticker: probeTrade.ticker, occ: probeTrade.occ, url: probeUrl,
     })
@@ -7386,18 +7386,27 @@ async function refreshAllPnL() {
           { hint: 'Set a Polygon API key via the app\'s API-key input (Firebase is now the source of truth; localStorage is only a cache).' })
         if(typeof setPolygonKeyStatus === 'function') setPolygonKeyStatus('missing', 'Refresh P&L probe: no key')
       } else {
-        const r = await fetch(API + probePath + '&apiKey=' + KEY)
+        const r = await fetch(API + probePath + '?apiKey=' + KEY)
         let bodyShape = null
         try {
           const j = await r.clone().json()
+          // Single-contract endpoint returns results as OBJECT; defensive
+          // path also handles array (old list-endpoint) shape.
+          const resObj = (j && j.results && typeof j.results === 'object' && !Array.isArray(j.results))
+            ? j.results : (j?.results?.[0] || null)
           bodyShape = {
             status: j && j.status,
-            resultsLen: (j && j.results) ? j.results.length : 0,
-            firstResultKeys: (j && j.results && j.results[0]) ? Object.keys(j.results[0]) : null,
-            firstDayClose: j?.results?.[0]?.day?.close ?? null,
-            firstPrevDayC: j?.results?.[0]?.prevDay?.c ?? null,
-            firstLastQuoteBid: j?.results?.[0]?.last_quote?.bid ?? null,
-            firstLastQuoteAsk: j?.results?.[0]?.last_quote?.ask ?? null,
+            resultsShape: Array.isArray(j?.results) ? 'array' : (j?.results ? 'object' : 'none'),
+            detailsTicker: resObj?.details?.ticker ?? null,
+            detailsStrike: resObj?.details?.strike_price ?? null,
+            detailsType:   resObj?.details?.contract_type ?? null,
+            detailsExpiry: resObj?.details?.expiration_date ?? null,
+            dayClose: resObj?.day?.close ?? resObj?.day?.c ?? null,
+            prevDayC: resObj?.prevDay?.c ?? null,
+            lastQuoteBid: resObj?.last_quote?.bid ?? null,
+            lastQuoteAsk: resObj?.last_quote?.ask ?? null,
+            lastTrade: resObj?.last_trade?.price ?? resObj?.last_trade?.p ?? null,
+            underlyingPx: resObj?.underlying_asset?.price ?? null,
             error: j && (j.error || j.message) || null,
           }
         } catch(bodyErr) { bodyShape = { parseError: bodyErr.message } }
@@ -7490,20 +7499,66 @@ async function refreshAllPnL() {
       // on the trade for later inspection + card badge rendering.
       let prevClose = null
       let priceInfo = { px: null, source: null, bid: null, ask: null, mid: null, lastTrade: null, dayClose: null }
+      // Helper: does a snapshot-result object describe the option contract
+      // we asked for? Polygon's list endpoint sometimes ignores the
+      // ?ticker= filter; the single-contract endpoint occasionally returns
+      // an unrelated contract if the OCC is wrong. This guard checks the
+      // returned ticker / strike / type / expiry against what we queried
+      // so a mismatched response is rejected rather than priced.
+      const matchesContract = (r, expectedOCC, expectedStrike, expectedCP) => {
+        if(!r || !r.details) return false
+        const got = String(r.details.ticker || '').replace(/^O:/,'').toUpperCase()
+        if(expectedOCC && got && got !== expectedOCC.toUpperCase()) return false
+        if(typeof r.details.strike_price === 'number' && expectedStrike > 0) {
+          if(Math.abs(r.details.strike_price - expectedStrike) > 0.11) return false
+        }
+        if(r.details.contract_type && expectedCP) {
+          if(String(r.details.contract_type).toLowerCase() !== expectedCP) return false
+        }
+        return true
+      }
+      const cpType = /put/i.test(String(t.type||'')) ? 'put' : 'call'
+      const isTestContract =
+        (baseTicker === 'NVDA' && Math.round(strikeVal) === 185) ||
+        (baseTicker === 'AMD'  && Math.round(strikeVal) === 250) ||
+        (baseTicker === 'BCS'  && Math.round(strikeVal) === 22)  ||
+        (baseTicker === 'SKM'  && Math.round(strikeVal) === 35)
+
+      // Polygon single-contract snapshot. Path format is
+      //   /v3/snapshot/options/{underlying}/O:{occ}
+      // and `results` comes back as an OBJECT for that exact contract.
+      // The previous ?ticker= filter on the list endpoint could be silently
+      // dropped, causing results[0] to be a different (e.g. deep-ITM
+      // low-strike) contract that priced near the underlying — which is
+      // why AMD250 read ~243.84 and NVDA185 read ~95.18 (underlying-ish).
       if(t.occ) {
         dbg.occAttempted = true
-        dbg.directUrl = '/v3/snapshot/options/'+baseTicker+'?ticker=O:'+t.occ
+        dbg.directUrl = '/v3/snapshot/options/'+baseTicker+'/O:'+t.occ
         try {
           const snapD = await apiGet(dbg.directUrl, false, true)
-          dbg.occResultsLen = (snapD && snapD.results) ? snapD.results.length : 0
-          if(snapD?.results?.[0]) {
-            const r = snapD.results[0]
+          // Single-contract endpoint → results is an object. Defensive:
+          // if a future API change returns an array, take [0].
+          const r = (snapD && snapD.results && typeof snapD.results === 'object' && !Array.isArray(snapD.results))
+            ? snapD.results
+            : (snapD?.results?.[0] || null)
+          dbg.occResultsLen = r ? 1 : 0
+          if(isTestContract) {
+            console.info('[PNL-PARSE-RAW] ' + baseTicker + Math.round(strikeVal) + ' single-contract response', {
+              url: dbg.directUrl, status: snapD && snapD.status, hasResults: !!r,
+              detailsTicker: r?.details?.ticker, detailsStrike: r?.details?.strike_price,
+              detailsType: r?.details?.contract_type, detailsExpiry: r?.details?.expiration_date,
+              rawResults: r,
+            })
+          }
+          if(r && matchesContract(r, t.occ, strikeVal, cpType)) {
             priceInfo = pickLiveOptionPrice(r)
             price = priceInfo.px
             if(typeof r.prevDay?.c === 'number') prevClose = r.prevDay.c
             else if(typeof r.prevDay?.close === 'number') prevClose = r.prevDay.close
             if(price !== null) { dbg.occSucceeded = true; directHit++ }
             else { dbg.skipReason = 'occResultNoPriceField' }
+          } else if(r) {
+            dbg.skipReason = 'occContractMismatch:ret=' + (r?.details?.ticker || '') + '/strike=' + r?.details?.strike_price
           } else {
             dbg.skipReason = 'occEmptyResult'
           }
@@ -7516,39 +7571,96 @@ async function refreshAllPnL() {
       }
       if(dbg.occAttempted || t.occ) attemptedLive++
 
-      // Fallback: search by expiry + strike (widen strike window to ±1.0
-      // so off-by-cents strike parsing and fractional-dollar strikes still
-      // match, then pick the closest strike from the results).
+      // Fallback: list endpoint filtered by expiry + contract_type + a ±1
+      // strike window; pick the closest-strike match. Validates the chosen
+      // contract matches our expected type AND strike before pricing —
+      // ignored filters can no longer sneak through a wrong-contract price.
       if(!price && expISO && strikeVal && baseTicker) {
         dbg.fallbackAttempted = true
-        const cpType = /put/i.test(String(t.type||'')) ? 'put' : 'call'
         dbg.fallbackUrl = '/v3/snapshot/options/'+baseTicker+
           '?expiration_date='+expISO+'&contract_type='+cpType+
           '&strike_price.gte='+(strikeVal-1.0)+'&strike_price.lte='+(strikeVal+1.0)+'&limit=10'
         try {
           const snapData = await apiGet(dbg.fallbackUrl, false, true)
           dbg.fallbackResultsLen = (snapData && snapData.results) ? snapData.results.length : 0
+          if(isTestContract) {
+            console.info('[PNL-PARSE-RAW] ' + baseTicker + Math.round(strikeVal) + ' list response', {
+              url: dbg.fallbackUrl, status: snapData && snapData.status,
+              resultsLen: dbg.fallbackResultsLen,
+              returnedContracts: (snapData?.results || []).map(r => ({
+                ticker: r?.details?.ticker, strike: r?.details?.strike_price,
+                type: r?.details?.contract_type, expiry: r?.details?.expiration_date,
+                dayClose: r?.day?.close, bid: r?.last_quote?.bid, ask: r?.last_quote?.ask,
+              })),
+            })
+          }
           if(snapData?.results?.length) {
             let best = null, bestDiff = Infinity
             for(const r of snapData.results) {
               const k = r.details?.strike_price
               if(typeof k !== 'number') continue
+              // Only consider results whose contract type matches.
+              if(r.details.contract_type && String(r.details.contract_type).toLowerCase() !== cpType) continue
               const diff = Math.abs(k - strikeVal)
               if(diff < bestDiff) { best = r; bestDiff = diff }
             }
-            best = best || snapData.results[0]
-            priceInfo = pickLiveOptionPrice(best)
-            price = priceInfo.px
-            if(typeof best?.prevDay?.c === 'number') prevClose = best.prevDay.c
-            else if(typeof best?.prevDay?.close === 'number') prevClose = best.prevDay.close
-            if(price !== null) { dbg.fallbackSucceeded = true; fallbackHit++; dbg.skipReason = null }
-            else { dbg.skipReason = dbg.skipReason || 'fallbackResultNoPriceField'; badStrikeMatch++ }
+            if(best && matchesContract(best, null, strikeVal, cpType)) {
+              dbg.matchedContractTicker = best?.details?.ticker || null
+              dbg.matchedContractStrike = best?.details?.strike_price ?? null
+              priceInfo = pickLiveOptionPrice(best)
+              price = priceInfo.px
+              if(typeof best?.prevDay?.c === 'number') prevClose = best.prevDay.c
+              else if(typeof best?.prevDay?.close === 'number') prevClose = best.prevDay.close
+              if(price !== null) { dbg.fallbackSucceeded = true; fallbackHit++; dbg.skipReason = null }
+              else { dbg.skipReason = dbg.skipReason || 'fallbackResultNoPriceField'; badStrikeMatch++ }
+            } else {
+              dbg.skipReason = dbg.skipReason || 'fallbackNoContractMatch'
+              badStrikeMatch++
+            }
           } else {
             dbg.skipReason = dbg.skipReason || 'fallbackEmptyResult'; emptyResult++
           }
         } catch(fbErr) {
           dbg.skipReason = dbg.skipReason || ('fallbackFetchThrew:' + (fbErr && fbErr.message))
           fetchErrors++
+        }
+      }
+
+      // ── Sanity guard against underlying-like prices ────────────────────
+      // An option premium can never legitimately exceed the underlying
+      // stock price. For calls, option price ≤ stock price; for puts,
+      // option price ≤ strike. If the chosen price looks like an
+      // underlying-stock value — within 1% of stockPrice, or ≥ stockPrice
+      // for a call — reject it as a wrong-contract response.
+      if(price !== null) {
+        const underlyingPx = (window._livePrices && window._livePrices[baseTicker])
+          || t.stockPrice || 0
+        const importedMid  = (typeof t.importedLastPx === 'number' && t.importedLastPx > 0) ? t.importedLastPx : null
+        let rejectReason = null
+        if(underlyingPx > 0) {
+          const near = Math.abs(price - underlyingPx) / underlyingPx < 0.02
+          const tooHighCall  = cpType === 'call' && price >= underlyingPx * 0.95  // an OTM call can't be worth ~= stock
+          const tooHighPut   = cpType === 'put'  && strikeVal > 0 && price > strikeVal * 1.05
+          if(near)         rejectReason = 'priceMatchesUnderlying(' + underlyingPx.toFixed(2) + ')'
+          else if(tooHighCall) rejectReason = 'callPriceGteStock(' + underlyingPx.toFixed(2) + ')'
+          else if(tooHighPut)  rejectReason = 'putPriceGtStrike('  + strikeVal.toFixed(2) + ')'
+        }
+        // Also reject if dramatically far from a Fidelity-imported lastPx
+        // (>5× or <1/5×) when we have one — imported prices don't drift
+        // that far intraday.
+        if(!rejectReason && importedMid) {
+          const ratio = price / importedMid
+          if(ratio > 5 || ratio < 0.2) rejectReason = 'farFromImportedMid(import=' + importedMid.toFixed(2) + ',ratio=' + ratio.toFixed(2) + ')'
+        }
+        if(rejectReason) {
+          console.warn('[PNL-REFRESH] REJECTED as underlying-like or implausible', {
+            id: t.id, ticker: t.ticker, occ: t.occ,
+            rejectedPrice: price, underlyingPx, importedMid, strike: strikeVal, cpType,
+            reason: rejectReason,
+          })
+          price = null
+          priceInfo = { px: null, source: null, bid: priceInfo.bid, ask: priceInfo.ask, mid: priceInfo.mid, lastTrade: priceInfo.lastTrade, dayClose: priceInfo.dayClose }
+          dbg.skipReason = 'sanityRejected:' + rejectReason
         }
       }
       // Stamp price-selection fields on the diagnostic record
@@ -8859,10 +8971,20 @@ async function refreshPortfolioPrices() {
       const rawOcc = p.raw ? p.raw.replace(/^-/,'') : '';
       if(rawOcc && /^[A-Z]+\d{6}[CP]/.test(rawOcc)) {
         try {
-          const optSnap = await apiGet('/v3/snapshot/options/'+base+'?ticker=O:'+rawOcc, false, true)
-          if(optSnap?.results?.[0]) {
-            const r = optSnap.results[0]
-            const optPx = r.day?.close || ((r.last_quote?.bid||0)+(r.last_quote?.ask||0))/2
+          // Single-contract snapshot endpoint — results is an OBJECT for
+          // that exact contract, not an array. The list endpoint with
+          // ?ticker= can silently ignore the filter and return a
+          // deepest-ITM contract priced near the underlying.
+          const optSnap = await apiGet('/v3/snapshot/options/'+base+'/O:'+rawOcc, false, true)
+          const r = (optSnap && optSnap.results && typeof optSnap.results === 'object' && !Array.isArray(optSnap.results))
+            ? optSnap.results : (optSnap?.results?.[0] || null)
+          if(r && r.details && String(r.details.ticker||'').replace(/^O:/,'').toUpperCase() === rawOcc.toUpperCase()) {
+            // Mid preferred; last trade next; day close last (can be stale)
+            const bid = (typeof r.last_quote?.bid === 'number' && r.last_quote.bid > 0) ? r.last_quote.bid : null
+            const ask = (typeof r.last_quote?.ask === 'number' && r.last_quote.ask > 0) ? r.last_quote.ask : null
+            let optPx = (bid !== null && ask !== null && ask >= bid) ? (bid + ask) / 2 : null
+            if(optPx == null && typeof r.last_trade?.price === 'number' && r.last_trade.price > 0) optPx = r.last_trade.price
+            if(optPx == null && typeof r.day?.close === 'number' && r.day.close > 0) optPx = r.day.close
             if(optPx > 0) {
               const cts = p.c || 1
               p.val   = Math.round(optPx * 100 * cts)
