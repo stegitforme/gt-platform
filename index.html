@@ -22,7 +22,12 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#0a0c0f;color:#e8
 .page{display:none;padding:20px;min-height:calc(100vh - 105px)}
 .page.active{display:block}
 .sizer-page{display:none;height:calc(100vh - 105px);overflow:hidden}
-.sizer-page.active{display:grid;grid-template-columns:360px 1fr}
+.sizer-page.active{display:grid;grid-template-columns:300px 1fr;gap:14px;padding:0 14px;align-items:start}
+.sizer-page .sizer-left,.sizer-page .sizer-right{display:flex;flex-direction:column;gap:10px;max-height:calc(100vh - 105px);overflow-y:auto;min-width:0}
+.sizer-page .sizer-left .card{margin-bottom:0}
+.sizer-page .sizer-right .card{margin-bottom:0}
+.sizer-page .sizer-left{position:sticky;top:0}
+@media(max-width:900px){.sizer-page.active{grid-template-columns:1fr;padding:0 10px}.sizer-page .sizer-left{position:static}}
 .trades-page{display:none;padding:20px;min-height:calc(100vh - 105px);overflow-y:auto}
 .trades-page.active{display:block}
 .card{background:#111318;border:1px solid rgba(255,255,255,0.07);border-radius:10px;margin-bottom:14px;overflow:hidden}
@@ -588,57 +593,31 @@ tr:hover td{background:#171b22;cursor:pointer}
 </div>
 <!-- &#9552;&#9552;&#9552; POSITION SIZER &#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552; -->
 <div id="sizer" class="sizer-page">
-<div class="card" style="margin-bottom:12px">
+<!-- LEFT RAIL — sticky risk-budget summary -->
+<div class="sizer-left">
+<div class="card" style="margin-bottom:0;border:1px solid rgba(240,192,64,.22);box-shadow:0 0 0 1px rgba(240,192,64,.06) inset">
   <div class="card-body" style="padding:14px">
-    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px">
-      <div>
-        <div style="font-size:11px;color:#555c6e;font-weight:600;letter-spacing:.08em">TOTAL RISK BUDGET $</div>
-        <input type="number" id="risk-budget" value="21000" step="500" oninput="syncRiskBudget();plannerCalc()" style="font-size:22px;font-weight:700;color:#f0c040;background:transparent;border:none;border-bottom:1px solid #f0c040;width:140px;padding:2px 0">
-      </div>
-      <div style="display:flex;gap:16px;flex-wrap:wrap">
-        <div style="text-align:center"><div style="font-size:10px;color:#555c6e">DEPLOYED</div><div id="pl-deployed" style="font-size:18px;font-weight:700;color:#ff8c42">--</div></div>
-        <div style="text-align:center"><div style="font-size:10px;color:#555c6e">AVAILABLE</div><div id="pl-available" style="font-size:18px;font-weight:700;color:#00d68f">--</div></div>
-        <div style="text-align:center"><div style="font-size:10px;color:#555c6e">AFTER CANDIDATES</div><div id="pl-after" style="font-size:18px;font-weight:700">--</div></div>
-      </div>
+    <div style="font-size:10px;color:#555c6e;font-weight:700;letter-spacing:.08em;margin-bottom:6px">TOTAL RISK BUDGET $</div>
+    <input type="number" id="risk-budget" value="21000" step="500" oninput="syncRiskBudget();plannerCalc()" style="font-size:26px;font-weight:700;color:#f0c040;background:transparent;border:none;border-bottom:1px solid #f0c040;width:100%;padding:2px 0;margin-bottom:14px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+      <div><div style="font-size:10px;color:#555c6e">DEPLOYED</div><div id="pl-deployed" style="font-size:17px;font-weight:700;color:#ff8c42">--</div></div>
+      <div><div style="font-size:10px;color:#555c6e">AVAILABLE</div><div id="pl-available" style="font-size:17px;font-weight:700;color:#00d68f">--</div></div>
+      <div style="grid-column:1 / -1"><div style="font-size:10px;color:#555c6e">AFTER CANDIDATES</div><div id="pl-after" style="font-size:17px;font-weight:700">--</div></div>
     </div>
-    <div style="background:#1e2d3d;border-radius:4px;height:10px;overflow:hidden;margin-bottom:6px">
+    <div style="background:#1e2d3d;border-radius:4px;height:10px;overflow:hidden;margin-bottom:8px">
       <div id="pl-meter" style="height:100%;width:0%;background:#00d68f;border-radius:4px;transition:width .4s,background .4s"></div>
     </div>
     <div id="pl-intel-panel" style="margin-top:10px;padding-top:10px;border-top:1px solid #1e2d3d"></div>
-    <div style="display:flex;justify-content:space-between;font-size:11px;color:#555c6e">
-      <span><b id="pl-open-count">0</b> open trades &bull; <b id="pl-cand-count">0</b> candidates</span>
+    <div style="display:flex;justify-content:space-between;font-size:11px;color:#555c6e;margin-top:8px">
+      <span><b id="pl-open-count">0</b> open · <b id="pl-cand-count">0</b> candidates</span>
       <span id="pl-verdict" style="font-weight:700"></span>
     </div>
   </div>
 </div>
-<div class="card" style="margin-bottom:12px">
-  <div class="card-head" style="display:flex;justify-content:space-between;align-items:center">
-    <span class="card-title">Open Positions — <span style="color:#f0c040">Planning Risk @ 1 ATR</span></span>
-    <span id="pl-sector-toggle" onclick="toggleSectorView()" style="font-size:11px;color:#4da6ff;cursor:pointer">by sector</span>
-  </div>
-  <div class="card-body" style="padding:0">
-    <div id="pl-open-table" style="overflow-x:auto">
-      <table style="width:100%;border-collapse:collapse;font-size:12px">
-        <thead><tr style="color:#555c6e;font-size:10px;text-transform:uppercase;border-bottom:1px solid #1e2d3d">
-          <th style="padding:6px 10px;text-align:left">Ticker</th>
-          <th style="padding:6px 4px;text-align:left">Sector</th>
-          <th style="padding:6px 4px;text-align:left">Expiry</th>
-          <th style="padding:6px 4px;text-align:right">Cts</th>
-          <th style="padding:6px 4px;text-align:right">ATR</th>
-          <th style="padding:6px 4px;text-align:right">Delta</th>
-          <th style="padding:6px 4px;text-align:right" title="ATR × delta × 100 × contracts">Risk@1ATR (Plan)</th>
-        </tr></thead>
-        <tbody id="pl-open-body"><tr><td colspan="7" style="padding:12px;text-align:center;color:#555c6e">Loading positions...</td></tr></tbody>
-        <tfoot><tr style="border-top:1px solid #1e2d3d;font-weight:700">
-          <td colspan="6" style="padding:6px 10px;font-size:11px;color:#555c6e">TOTAL DEPLOYED</td>
-          <td id="pl-open-total" style="padding:6px 4px;text-align:right;color:#ff8c42">--</td>
-        </tr></tfoot>
-      </table>
-    </div>
-    <div id="pl-sector-breakdown" style="display:none;padding:8px 10px;border-top:1px solid #1e2d3d;font-size:11px"></div>
-  </div>
 </div>
-<div class="card" style="margin-bottom:12px">
+<!-- RIGHT MAIN — Candidates + Quick Size -->
+<div class="sizer-right">
+<div class="card" style="margin-bottom:0">
   <div class="card-head" style="display:flex;justify-content:space-between;align-items:center">
     <span class="card-title">Candidates — New Trades to Plan</span>
     <div style="display:flex;gap:8px;align-items:center">
@@ -725,6 +704,7 @@ tr:hover td{background:#171b22;cursor:pointer}
     <div id="em-section" style="padding:0 12px 12px"></div>
   </div>
 </div>
+</div><!-- /.sizer-right -->
 <input type="hidden" id="acct" value="350000">
 <input type="hidden" id="riskpct" value="6">
 <input type="hidden" id="trade-ok-indicator">
@@ -733,7 +713,7 @@ tr:hover td{background:#171b22;cursor:pointer}
 <input type="hidden" id="risk-available">
 <input type="hidden" id="risk-meter-bar">
 <input type="hidden" id="risk-meter-pct">
-</div>
+</div><!-- /#sizer -->
 
 <!-- &#9552;&#9552;&#9552; TRADE MANAGER &#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552; -->
 <div id="trades" class="trades-page">
