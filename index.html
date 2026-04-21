@@ -151,6 +151,9 @@ tr:hover td{background:#171b22;cursor:pointer}
       if(userName) userName.textContent = user.displayName || user.email || 'Signed in'
       if(overlay) overlay.style.display = 'none'
       if(typeof setApi==='function') typeof setApi==="function"&&setApi('Firebase \u00b7 ' + (user.displayName || user.email || 'connected'), 'ok')
+      // Hydrate Polygon API key from Firebase (source of truth) before
+      // any downstream call that needs it. localStorage stays as cache.
+      if(typeof hydratePolygonKeyFromFirebase === 'function') hydratePolygonKeyFromFirebase()
       if(typeof loadFromFirebase === 'function') loadFromFirebase()
       try {
         const pendingRef = ref(db, 'pending_ov')
@@ -244,7 +247,7 @@ tr:hover td{background:#171b22;cursor:pointer}
 </div>
 
 <div id="api-bar">
-  <span style="margin-left:auto;font-size:10px;color:#333a4a;cursor:pointer" onclick="localStorage.removeItem('gt_api_key');location.reload()" title="Reset API key">key</span><div id="api-dot"></div>
+  <span data-role="polygon-key-status" style="margin-left:auto;font-size:10px;color:#333a4a;cursor:pointer;padding:1px 7px;border-radius:3px;border:1px solid transparent" onclick="resetPolygonKey()" title="Click to reset Polygon API key (clears both Firebase and cache)">Polygon key …</span><div id="api-dot"></div>
   <span id="api-msg">Ready -- enter a ticker to fetch live data</span>
   <span style="margin-left:auto;display:flex;align-items:center;gap:6px">
     <span id="deploy-status" style="font-size:10px;color:#333a4a"></span>
@@ -1178,11 +1181,21 @@ function checkApiKey() {
   return false
 }
 
-function saveApiKey() {
+async function saveApiKey() {
   const val = document.getElementById('setup-key-input').value.trim()
   if(!val || val.length < 20) { alert('Please enter a valid Massive/Polygon API key'); return }
   KEY = val
-  localStorage.setItem('gt_api_key', KEY)
+  localStorage.setItem('gt_api_key', KEY)   // local cache for offline boot
+  // Firebase is the source of truth — push the key now so every other
+  // device that logs in inherits it. fbConfigSet no-ops if auth hasn't
+  // resolved; in that case the next hydratePolygonKeyFromFirebase call
+  // will back-fill it.
+  try {
+    if(typeof fbConfigSet === 'function' && window.FBUID) {
+      await fbConfigSet('polygon_api_key', KEY)
+    }
+  } catch(e) { console.warn('[POLYGON-KEY] push to Firebase failed:', e.message) }
+  if(typeof setPolygonKeyStatus === 'function') setPolygonKeyStatus('loaded', 'saved · synced to Firebase')
   document.getElementById('setup-overlay').style.display = 'none'
   loadPortfolioData()
   loadOVData()
@@ -1191,6 +1204,20 @@ function saveApiKey() {
   runFilter()
   renderPortfolio()
   renderTrades()
+}
+
+// Reset the Polygon key from both Firebase and local cache.
+async function resetPolygonKey() {
+  if(!confirm('Reset Polygon API key in Firebase and local cache?')) return
+  try {
+    if(typeof fbConfigSet === 'function' && window.FBUID) {
+      await fbConfigSet('polygon_api_key', '')
+    }
+  } catch(e) { console.warn('[POLYGON-KEY] Firebase reset failed:', e.message) }
+  localStorage.removeItem('gt_api_key')
+  KEY = ''
+  if(typeof setPolygonKeyStatus === 'function') setPolygonKeyStatus('missing', 'cleared — page will reload')
+  setTimeout(() => location.reload(), 400)
 }
 const API = 'https://api.polygon.io'
 
@@ -3246,6 +3273,72 @@ async function fbLoad(key) {
     const snap = await window.FBGet(window.FBRef(window.FBDB, 'users/' + window.FBUID + '/' + key))
     return snap.exists() ? snap.val() : null
   } catch(e) { console.warn('fbLoad error:', e.message); return null }
+}
+
+// ── App config in Firebase ────────────────────────────────────────────────
+// Stores small, user-specific runtime config (e.g. the Polygon API key)
+// under users/{uid}/app_config/{name}. Firebase is the source of truth;
+// localStorage is only a boot-time cache so the app works offline for
+// the first render and while auth is resolving.
+async function fbConfigGet(name) {
+  return await fbLoad('app_config/' + name)
+}
+async function fbConfigSet(name, value) {
+  return await fbSave('app_config/' + name, value)
+}
+
+// Render the Polygon-key status pill in the header ("key" indicator at the
+// top-right of the API bar). Called on boot, after Firebase hydration,
+// after manual save, and after the first refreshAllPnL probe response.
+function setPolygonKeyStatus(state, detail) {
+  // state: 'loaded' | 'missing' | 'invalid' | 'syncing'
+  const el = document.querySelector('#api-bar [data-role="polygon-key-status"]')
+  if(!el) return
+  const map = {
+    loaded:  { text: 'Polygon key loaded',  color: '#00d68f', bg: 'rgba(0,214,143,.10)',  border: 'rgba(0,214,143,.35)' },
+    syncing: { text: 'Polygon key syncing…',color: '#4da6ff', bg: 'rgba(77,166,255,.10)', border: 'rgba(77,166,255,.35)' },
+    missing: { text: 'Polygon key missing', color: '#ff8c42', bg: 'rgba(255,140,66,.12)', border: 'rgba(255,140,66,.35)' },
+    invalid: { text: 'Polygon key invalid', color: '#ff4560', bg: 'rgba(255,69,96,.12)',  border: 'rgba(255,69,96,.35)' },
+  }
+  const m = map[state] || map.missing
+  el.textContent = m.text
+  el.title = detail || m.text
+  el.style.color = m.color
+  el.style.background = m.bg
+  el.style.border = '1px solid ' + m.border
+  window._POLYGON_KEY_STATE = state
+}
+
+// Boot-time precedence for the Polygon API key:
+//   1. Firebase app_config/polygon_api_key  (source of truth, cross-device)
+//   2. localStorage['gt_api_key']           (cache; used only when
+//      Firebase has no value or auth hasn't resolved yet)
+// localStorage is mirrored from Firebase on every successful load, so
+// offline reloads still work. Manual saves write BOTH.
+async function hydratePolygonKeyFromFirebase() {
+  try {
+    if(!window.FBUID) { setPolygonKeyStatus(KEY ? 'loaded' : 'missing', 'offline/pre-auth — using cached key'); return }
+    setPolygonKeyStatus('syncing', 'loading from Firebase…')
+    const cloudKey = await fbConfigGet('polygon_api_key')
+    if(cloudKey && typeof cloudKey === 'string' && cloudKey.length >= 20) {
+      KEY = cloudKey
+      localStorage.setItem('gt_api_key', cloudKey)  // cache for offline boot
+      setPolygonKeyStatus('loaded', 'from Firebase · len=' + cloudKey.length)
+      console.info('[POLYGON-KEY] hydrated from Firebase', { len: cloudKey.length })
+    } else if(KEY && KEY.length >= 20) {
+      // Local cache present but Firebase has nothing — back-fill Firebase
+      // so the next device that logs in inherits it.
+      await fbConfigSet('polygon_api_key', KEY)
+      setPolygonKeyStatus('loaded', 'back-filled to Firebase from localStorage cache')
+      console.info('[POLYGON-KEY] back-filled Firebase from localStorage cache', { len: KEY.length })
+    } else {
+      setPolygonKeyStatus('missing', 'no key in Firebase or localStorage — click to set')
+      console.warn('[POLYGON-KEY] no key available; Polygon snapshots will return null')
+    }
+  } catch(e) {
+    setPolygonKeyStatus(KEY ? 'loaded' : 'missing', 'Firebase error: ' + e.message)
+    console.warn('[POLYGON-KEY] Firebase hydrate failed:', e.message)
+  }
 }
 
 // Save ALL platform data to Firebase
@@ -7211,7 +7304,8 @@ async function refreshAllPnL() {
     try {
       if(!KEY) {
         console.error('[PNL-REFRESH-PROBE] ABORT: Polygon API key missing. Every option snapshot will return null.',
-          { hint: 'Set a Polygon API key via the app\'s API-key input (stored in localStorage[gt_api_key]).' })
+          { hint: 'Set a Polygon API key via the app\'s API-key input (Firebase is now the source of truth; localStorage is only a cache).' })
+        if(typeof setPolygonKeyStatus === 'function') setPolygonKeyStatus('missing', 'Refresh P&L probe: no key')
       } else {
         const r = await fetch(API + probePath + '&apiKey=' + KEY)
         let bodyShape = null
@@ -7231,6 +7325,18 @@ async function refreshAllPnL() {
         console.info('[PNL-REFRESH-PROBE] response', {
           httpStatus: r.status, ok: r.ok, bodyShape,
         })
+        // Reflect probe outcome in the status pill.
+        if(typeof setPolygonKeyStatus === 'function') {
+          if(r.status === 401 || r.status === 403) {
+            setPolygonKeyStatus('invalid', 'Polygon returned ' + r.status)
+          } else if(!r.ok) {
+            setPolygonKeyStatus('invalid', 'Polygon HTTP ' + r.status)
+          } else if(bodyShape && bodyShape.error) {
+            setPolygonKeyStatus('invalid', 'Polygon error: ' + bodyShape.error)
+          } else {
+            setPolygonKeyStatus('loaded', 'Probe OK · ' + (bodyShape && bodyShape.resultsLen) + ' results')
+          }
+        }
       }
     } catch(probeErr) {
       console.error('[PNL-REFRESH-PROBE] fetch threw', probeErr && probeErr.message)
@@ -7995,6 +8101,13 @@ function renderPortfolio() {
 // -- INIT ========================================
 function initPlatform() {
   console.log('[INIT-BOOT] initPlatform entry. readyState=', document.readyState, 'KEY=', !!KEY)
+  // Paint the Polygon-key status pill immediately from the localStorage
+  // cache so the UI reflects boot state before Firebase auth resolves.
+  // hydratePolygonKeyFromFirebase (fired by onAuthStateChanged) will
+  // overwrite this with the authoritative Firebase value when available.
+  if(typeof setPolygonKeyStatus === 'function') {
+    setPolygonKeyStatus(KEY && KEY.length >= 20 ? 'loaded' : 'missing', KEY ? 'from localStorage cache · awaiting Firebase' : 'no cached key · awaiting Firebase')
+  }
   try {
     // Restore saved account settings
     const savedAcct = localStorage.getItem('gt_acct')
