@@ -2893,8 +2893,16 @@ function runFilter() {
 }
 
 function fetchScreenerPricesAll() {
-  var tickers = Object.keys(OV).slice(0,50)
-  console.log('[PRICE-DEBUG] button clicked. OV size=', Object.keys(OV).length, 'tickers to fetch=', tickers.length, 'first 5:', tickers.slice(0,5))
+  // Collect tickers from currently visible Screener rows (col 3 = Ticker),
+  // not a hardcoded OV slice — so every visible row actually gets priced.
+  const rows = document.querySelectorAll('#scr-body tr')
+  const tickers = []
+  rows.forEach(r => {
+    const td = r.querySelector('td:nth-child(3)')
+    if(td) { const t = td.firstChild ? td.firstChild.textContent.trim() : td.textContent.split('\n')[0].trim(); if(t && t.length <= 7) tickers.push(t) }
+  })
+  console.log('[PRICE-DEBUG] button clicked. visible rows=', rows.length, 'tickers to fetch=', tickers.length, 'first 5:', tickers.slice(0,5))
+  if(!tickers.length) { setApi('No visible rows to price', 'err'); return }
   fetchScreenerPrices(tickers)
 }
 async function fetchScreenerPrices(tickers) {
