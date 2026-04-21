@@ -6551,6 +6551,30 @@ function renderTrades() {
       default: return (b.id||0) - (a.id||0)
     }
   }
+  // ── DOM-integrity guards (Open Trades) ────────────────────────────────────
+  // Root cause of the "pnl-grid outside its card" bug: when two trades share
+  // the same t.id (saveTrade uses Date.now(); Fidelity/planner paths also
+  // derive from Date.now()), the rendered DOM ended up with duplicate
+  // id="pnl-grid-<id>" / data-trade-id="<id>" attributes. getElementById
+  // returns the FIRST in document order, which could live in a sibling card,
+  // so card.contains(pnl-grid) read false on the intended card.
+  // Give any colliding trade a fresh unique id before rendering.
+  const _seenIds = new Set()
+  TRADES.forEach(t => {
+    if(!t.id || _seenIds.has(t.id)) {
+      let n = Date.now() + Math.floor(Math.random() * 100000)
+      while(_seenIds.has(n)) n++
+      t.id = n
+    }
+    _seenIds.add(t.id)
+  })
+  // HTML-escape helper for fields that may contain user-supplied characters
+  // (notes, ticker, desc, date). An unescaped '<' or '"' in any of these
+  // corrupts card markup and causes the browser's tag-soup recovery to move
+  // subsequent elements (like the pnl-grid) outside the card.
+  const esc = s => String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;')
   const open   = TRADES.filter(t => t.status === 'open').sort(sortFn)
   const closed = TRADES.filter(t => t.status === 'closed').sort(sortFn)
   document.getElementById('trade-count').textContent = open.length + ' open' + (closed.length ? ' · ' + closed.length + ' closed' : '')
@@ -6690,11 +6714,11 @@ function renderTrades() {
     return '<div class="trade-card" data-trade-id="' + t.id + '">' +
       '<div class="trade-card-head">' +
         '<div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">' +
-          '<span style="font-family:\'SF Mono\',monospace;font-weight:700;font-size:15px;color:#f0c040">' + t.ticker + '\x3C/span>' +
+          '<span style="font-family:\'SF Mono\',monospace;font-weight:700;font-size:15px;color:#f0c040">' + esc(t.ticker) + '\x3C/span>' +
           typeTag +
-          '<span class="dim" style="font-size:11px">' + (t.desc||'') + '\x3C/span>' +
-          '<span class="dim" style="font-size:11px">' + qtyLabel + '\x3C/span>' +
-          '<span class="dim" style="font-size:10px">' + (t.date||'') + '\x3C/span>' +
+          '<span class="dim" style="font-size:11px">' + esc(t.desc||'') + '\x3C/span>' +
+          '<span class="dim" style="font-size:11px">' + esc(qtyLabel) + '\x3C/span>' +
+          '<span class="dim" style="font-size:10px">' + esc(t.date||'') + '\x3C/span>' +
           statusBadge +
           // Live stock price — auto-refreshes every 5 min during market hours
           '<span id="live-px-' + t.id + '" style="font-size:11px;padding:2px 7px;background:rgba(77,166,255,.06);border:1px solid rgba(77,166,255,.12);border-radius:4px;white-space:nowrap">' +
@@ -6763,13 +6787,13 @@ function renderTrades() {
           ((t.rolls||[]).length ? '<div style="margin-top:9px;padding-top:9px;border-top:1px solid rgba(255,255,255,.06)"><div style="font-size:10px;color:#555c6e;margin-bottom:4px">ROLLS\x3C/div>' + (t.rolls||[]).map(r=>'<div style="font-size:11px;color:#8b91a0;font-family:\'SF Mono\',monospace">'+r.date+' .'
 +r.from.toFixed(2)+' ->'
 +r.to.toFixed(2)+'\x3C/div>').join('') + '\x3C/div>' : '') +
-          (t.notes ? '<div style="margin-top:7px;font-size:11px;color:#555c6e;border-top:1px solid rgba(255,255,255,.06);padding-top:7px">' + t.notes + '\x3C/div>' : '') +
+          (t.notes ? '<div style="margin-top:7px;font-size:11px;color:#555c6e;border-top:1px solid rgba(255,255,255,.06);padding-top:7px">' + esc(t.notes) + '\x3C/div>' : '') +
         '\x3C/div>' +
       '\x3C/div>' +
       '<div id="chart-' + t.id + '" style="display:none;border-top:1px solid rgba(255,255,255,.07);padding:0">' +
         '<div class="tradingview-widget-container" style="height:380px">' +
           '<iframe scrolling="no" allowtransparency="true" frameborder="0" ' +
-          'src="https://s.tradingview.com/widgetembed/?frameElementId=tv_' + t.id + '&symbol=' + t.ticker + '&interval=D&hidesidetoolbar=0&symboledit=1&saveimage=1&toolbarbg=1e2330&studies=[]&theme=dark&style=1&timezone=America%2FNew_York&studies_overrides={}&overrides={}&enabled_features=[]&disabled_features=[]&locale=en&utm_source=gt-platform" ' +
+          'src="https://s.tradingview.com/widgetembed/?frameElementId=tv_' + t.id + '&symbol=' + encodeURIComponent((t.underlying || (t.ticker||'').split(' ')[0] || '')) + '&interval=D&hidesidetoolbar=0&symboledit=1&saveimage=1&toolbarbg=1e2330&studies=[]&theme=dark&style=1&timezone=America%2FNew_York&studies_overrides={}&overrides={}&enabled_features=[]&disabled_features=[]&locale=en&utm_source=gt-platform" ' +
           'style="width:100%;height:380px;margin:0;padding:0" id="tv_' + t.id + '">' +
           '\x3C/iframe>' +
         '\x3C/div>' +
@@ -6777,10 +6801,51 @@ function renderTrades() {
     '\x3C/div>'
   }
 
-  let html = '';
-  if(open.length)   html += '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#00d68f;margin-bottom:8px">Open (' + open.length + ')\x3C/div>' + open.map(renderOne).join('')
-  if(closed.length) html += '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e;margin:14px 0 8px">Closed (' + closed.length + ')\x3C/div>' + closed.map(renderOne).join('')
-  document.getElementById('trades-list').innerHTML = html
+  // Render each card as its own <template> element and append individually.
+  // Previously we concatenated every card's HTML into one blob and assigned
+  // via innerHTML. If any single card's markup was imbalanced (data-driven
+  // HTML in notes/ticker/desc, or simply from a cross-browser parser quirk),
+  // the browser's tag-soup recovery would move following siblings — like
+  // pnl-grid-<id> — OUT of their intended card. Isolating each card to its
+  // own <template>.innerHTML parse pass contains that damage to a single
+  // card and guarantees cardEl.contains(pnl-grid-<tradeId>) === true.
+  const listEl = document.getElementById('trades-list')
+  listEl.innerHTML = ''
+  const parseCard = h => {
+    const tpl = document.createElement('template')
+    tpl.innerHTML = String(h || '').trim()
+    return tpl.content.firstElementChild
+  }
+  const appendHeader = (label, color, marginTop) => {
+    const d = document.createElement('div')
+    d.style.cssText = 'font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:' + color + ';margin:' + (marginTop ? '14px 0 8px' : '0 0 8px')
+    d.textContent = label
+    listEl.appendChild(d)
+  }
+  if(open.length) {
+    appendHeader('Open (' + open.length + ')', '#00d68f', false)
+    for(const t of open) {
+      const card = parseCard(renderOne(t))
+      if(card) listEl.appendChild(card)
+    }
+  }
+  if(closed.length) {
+    appendHeader('Closed (' + closed.length + ')', '#555c6e', true)
+    for(const t of closed) {
+      const card = parseCard(renderOne(t))
+      if(card) listEl.appendChild(card)
+    }
+  }
+  // Post-render invariant check — any violation is a real bug worth logging.
+  try {
+    listEl.querySelectorAll('.trade-card[data-trade-id]').forEach(cardEl => {
+      const tid = cardEl.dataset.tradeId
+      const grid = document.getElementById('pnl-grid-' + tid)
+      if(!grid || !cardEl.contains(grid)) {
+        console.warn('[TRADE-CARD-NEST] pnl-grid not inside its card', tid, {grid, cardEl})
+      }
+    })
+  } catch(e) { /* diagnostic only */ }
   // Update live stock price displays if we already have prices
   if(window._livePrices) setTimeout(updateLivePriceTickers, 50)
 }
