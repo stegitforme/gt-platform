@@ -2939,9 +2939,6 @@ async function fetchScreenerPrices(tickers) {
             '<div style="font-size:10px;color:'+cc+'">'+(chg>=0?'+':'')+(chg*100).toFixed(1)+'%'+(spreadPct?' | sp:'+spreadPct+'%':'')+'\x3C/div>'
         }
         fetched++
-        console.log('[PRICE-DEBUG] rerender called after', t)
-        // Re-render the rows so the new Live Price and Spread cells paint immediately.
-        if(typeof runFilter === 'function') runFilter()
       }
     } catch(e) { console.log('[PRICE-DEBUG] fetch error for', t, ':', e.message) }
 
