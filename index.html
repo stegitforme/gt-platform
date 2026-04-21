@@ -89,9 +89,13 @@ tr:hover td{background:#171b22;cursor:pointer}
 .pos-row:last-child{border:none}
 #api-bar{background:#0e1116;border-bottom:1px solid rgba(255,255,255,.06);padding:5px 24px;font-size:11px;color:#555c6e;font-family:\'SF Mono\','Fira Code',monospace;display:flex;align-items:center;gap:7px}
 #api-dot{width:6px;height:6px;border-radius:50%;background:#555c6e;flex-shrink:0;transition:background .3s}
-.trade-card{background:#111318;border:1px solid rgba(255,255,255,.07);border-radius:10px;margin-bottom:12px;overflow:hidden}
-.trade-card-head{display:flex;align-items:center;justify-content:space-between;padding:11px 14px;border-bottom:1px solid rgba(255,255,255,.07)}
-.trade-card-body{padding:14px;display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.trade-card{background:#111318;border:1px solid rgba(255,255,255,.07);border-radius:10px;margin-bottom:8px;overflow:hidden}
+.trade-card-head{display:flex;align-items:center;justify-content:space-between;padding:7px 12px;border-bottom:1px solid rgba(255,255,255,.07)}
+.trade-card-body{padding:10px 12px;display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.trade-card-body .metric{padding:5px 9px;border-radius:5px}
+.trade-card-body .metric-label{margin-bottom:1px;font-size:9px}
+.trade-card-body .metric-value{font-size:13px}
+.trade-card-body .grid2{gap:5px!important}
 ::-webkit-scrollbar{width:4px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:#1e2330;border-radius:2px}
@@ -6613,19 +6617,47 @@ function renderTrades() {
       const fw = isEntry ? 'font-weight:800' : 'font-weight:500'
       const c  = col || '#8b91a0'
       const pc = pctv > 0 ? '#00d68f' : pctv < 0 ? '#ff4560' : '#e8eaf0'
-      return '<div style="display:grid;grid-template-columns:1fr 70px 56px;align-items:center;gap:8px;padding:5px 10px;margin-bottom:3px;border-radius:5px;' + bg + '">'
+      return '<div style="display:grid;grid-template-columns:1fr 66px 52px;align-items:center;gap:6px;padding:3px 8px;margin-bottom:2px;border-radius:4px;' + bg + '">'
            + '<div style="font-size:11px;color:' + c + ';' + fw + ';letter-spacing:.04em">' + lbl + '\x3C/div>'
            + '<div style="font-family:\'SF Mono\',monospace;font-size:12px;text-align:right;' + fw + '">' + (px||0).toFixed(2) + '\x3C/div>'
            + '<div style="font-family:\'SF Mono\',monospace;font-size:10px;text-align:right;color:' + pc + '">' + (pctv>=0?'+':'') + pctv.toFixed(1) + '%\x3C/div>'
            + '\x3C/div>'
     }
-    // Current value resolution — shows "Loading..." rather than a blank tile
+    // ── Current-value + P/L resolution ──────────────────────────────────────
+    // Fields come from multiple sources (Fidelity CSV import, refreshAllPnL
+    // option-price loop, manual New Trade). Any path may leave some fields
+    // unset — most visibly on the first manually-added trade (e.g. NVDA)
+    // that was never part of a Fidelity import AND hadn't been snapshotted
+    // yet by refreshAllPnL. Derive the missing ones from whatever is present
+    // so "Loading..." and "--" only appear when we truly cannot compute.
+    const optPxNum = (typeof t.lastPx === 'number' && t.lastPx > 0)       ? t.lastPx
+                   : (typeof t.currentPrice === 'number' && t.currentPrice > 0) ? t.currentPrice
+                   : null
     const curValNum = (typeof t.curVal === 'number' && t.curVal > 0)
       ? t.curVal
-      : (t.lastPx ? t.lastPx * 100 * (t.cts || 1) : null)
+      : (optPxNum ? optPxNum * 100 * (t.cts || 1) : null)
     const curValStr = curValNum != null
       ? ''+Math.round(curValNum).toLocaleString()
       : '<span style="color:#8b91a0;font-size:11px;font-weight:500">Loading...\x3C/span>'
+    const costBasisNum = (typeof t.costTotal === 'number' && t.costTotal > 0) ? t.costTotal
+                       : (basis > 0 ? basis : null)
+    // Total $ / Total %: prefer stored (Fidelity/refreshAllPnL) values; else
+    // derive from curVal - costBasis and cost basis.
+    const totalGLNum  = (typeof t.totalGL === 'number') ? t.totalGL
+                      : (typeof t.pnl === 'number') ? t.pnl
+                      : (curValNum != null && costBasisNum != null) ? (curValNum - costBasisNum)
+                      : null
+    const totalPctNum = (typeof t.totalPct === 'number') ? t.totalPct
+                      : (typeof t.pnlPct === 'number') ? t.pnlPct
+                      : (totalGLNum != null && costBasisNum > 0) ? (totalGLNum / costBasisNum * 100)
+                      : null
+    // Today %: Fidelity sometimes exports Today $ without Today %. Derive
+    // from Today $ and prior-day value (curVal - todayGL) when missing.
+    const todayGLNum  = (typeof t.todayGL === 'number') ? t.todayGL : null
+    const todayPctNum = (typeof t.todayPct === 'number' && !isNaN(t.todayPct)) ? t.todayPct
+                      : (todayGLNum != null && curValNum != null && (curValNum - todayGLNum) > 0)
+                        ? (todayGLNum / (curValNum - todayGLNum) * 100)
+                        : null
 
     return '<div class="trade-card" data-trade-id="' + t.id + '">' +
       '<div class="trade-card-head">' +
@@ -6668,7 +6700,7 @@ function renderTrades() {
       '\x3C/div>' +
       '<div class="trade-card-body">' +
         '<div>' +
-          '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e;margin-bottom:7px">Decision Ladder\x3C/div>' +
+          '<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e;margin-bottom:4px">Decision Ladder\x3C/div>' +
           (!t.entry ? '<div style="font-size:11px;color:#555c6e">Stock price loading... levels will appear shortly\x3C/div>' : !t.atr ? '<div style="font-size:11px;color:#555c6e">Enter ATR to see levels\x3C/div>' :
           // +1 ATR  →  +.5 ATR  →  ENTRY  →  -.5 ATR  (Entry visually distinct)
           ladderRow('+1 ATR',  r2, pct(r2), false, '#00d68f') +
@@ -6677,7 +6709,7 @@ function renderTrades() {
           ladderRow('-.5 ATR', sl, pct(sl), false, '#ff8c42')) +
         '\x3C/div>' +
         '<div>' +
-          '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e;margin-bottom:7px">P/L & Position\x3C/div>' +
+          '<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e;margin-bottom:4px">P/L & Position\x3C/div>' +
           // Unique id + scoped class so any future per-card update path queries
           // #pnl-grid-<id> (or cardEl.querySelector) instead of a global .grid2
           // (which would hit the Market tab first).
@@ -6687,18 +6719,18 @@ function renderTrades() {
             mkMini(isStk ? 'Total cost' : 'Cost basis', basis>0?''
 +Math.round(basis).toLocaleString():'--', '') +
             mkMini('Current value', curValStr, 'b') +
-            mkMini('Today $', (t.todayGL !== undefined && t.todayGL !== null)
-              ? ((t.todayGL>=0?'+':'-') + Math.abs(Math.round(t.todayGL)).toLocaleString())
-              : '--', (t.todayGL||0)>=0 ? 'g' : 'r') +
-            mkMini('Today %', (t.todayPct !== undefined && t.todayPct !== null)
-              ? ((t.todayPct>=0?'+':'') + t.todayPct.toFixed(2) + '%')
-              : '--', (t.todayPct||0)>=0 ? 'g' : 'r') +
-            mkMini('Total $', (t.totalGL !== undefined && t.totalGL !== null)
-              ? ((t.totalGL>=0?'+':'-') + Math.abs(Math.round(t.totalGL)).toLocaleString())
-              : '--', (t.totalGL||0)>=0 ? 'g' : 'r') +
-            mkMini('Total %', (t.totalPct !== undefined && t.totalPct !== null)
-              ? ((t.totalPct>=0?'+':'') + t.totalPct.toFixed(2) + '%')
-              : '--', (t.totalPct||0)>=0 ? 'g' : 'r') +
+            mkMini('Today $', todayGLNum != null
+              ? ((todayGLNum>=0?'+':'-') + Math.abs(Math.round(todayGLNum)).toLocaleString())
+              : '--', (todayGLNum||0)>=0 ? 'g' : 'r') +
+            mkMini('Today %', todayPctNum != null
+              ? ((todayPctNum>=0?'+':'') + todayPctNum.toFixed(2) + '%')
+              : '--', (todayPctNum||0)>=0 ? 'g' : 'r') +
+            mkMini('Total $', totalGLNum != null
+              ? ((totalGLNum>=0?'+':'-') + Math.abs(Math.round(totalGLNum)).toLocaleString())
+              : '--', (totalGLNum||0)>=0 ? 'g' : 'r') +
+            mkMini('Total %', totalPctNum != null
+              ? ((totalPctNum>=0?'+':'') + totalPctNum.toFixed(2) + '%')
+              : '--', (totalPctNum||0)>=0 ? 'g' : 'r') +
           '\x3C/div>' +
           ((t.rolls||[]).length ? '<div style="margin-top:9px;padding-top:9px;border-top:1px solid rgba(255,255,255,.06)"><div style="font-size:10px;color:#555c6e;margin-bottom:4px">ROLLS\x3C/div>' + (t.rolls||[]).map(r=>'<div style="font-size:11px;color:#8b91a0;font-family:\'SF Mono\',monospace">'+r.date+' .'
 +r.from.toFixed(2)+' ->'
