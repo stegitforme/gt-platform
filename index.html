@@ -6923,33 +6923,79 @@ function renderTrades() {
     appendHeader('Closed (' + closed.length + ')', '#555c6e', true)
     for(const t of closed) listEl.appendChild(buildCard(t))
   }
-  // Strong always-on assertion — scoped strictly to cardEl.
+  // ── DOM placement / order audit ───────────────────────────────────────────
+  // Stronger invariant than the old nest check: confirms each card's
+  // pnl-grid id matches its card's tradeId, detects duplicate ids across
+  // cards (the only way getElementById can resolve to a grid in the wrong
+  // card), and logs the actual rendered ORDER so sort-order surprises are
+  // immediately visible (e.g. NVDA lands at card 23 because its t.id is
+  // lower than Fidelity import ids — that's sort order, not misplacement).
   try {
-    let ok = 0, bad = 0
-    listEl.querySelectorAll('.trade-card[data-trade-id]').forEach(cardEl => {
-      const tid = cardEl.getAttribute('data-trade-id')
-      // Scoped queries only — never document.getElementById.
+    const cardEls = Array.from(listEl.querySelectorAll('.trade-card[data-trade-id]'))
+    // Step 1: build a map of tradeId → list of .trade-pnl-grid cards that
+    // contain a grid with id = 'pnl-grid-<tradeId>'. Any tradeId whose list
+    // has length != 1 indicates a placement bug.
+    const gridOwners = new Map()   // tradeId string → array of { cardIndex, cardTid }
+    cardEls.forEach((cardEl, cardIndex) => {
       const grid = cardEl.querySelector('.trade-pnl-grid')
-      const gridInside  = !!grid && cardEl.contains(grid)
-      const gridIdOk    = !!grid && grid.id === 'pnl-grid-' + tid
-      const gridAttrOk  = !!grid && grid.getAttribute('data-for-trade') === tid
-      // Verify the VISIBLE metric tiles actually belong to this grid
+      if(!grid || !grid.id || !grid.id.startsWith('pnl-grid-')) return
+      const gridTid = grid.id.slice('pnl-grid-'.length)
+      if(!gridOwners.has(gridTid)) gridOwners.set(gridTid, [])
+      gridOwners.get(gridTid).push({
+        cardIndex,
+        cardTid: cardEl.getAttribute('data-trade-id'),
+      })
+    })
+    // Also scan the WHOLE document for any stray id="pnl-grid-*" that are
+    // not inside a .trade-card (would prove a mis-append).
+    const strayGrids = Array.from(document.querySelectorAll('[id^="pnl-grid-"]'))
+      .filter(g => !g.closest('.trade-card[data-trade-id]'))
+      .map(g => ({ id: g.id, parent: g.parentElement && g.parentElement.tagName }))
+    if(strayGrids.length) console.warn('[TRADE-CARD-ORDER] stray pnl-grid elements outside any card', strayGrids)
+    // Step 2: per-card diagnostic (the exact shape the user asked for).
+    let ok = 0, bad = 0
+    cardEls.forEach((cardEl, cardIndex) => {
+      const cardTradeId = cardEl.getAttribute('data-trade-id')
+      const grid = cardEl.querySelector('.trade-pnl-grid')
+      const gridIdInCard  = grid && grid.id
+      const expectedGridId = 'pnl-grid-' + cardTradeId
+      const match = gridIdInCard === expectedGridId
+      // If this card's tradeId is owned by a grid in a DIFFERENT card,
+      // surface that other card's index.
+      const ownerList = gridOwners.get(cardTradeId) || []
+      const wrongOwner = ownerList.find(o => o.cardIndex !== cardIndex)
+      const actualOwnerCardIndexIfFoundElsewhere = wrongOwner ? wrongOwner.cardIndex : null
+      // Secondary checks
+      const gridInside   = !!grid && cardEl.contains(grid)
+      const gridAttrOk   = !!grid && grid.getAttribute('data-for-trade') === cardTradeId
       const tiles = cardEl.querySelectorAll('.metric')
       const firstTileInOwnGrid = tiles.length > 0 && grid && grid.contains(tiles[0])
-      if(!gridInside || !gridIdOk || !gridAttrOk || !firstTileInOwnGrid) {
+      const payload = {
+        cardIndex, cardTradeId, gridIdInCard, expectedGridId, match,
+        actualOwnerCardIndexIfFoundElsewhere,
+        gridInside, gridAttrOk, firstTileInOwnGrid,
+        duplicateOwners: ownerList.length > 1 ? ownerList : null,
+      }
+      if(!match || !gridInside || !gridAttrOk || !firstTileInOwnGrid || actualOwnerCardIndexIfFoundElsewhere != null || ownerList.length > 1) {
         bad++
-        console.warn('[TRADE-CARD-NEST] pnl-grid/card mismatch', {
-          cardTradeId: tid,
-          foundGridId: grid && grid.id,
-          foundGridAttr: grid && grid.getAttribute('data-for-trade'),
-          gridInside, gridIdOk, gridAttrOk, firstTileInOwnGrid,
+        console.warn('[TRADE-CARD-ORDER] mismatch', {
+          ...payload,
           cardFirst400: (cardEl.outerHTML || '').slice(0, 400),
         })
-      } else { ok++ }
+      } else {
+        ok++
+        // Light per-card trace for the first few only — avoid console spam.
+        if(cardIndex < 3) console.info('[TRADE-CARD-ORDER]', payload)
+      }
     })
-    // Always log the summary so you can verify the check is running.
-    console.info('[TRADE-CARD-NEST] render v2 complete — ok=' + ok + ' bad=' + bad + ' total=' + (ok+bad))
-  } catch(e) { console.warn('[TRADE-CARD-NEST] check threw', e) }
+    // Step 3: render-order summary so sort-order surprises are visible.
+    const orderSummary = cardEls.slice(0, 30).map((cardEl, cardIndex) => {
+      const tid = cardEl.getAttribute('data-trade-id')
+      const t = TRADES.find(x => String(x.id) === tid)
+      return { cardIndex, tradeId: tid, ticker: t && t.ticker, date: t && t.date, desc: t && t.desc }
+    })
+    console.info('[TRADE-CARD-ORDER] render v3 summary — ok=' + ok + ' bad=' + bad + ' total=' + (ok+bad) + ' sort=' + (document.getElementById('tm-sort')?.value || 'date-desc'), orderSummary)
+  } catch(e) { console.warn('[TRADE-CARD-ORDER] check threw', e) }
   // Update live stock price displays if we already have prices
   if(window._livePrices) setTimeout(updateLivePriceTickers, 50)
 }
