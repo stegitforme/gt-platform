@@ -6584,6 +6584,46 @@ function renderTrades() {
       : '<span style="background:rgba(240,192,64,.12);color:#f0c040;font-size:9px;font-weight:700;padding:2px 5px;border-radius:3px;letter-spacing:.04em">' + (t.type||'CALL').toUpperCase() + (t.strike ? ''
 +t.strike : '') + '\x3C/span>'
 
+    // ── Decision dashboard precompute ───────────────────────────────────────
+    // Live underlying price (for action badge + % vs entry). Prefer cached
+    // live price by underlying symbol; fall back to stored stockPrice/entry.
+    const underlying = (typeof getTradeUnderlying === 'function')
+      ? getTradeUnderlying(t)
+      : ((t.underlying || (t.ticker||'').split(' ')[0]) || '')
+    const livePx = (window._livePrices && window._livePrices[underlying]) || t.stockPrice || t.entry || 0
+    const pctFromEntry = t.entry ? ((livePx - t.entry) / t.entry * 100) : 0
+    // Action badge: EXIT WATCH / ROLL WATCH / HOLD (only when we have entry + atr on an open trade)
+    let actionBadge = ''
+    if(isOpen && t.entry && t.atr && livePx) {
+      if(livePx <= sl) actionBadge =
+        '<span style="background:rgba(255,69,96,.18);color:#ff4560;font-size:10px;font-weight:800;padding:3px 9px;border-radius:4px;border:1px solid rgba(255,69,96,.45);letter-spacing:.08em">EXIT WATCH\x3C/span>'
+      else if(livePx >= r1) actionBadge =
+        '<span style="background:rgba(0,214,143,.18);color:#00d68f;font-size:10px;font-weight:800;padding:3px 9px;border-radius:4px;border:1px solid rgba(0,214,143,.45);letter-spacing:.08em">ROLL WATCH\x3C/span>'
+      else actionBadge =
+        '<span style="background:rgba(139,145,160,.12);color:#8b91a0;font-size:10px;font-weight:700;padding:3px 9px;border-radius:4px;border:1px solid rgba(139,145,160,.28);letter-spacing:.08em">HOLD\x3C/span>'
+    }
+    // Compact decision-ladder row builder — future-friendly for chart overlay
+    const ladderRow = (lbl, px, pctv, isEntry, col) => {
+      const bg = isEntry
+        ? 'background:rgba(240,192,64,.08);border:1px solid rgba(240,192,64,.28);'
+        : 'border:1px solid transparent;'
+      const fw = isEntry ? 'font-weight:800' : 'font-weight:500'
+      const c  = col || '#8b91a0'
+      const pc = pctv > 0 ? '#00d68f' : pctv < 0 ? '#ff4560' : '#e8eaf0'
+      return '<div style="display:grid;grid-template-columns:1fr 70px 56px;align-items:center;gap:8px;padding:5px 10px;margin-bottom:3px;border-radius:5px;' + bg + '">'
+           + '<div style="font-size:11px;color:' + c + ';' + fw + ';letter-spacing:.04em">' + lbl + '\x3C/div>'
+           + '<div style="font-family:\'SF Mono\',monospace;font-size:12px;text-align:right;' + fw + '">' + (px||0).toFixed(2) + '\x3C/div>'
+           + '<div style="font-family:\'SF Mono\',monospace;font-size:10px;text-align:right;color:' + pc + '">' + (pctv>=0?'+':'') + pctv.toFixed(1) + '%\x3C/div>'
+           + '\x3C/div>'
+    }
+    // Current value resolution — shows "Loading..." rather than a blank tile
+    const curValNum = (typeof t.curVal === 'number' && t.curVal > 0)
+      ? t.curVal
+      : (t.lastPx ? t.lastPx * 100 * (t.cts || 1) : null)
+    const curValStr = curValNum != null
+      ? ''+Math.round(curValNum).toLocaleString()
+      : '<span style="color:#8b91a0;font-size:11px;font-weight:500">Loading...\x3C/span>'
+
     return '<div class="trade-card">' +
       '<div class="trade-card-head">' +
         '<div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">' +
@@ -6598,6 +6638,10 @@ function renderTrades() {
           (t.stockPrice||t.entry ? '<span style="font-size:10px;color:#555c6e">'+(t.ticker.split(' ')[0])+'\x3C/span> <span style="font-family:SF Mono,monospace;font-weight:600;color:#4da6ff">'
 +((t.stockPrice||t.entry)||0).toFixed(2)+'\x3C/span>' : '<span style="font-size:10px;color:#555c6e">loading...\x3C/span>') +
           '\x3C/span>' +
+          // % vs entry (quick scan)
+          ((t.entry && livePx) ? '<span style="font-size:10px;font-family:\'SF Mono\',monospace;color:' + (pctFromEntry>=0?'#00d68f':'#ff4560') + '">' + (pctFromEntry>=0?'+':'') + pctFromEntry.toFixed(1) + '%\x3C/span>' : '') +
+          // High-visibility action badge (EXIT WATCH / ROLL WATCH / HOLD)
+          actionBadge +
           // Current option price from Fidelity
           (t.lastPx ? '<span style="font-family:\'SF Mono\',monospace;font-size:12px;color:#4da6ff;background:rgba(77,166,255,.08);border:1px solid rgba(77,166,255,.2);padding:2px 7px;border-radius:4px">'
  + (+t.lastPx).toFixed(2) + '\x3C/span>' : '') +
@@ -6621,32 +6665,34 @@ function renderTrades() {
       '\x3C/div>' +
       '<div class="trade-card-body">' +
         '<div>' +
-          '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e;margin-bottom:7px">Levels\x3C/div>' +
-          (!t.entry && !isStk ? '<div style="font-size:11px;color:#555c6e">Stock price loading... levels will appear shortly\x3C/div>' : isStk && !t.atr ? '<div style="font-size:11px;color:#555c6e">Enter ATR to see levels\x3C/div>' :
-          mkLevel('bg-g','#00d68f','Entry',  t.entry, 0) +
-          mkLevel('bg-b','#4da6ff','.5 ATR roll', r1, pct(r1)) +
-          mkLevel('bg-b','#4da6ff','1x ATR roll',r2, pct(r2)) +
-          mkLevel('bg-b','#4da6ff','2x ATR roll',r3, pct(r3)) +
-          mkLevel('bg-o','#ff8c42','Stop loss -.5 ATR', sl, pct(sl)) +
-          mkLevel('bg-r','#ff4560','Emergency -2x ATR', em, pct(em))) +
+          '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e;margin-bottom:7px">Decision Ladder\x3C/div>' +
+          (!t.entry ? '<div style="font-size:11px;color:#555c6e">Stock price loading... levels will appear shortly\x3C/div>' : !t.atr ? '<div style="font-size:11px;color:#555c6e">Enter ATR to see levels\x3C/div>' :
+          // +1 ATR  →  +.5 ATR  →  ENTRY  →  -.5 ATR  (Entry visually distinct)
+          ladderRow('+1 ATR',  r2, pct(r2), false, '#00d68f') +
+          ladderRow('+.5 ATR', r1, pct(r1), false, '#4da6ff') +
+          ladderRow('ENTRY',   t.entry, 0,   true,  '#f0c040') +
+          ladderRow('-.5 ATR', sl, pct(sl), false, '#ff8c42')) +
         '\x3C/div>' +
         '<div>' +
-          '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e;margin-bottom:7px">Risk & P/L\x3C/div>' +
+          '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e;margin-bottom:7px">P/L & Position\x3C/div>' +
           '<div class="grid2" style="gap:6px">' +
             mkMini(isStk ? 'Avg cost/share' : 'Stock px at entry', t.entry > 0 ? ''
 +t.entry.toFixed(2) : '<span style="color:#ff8c42;font-size:11px">fetching...\x3C/span>', '') +
             mkMini(isStk ? 'Total cost' : 'Cost basis', basis>0?''
 +Math.round(basis).toLocaleString():'--', '') +
-            (isStk ? '' : mkMini('Loss @ .5ATR', ''
-+Math.round(lH).toLocaleString(), 'o')) +
-            (isStk ? '' : mkMini('Loss @ 2xATR', ''
-+Math.round(lF).toLocaleString(), 'r')) +
-            mkMini(isStk ? 'Current value' : '+50% target', isStk ? (t.curVal?''
-+t.curVal.toLocaleString():'--') : (basis>0?'+'
-+Math.round(basis*.5).toLocaleString():'--'), isStk?'':'g') +
-            mkMini('Cur Value', t.curVal ? ''
-+Math.round(t.curVal).toLocaleString() : (t.lastPx ? ''
-+Math.round(t.lastPx*100*(t.cts||1)).toLocaleString() : '--'), 'b') +
+            mkMini('Current value', curValStr, 'b') +
+            mkMini('Today $', (t.todayGL !== undefined && t.todayGL !== null)
+              ? ((t.todayGL>=0?'+':'-') + Math.abs(Math.round(t.todayGL)).toLocaleString())
+              : '--', (t.todayGL||0)>=0 ? 'g' : 'r') +
+            mkMini('Today %', (t.todayPct !== undefined && t.todayPct !== null)
+              ? ((t.todayPct>=0?'+':'') + t.todayPct.toFixed(2) + '%')
+              : '--', (t.todayPct||0)>=0 ? 'g' : 'r') +
+            mkMini('Total $', (t.totalGL !== undefined && t.totalGL !== null)
+              ? ((t.totalGL>=0?'+':'-') + Math.abs(Math.round(t.totalGL)).toLocaleString())
+              : '--', (t.totalGL||0)>=0 ? 'g' : 'r') +
+            mkMini('Total %', (t.totalPct !== undefined && t.totalPct !== null)
+              ? ((t.totalPct>=0?'+':'') + t.totalPct.toFixed(2) + '%')
+              : '--', (t.totalPct||0)>=0 ? 'g' : 'r') +
           '\x3C/div>' +
           ((t.rolls||[]).length ? '<div style="margin-top:9px;padding-top:9px;border-top:1px solid rgba(255,255,255,.06)"><div style="font-size:10px;color:#555c6e;margin-bottom:4px">ROLLS\x3C/div>' + (t.rolls||[]).map(r=>'<div style="font-size:11px;color:#8b91a0;font-family:\'SF Mono\',monospace">'+r.date+' .'
 +r.from.toFixed(2)+' ->'
