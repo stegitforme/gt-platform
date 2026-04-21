@@ -4249,16 +4249,33 @@ async function syncOpenPositionsPaste(text, statusCallback) {
   results.forEach(r => {
     // Dedup by OCC symbol
     const existing = TRADES.find(t => t.occ === r.occ && t.status === 'open')
+    const importedAt = Date.now()
     if(existing) {
-      // UPDATE existing — refresh current value, P&L, last price
-      existing.curVal   = r.curVal
-      existing.todayGL  = r.todayGL
-      existing.todayPct = r.todayPct
-      existing.totalGL  = r.totalGL
-      existing.totalPct = r.totalPct
-      existing.lastPx   = r.lastPx
-      existing.cts      = r.cts  // qty may have changed (partial close)
-      // Update ATR if we got one and existing doesn't have it
+      // UPDATE existing — refresh imported fallback values. Do NOT clobber
+      // a live-source snapshot that's still fresh (see priceSource rule).
+      // We write these as imported* so the card's source-of-truth chain
+      // can prefer live when present and fall back to imported otherwise.
+      existing.importedCurVal   = r.curVal
+      existing.importedTodayGL  = r.todayGL
+      existing.importedTodayPct = r.todayPct
+      existing.importedTotalGL  = r.totalGL
+      existing.importedTotalPct = r.totalPct
+      existing.importedLastPx   = r.lastPx
+      existing.importedAt       = importedAt
+      // If there's no live snapshot yet, the visible fields come from the
+      // imported set; mirror into canonical fields so the card's precompute
+      // works without a refresh.
+      if(existing.priceSource !== 'live') {
+        existing.curVal   = r.curVal
+        existing.todayGL  = r.todayGL
+        existing.todayPct = r.todayPct
+        existing.totalGL  = r.totalGL
+        existing.totalPct = r.totalPct
+        existing.lastPx   = r.lastPx
+        existing.priceSource   = 'imported'
+        existing.priceSourceAt = importedAt
+      }
+      existing.cts = r.cts  // qty may have changed (partial close)
       if(!existing.atr && atrMap[r.ticker]) existing.atr = atrMap[r.ticker]
       updated++
     } else {
@@ -4282,11 +4299,23 @@ async function syncOpenPositionsPaste(text, statusCallback) {
         notes:    'Imported from Fidelity',
         status:   'open',
         rolls:    [],
+        // Canonical (shown on card when no live snapshot yet)
         curVal:   r.curVal,
         todayGL:  r.todayGL,
+        todayPct: r.todayPct,
         totalGL:  r.totalGL,
         totalPct: r.totalPct,
-        lastPx:   r.lastPx
+        lastPx:   r.lastPx,
+        // Imported fallback snapshot (retained even after a live refresh)
+        importedCurVal:   r.curVal,
+        importedTodayGL:  r.todayGL,
+        importedTodayPct: r.todayPct,
+        importedTotalGL:  r.totalGL,
+        importedTotalPct: r.totalPct,
+        importedLastPx:   r.lastPx,
+        importedAt:       importedAt,
+        priceSource:      'imported',
+        priceSourceAt:    importedAt
       })
       added++
     }
@@ -6800,6 +6829,26 @@ function renderTrades() {
       : ((t.underlying || (t.ticker||'').split(' ')[0]) || '')
     const livePx = (window._livePrices && window._livePrices[underlying]) || t.stockPrice || t.entry || 0
     const pctFromEntry = t.entry ? ((livePx - t.entry) / t.entry * 100) : 0
+    // Freshness / source-of-truth badge for option trades.
+    // Shows where the visible P&L values came from and when:
+    //   Live · HH:MM:SS ET   — live option snapshot (refreshAllPnL success)
+    //   Imported · HH:MM ET  — Fidelity CSV import fallback
+    //   Unresolved           — no live match and no imported fallback
+    let sourceBadge = ''
+    if(isOpen && !isStk) {
+      const src = t.priceSource || (typeof t.curVal === 'number' && t.curVal > 0 ? 'imported' : 'unresolved')
+      const at  = t.priceSourceAt || t.importedAt
+      // Format as America/New_York market time
+      const fmt = at ? new Date(at).toLocaleTimeString('en-US',
+        { hour:'2-digit', minute:'2-digit', second: src === 'live' ? '2-digit' : undefined, hour12:false, timeZone:'America/New_York' }) : ''
+      if(src === 'live') {
+        sourceBadge = '<span title="Live option snapshot" style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;letter-spacing:.05em;background:rgba(0,214,143,.14);color:#00d68f;border:1px solid rgba(0,214,143,.32)">LIVE' + (fmt ? ' · ' + fmt + ' ET' : '') + '\x3C/span>'
+      } else if(src === 'imported') {
+        sourceBadge = '<span title="Imported Fidelity snapshot (fallback)" style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;letter-spacing:.05em;background:rgba(240,192,64,.14);color:#f0c040;border:1px solid rgba(240,192,64,.32)">IMPORTED' + (fmt ? ' · ' + fmt + ' ET' : '') + '\x3C/span>'
+      } else {
+        sourceBadge = '<span title="No live snapshot and no imported fallback" style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;letter-spacing:.05em;background:rgba(255,69,96,.14);color:#ff4560;border:1px solid rgba(255,69,96,.32)">UNRESOLVED\x3C/span>'
+      }
+    }
     // Action badge: EXIT WATCH / ROLL WATCH / HOLD (only when we have entry + atr on an open trade)
     let actionBadge = ''
     if(isOpen && t.entry && t.atr && livePx) {
@@ -6894,6 +6943,7 @@ function renderTrades() {
           '\x3C/span>' +
           ((t.entry && livePx) ? '<span style="font-size:10px;font-family:\'SF Mono\',monospace;color:' + (pctFromEntry>=0?'#00d68f':'#ff4560') + '">' + (pctFromEntry>=0?'+':'') + pctFromEntry.toFixed(1) + '%\x3C/span>' : '') +
           actionBadge +
+          sourceBadge +
           (t.lastPx ? '<span style="font-family:\'SF Mono\',monospace;font-size:12px;color:#4da6ff;background:rgba(77,166,255,.08);border:1px solid rgba(77,166,255,.2);padding:2px 7px;border-radius:4px">'
  + (+t.lastPx).toFixed(2) + '\x3C/span>' : '') +
           (t.totalGL !== undefined ? '<span style="font-family:\'SF Mono\',monospace;font-size:12px;font-weight:600;color:' + (t.totalGL>=0?'#00d68f':'#ff4560') + '">' + (t.totalGL>=0?'+'
@@ -7142,12 +7192,14 @@ async function refreshAllPnL() {
   // now-nonexistent #sp-<id> selector.
   await fetchStockPricesForTrades()
 
-  // Counters: updated = fetched an option price THIS run;
-  //            alreadyImported = had curVal before the loop (Fidelity) and
-  //                              kept/refreshed it;
-  //            unresolved = finished the loop with neither a fresh price
-  //                         nor any stored curVal.
-  let updated = 0, alreadyImported = 0, unresolved = 0, totalPnL = 0
+  // Counters aligned with the source-of-truth rule:
+  //   live       = this run fetched a live option snapshot successfully
+  //   imported   = no live match this run but an imported Fidelity snapshot
+  //                is still shown as the fallback (visible values not stale
+  //                beyond the last Fidelity import)
+  //   unresolved = no live + no imported; card shows the explicit
+  //                "Contract unresolved" / "Fetching…" state
+  let live = 0, imported = 0, unresolved = 0, totalPnL = 0
   const unresolvedDetails = []
 
   for(const t of trades) {
@@ -7178,6 +7230,10 @@ async function refreshAllPnL() {
         occMatched: false, fallbackMatched: false, price: null,
       }
 
+      // prevClose captures yesterday's close from the same snapshot so we
+      // can derive Today $/% live (Fidelity's imported todayGL/todayPct
+      // would otherwise remain stale until the next CSV import).
+      let prevClose = null
       if(t.occ) {
         // Direct OCC snapshot — most accurate
         const snapD = await apiGet('/v3/snapshot/options/'+baseTicker+'?ticker=O:'+t.occ, false, true)
@@ -7185,6 +7241,8 @@ async function refreshAllPnL() {
           const r = snapD.results[0]
           if(r.day?.close) price = r.day.close
           else if(r.last_quote?.ask) price = (r.last_quote.bid + r.last_quote.ask)/2
+          if(typeof r.prevDay?.c === 'number') prevClose = r.prevDay.c
+          else if(typeof r.prevDay?.close === 'number') prevClose = r.prevDay.close
           if(price !== null) dbg.occMatched = true
         }
       }
@@ -7210,6 +7268,8 @@ async function refreshAllPnL() {
           best = best || snapData.results[0]
           if(best?.day?.close) price = best.day.close
           else if(best?.last_quote?.ask) price = (best.last_quote.bid+best.last_quote.ask)/2
+          if(typeof best?.prevDay?.c === 'number') prevClose = best.prevDay.c
+          else if(typeof best?.prevDay?.close === 'number') prevClose = best.prevDay.close
           if(price !== null) dbg.fallbackMatched = true
         }
       }
@@ -7217,10 +7277,18 @@ async function refreshAllPnL() {
       dbg.price = price
       if(price === null) {
         if(hadImportedValue) {
-          alreadyImported++
+          imported++
+          // Flag the trade so the card's freshness badge reads "Imported".
+          const tr2 = TRADES.find(x => x.id === t.id)
+          if(tr2 && tr2.priceSource !== 'live') {
+            tr2.priceSource   = 'imported'
+            tr2.priceSourceAt = tr2.importedAt || tr2.priceSourceAt || Date.now()
+          }
           console.info('[PNL-REFRESH] kept imported value', dbg)
         } else {
           unresolved++
+          const tr2 = TRADES.find(x => x.id === t.id)
+          if(tr2) { tr2.priceSource = 'unresolved'; tr2.priceSourceAt = Date.now() }
           unresolvedDetails.push(dbg)
           console.warn('[PNL-REFRESH] UNRESOLVED — no OCC + no fallback match', dbg)
         }
@@ -7233,19 +7301,38 @@ async function refreshAllPnL() {
         const costBasis  = (t.cost || 0) * 100 * t.cts
         const pnl        = currentVal - costBasis
         const pnlPct     = costBasis > 0 ? (pnl / costBasis * 100) : 0
+        // Today $/% derived from prev-day close when the snapshot gave us one.
+        // This makes live refresh the source of truth for Today numbers too,
+        // rather than carrying forward Fidelity's stale imported Today $/%.
+        let todayGL = null, todayPct = null
+        if(typeof prevClose === 'number' && prevClose > 0) {
+          const prevVal = prevClose * 100 * t.cts
+          todayGL  = currentVal - prevVal
+          todayPct = prevVal > 0 ? (todayGL / prevVal * 100) : 0
+        }
         totalPnL += pnl
 
-        // Update the trade in storage. Also populate the fields the new
-        // decision-dashboard card reads (curVal / totalGL / totalPct) so the
-        // tiles actually refresh — not just the legacy pnl / pnlPct.
-        // todayGL/todayPct remain Fidelity-sourced and are not overwritten.
+        // Live pricing is the SOURCE OF TRUTH when we have it. Overwrite
+        // every visible option-pricing field on the trade, and stamp
+        // priceSource='live' + priceSourceAt. Imported values remain in
+        // the importedXxx fields as a fallback for future refreshes.
         const allTrades = TRADES
         const tr = allTrades.find(x => x.id === t.id)
         if(tr) {
-          tr.currentPrice = price; tr.pnl = pnl; tr.pnlPct = pnlPct
-          tr.curVal   = currentVal
-          tr.totalGL  = pnl
-          tr.totalPct = pnlPct
+          tr.currentPrice = price
+          tr.lastPx       = price
+          tr.pnl          = pnl
+          tr.pnlPct       = pnlPct
+          tr.curVal       = currentVal
+          tr.totalGL      = pnl
+          tr.totalPct     = pnlPct
+          if(todayGL !== null) {
+            tr.todayGL  = Math.round(todayGL)
+            tr.todayPct = +todayPct.toFixed(2)
+          }
+          tr.priceSource   = 'live'
+          tr.priceSourceAt = Date.now()
+          if(typeof prevClose === 'number') tr.prevClose = prevClose
         }
         saveTrades()
 
@@ -7260,15 +7347,22 @@ async function refreshAllPnL() {
             ' <span style="font-size:10px;color:#555c6e">@'
 +price.toFixed(2)+'\x3C/span>'
         }
-        updated++
+        live++
       }
     } catch(e) {
       console.warn('[PNL-REFRESH] fetch threw', { id: t.id, ticker: t.ticker, err: e && e.message })
       if(!hadImportedValue) {
         unresolved++
+        const tr2 = TRADES.find(x => x.id === t.id)
+        if(tr2) { tr2.priceSource = 'unresolved'; tr2.priceSourceAt = Date.now() }
         unresolvedDetails.push({ id: t.id, ticker: t.ticker, error: e && e.message })
       } else {
-        alreadyImported++
+        imported++
+        const tr2 = TRADES.find(x => x.id === t.id)
+        if(tr2 && tr2.priceSource !== 'live') {
+          tr2.priceSource   = 'imported'
+          tr2.priceSourceAt = tr2.importedAt || tr2.priceSourceAt || Date.now()
+        }
       }
     }
     // Rate limit gap for non-cached calls
@@ -7284,18 +7378,19 @@ async function refreshAllPnL() {
   }
 
   const ts = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})
-  const statusKind = unresolved === 0 ? 'ok' : (updated === 0 && alreadyImported === 0 ? 'err' : 'loading')
+  const statusKind = unresolved === 0 ? 'ok' : (live === 0 && imported === 0 ? 'err' : 'loading')
   setApi(
-    'P&L: ' + updated + ' updated, ' + alreadyImported + ' imported, ' + unresolved + ' unresolved · last ' + ts,
+    'P&L: ' + live + ' live, ' + imported + ' imported, ' + unresolved + ' unresolved · last ' + ts,
     statusKind
   )
   if(unresolved > 0) {
     console.warn('[PNL-REFRESH] unresolved trades (' + unresolved + ')', unresolvedDetails)
   }
-  console.info('[PNL-REFRESH] summary', { updated, alreadyImported, unresolved, total: trades.length })
+  console.info('[PNL-REFRESH] summary', { live, imported, unresolved, total: trades.length })
   // Re-render so the decision-dashboard tiles (Current Value / Total $ /
-  // Total %) show the values we just wrote to the trades.
-  if(updated > 0) renderTrades()
+  // Total %) show the values we just wrote to the trades, and so the
+  // freshness badge reflects the updated priceSource.
+  if(live > 0 || imported > 0 || unresolved > 0) renderTrades()
   } catch(e) {
     console.error('[PRICE-REFRESH-ERROR]', e)
     setApi('P&L refresh failed: ' + e.message, 'err')
