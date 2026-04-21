@@ -89,13 +89,14 @@ tr:hover td{background:#171b22;cursor:pointer}
 .pos-row:last-child{border:none}
 #api-bar{background:#0e1116;border-bottom:1px solid rgba(255,255,255,.06);padding:5px 24px;font-size:11px;color:#555c6e;font-family:\'SF Mono\','Fira Code',monospace;display:flex;align-items:center;gap:7px}
 #api-dot{width:6px;height:6px;border-radius:50%;background:#555c6e;flex-shrink:0;transition:background .3s}
-.trade-card{background:#111318;border:1px solid rgba(255,255,255,.07);border-radius:10px;margin-bottom:8px;overflow:hidden}
-.trade-card-head{display:flex;align-items:center;justify-content:space-between;padding:7px 12px;border-bottom:1px solid rgba(255,255,255,.07)}
-.trade-card-body{padding:10px 12px;display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.trade-card-body .metric{padding:5px 9px;border-radius:5px}
-.trade-card-body .metric-label{margin-bottom:1px;font-size:9px}
-.trade-card-body .metric-value{font-size:13px}
-.trade-card-body .grid2{gap:5px!important}
+.trade-card{background:#111318;border:1px solid rgba(255,255,255,.07);border-radius:10px;margin-bottom:6px;overflow:hidden}
+.trade-card-head{display:flex;align-items:center;justify-content:space-between;padding:6px 12px;border-bottom:1px solid rgba(255,255,255,.07)}
+.trade-card-body{padding:8px 12px;display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:start}
+.trade-card-body > div{align-self:start}
+.trade-card-body .metric{padding:3px 8px;border-radius:5px}
+.trade-card-body .metric-label{margin-bottom:0;font-size:9px;line-height:1.25}
+.trade-card-body .metric-value{font-size:12px;line-height:1.3}
+.trade-card-body .grid2{gap:4px!important}
 ::-webkit-scrollbar{width:4px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:#1e2330;border-radius:2px}
@@ -6444,12 +6445,39 @@ function saveTrade() {
   }
   t.underlying = String(t.ticker || '').split(' ')[0].trim().toUpperCase()
   if(!t.ticker || !t.entry || !t.atr) { alert('Ticker, entry price, and ATR are required.'); return }
+  // Best-effort OCC build so refreshAllPnL can find the option snapshot on
+  // the next refresh (Fidelity-imported trades already have .occ; manual
+  // New Trade entries had none, which is why their P&L tiles stayed blank).
+  try {
+    if(t.strike && t.desc) {
+      let y, mo, da
+      const iso = t.desc.match(/^(\d{4})-(\d{2})-(\d{2})$/)      // 2026-05-15
+      const mdy = t.desc.match(/^([A-Za-z]{3,})[ -](\d{1,2})[ ,-]+(\d{2,4})$/) // May-15-2026 / May 15 2026
+      if(iso) { y = iso[1]; mo = iso[2]; da = iso[3] }
+      else if(mdy) {
+        const monthMap = {jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'}
+        mo = monthMap[mdy[1].slice(0,3).toLowerCase()]
+        da = String(+mdy[2]).padStart(2,'0')
+        y  = mdy[3].length === 2 ? ('20' + mdy[3]) : mdy[3]
+      }
+      if(y && mo && da) {
+        const cp = (t.type||'Call').toLowerCase().includes('put') ? 'P' : 'C'
+        const tk = t.underlying.replace(/[^A-Z]/g,'')
+        const strikePad = String(Math.round(t.strike * 1000)).padStart(8,'0')
+        t.occ = tk + y.slice(2) + mo + da + cp + strikePad
+      }
+    }
+  } catch(e) { /* best-effort only */ }
   TRADES.push(t)
   saveTrades()
   document.getElementById('add-form').style.display = 'none'
   renderTrades()
   renderPortfolioRisk()
   fbAutoSave(1000)  // sync to Firebase
+  // Kick off a live refresh so the newly-added trade's Current Value /
+  // Total $ / Total % tiles populate immediately (otherwise the card stays
+  // on "Loading..." until the next user-initiated refresh).
+  if(typeof refreshAllPnL === 'function') setTimeout(refreshAllPnL, 150)
 }
 
 function closeTrade(id) {
@@ -6792,6 +6820,14 @@ async function refreshAllPnL() {
       const expRaw     = t.desc || t.expiry || '';
       let expISO = '';
       try { const d=new Date(expRaw.replace(/-/g,' ')); if(!isNaN(d)) expISO=d.toISOString().split('T')[0] } catch(e){}
+      // Best-effort OCC build for manually-added trades that never got .occ
+      // stamped (saveTrade path pre-fix). Lets the OCC branch below work for
+      // existing stuck trades like NVDA without a migration step.
+      if(!t.occ && expISO && strikeVal && baseTicker) {
+        const cpChar = (t.type||'Call').toLowerCase().includes('put') ? 'P' : 'C'
+        const y2 = expISO.slice(2,4), mm = expISO.slice(5,7), dd = expISO.slice(8,10)
+        t.occ = baseTicker + y2 + mm + dd + cpChar + String(Math.round(strikeVal * 1000)).padStart(8,'0')
+      }
 
       if(t.occ) {
         // Direct OCC snapshot — most accurate
@@ -7438,6 +7474,17 @@ function initPlatform() {
     // Fetch stock prices immediately on load (snapshot = 1 fast call)
     console.log('[INIT-BOOT] scheduling fetchStockPricesForTrades (+2000ms)')
     setTimeout(fetchStockPricesForTrades, 2000)
+    // Sweep: if any open trade is missing option P&L data (curVal/lastPx),
+    // fire a one-shot refreshAllPnL so cards like a manually-added NVDA
+    // that never got an initial price fetch populate on boot.
+    setTimeout(function(){
+      try{
+        const stuck = TRADES.filter(t => t.status === 'open'
+          && (t.curVal == null || !(t.curVal > 0))
+          && (t.lastPx == null || !(t.lastPx > 0)))
+        if(stuck.length && typeof refreshAllPnL === 'function') refreshAllPnL()
+      }catch(e){ console.warn('[INIT-BOOT] stuck-trade sweep failed:', e.message) }
+    }, 4000)
     // Auto-run GT scores if cache empty
     setTimeout(function(){
       try{
