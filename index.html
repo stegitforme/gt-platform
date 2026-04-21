@@ -7006,9 +7006,9 @@ function renderTrades() {
         { hour:'2-digit', minute:'2-digit', second: withSeconds ? '2-digit' : undefined, hour12:false, timeZone:'America/New_York' }) : ''
       const mkBadge = (label, color, bg, border, title) =>
         '<span title="' + title + '" style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;letter-spacing:.05em;background:' + bg + ';color:' + color + ';border:1px solid ' + border + '">' + label + (fmt ? ' · ' + fmt + ' ET' : '') + '\x3C/span>'
-      if(src === 'live-mark')       sourceBadge = mkBadge('LIVE-MARK',  '#00d68f', 'rgba(0,214,143,.14)',  'rgba(0,214,143,.32)',  'Bid/ask midpoint (this cycle)')
-      else if(src === 'live-last')  sourceBadge = mkBadge('LIVE-LAST',  '#4da6ff', 'rgba(77,166,255,.14)', 'rgba(77,166,255,.32)', 'Last trade price (this cycle)')
-      else if(src === 'live-close') sourceBadge = mkBadge('LIVE-CLOSE', '#f0c040', 'rgba(240,192,64,.14)', 'rgba(240,192,64,.32)', 'Day close (this cycle)')
+      if(src === 'live-mark')       sourceBadge = mkBadge('LIVE-MARK',  '#00d68f', 'rgba(0,214,143,.14)',  'rgba(0,214,143,.32)',  'Bid/ask midpoint — real-time quote')
+      else if(src === 'live-last')  sourceBadge = mkBadge('LIVE-LAST',  '#4da6ff', 'rgba(77,166,255,.14)', 'rgba(77,166,255,.32)', 'Last trade price — real-time trade print')
+      else if(src === 'live-close') sourceBadge = mkBadge('LIVE-CLOSE', '#f0c040', 'rgba(240,192,64,.14)', 'rgba(240,192,64,.32)', 'Day close only — bid/ask/last unavailable; treat as delayed / EOD-like pricing')
       else if(src === 'cached-live-mark' || src === 'cached-live-last' || src === 'cached-live-close' || src.indexOf('cached-') === 0)
         sourceBadge = mkBadge('CACHED', '#8b91a0', 'rgba(139,145,160,.14)', 'rgba(139,145,160,.32)', 'Live price from a previous refresh — current cycle did NOT resolve this contract')
       else if(src === 'imported')   sourceBadge = mkBadge('IMPORTED',   '#f0c040', 'rgba(240,192,64,.14)', 'rgba(240,192,64,.32)', 'Imported Fidelity snapshot (fallback)')
@@ -7689,10 +7689,68 @@ async function refreshAllPnL() {
             if(best && matchesContract(best, null, strikeVal, cpType)) {
               dbg.matchedContractTicker = best?.details?.ticker || null
               dbg.matchedContractStrike = best?.details?.strike_price ?? null
+              // OCC self-heal: if the list endpoint's canonical ticker
+              // differs from the OCC we derived locally, overwrite t.occ
+              // with the canonical one so subsequent single-contract
+              // calls hit the right URL and stop 404ing.
+              const canonical = (best?.details?.ticker || '').replace(/^O:/,'').toUpperCase()
+              const current   = String(t.occ || '').toUpperCase()
+              if(canonical && canonical !== current) {
+                console.info('[OCC-SELF-HEAL]', {
+                  id: t.id, ticker: t.ticker,
+                  oldOcc: current || '(none)', newOcc: canonical,
+                  listReturnedTicker: best.details.ticker,
+                  listStrike: best.details.strike_price,
+                  listExpiry: best.details.expiration_date,
+                  listType: best.details.contract_type,
+                })
+                t.occ = canonical
+                // Persist the healed OCC so the next cycle's single-
+                // contract endpoint works.
+                try { saveTrades() } catch(e) {}
+              }
+              if(isTestContract) {
+                console.info('[OCC-MISMATCH] ' + baseTicker + Math.round(strikeVal), {
+                  requestedOcc: 'O:' + current,
+                  requestedExpiryISO: expISO,
+                  requestedStrike: strikeVal,
+                  requestedCP: cpType,
+                  listReturnedTicker: best?.details?.ticker || null,
+                  listReturnedStrike: best?.details?.strike_price ?? null,
+                  listReturnedExpiry: best?.details?.expiration_date ?? null,
+                  listReturnedType:   best?.details?.contract_type   ?? null,
+                  tickerMatch: ('O:' + current) === (best?.details?.ticker || ''),
+                  expiryMatch: expISO === (best?.details?.expiration_date || null),
+                  strikeMatch: Math.abs((best?.details?.strike_price || 0) - strikeVal) < 0.01,
+                })
+              }
               priceInfo = pickLiveOptionPrice(best)
               price = priceInfo.px
               if(typeof best?.prevDay?.c === 'number') prevClose = best.prevDay.c
               else if(typeof best?.prevDay?.close === 'number') prevClose = best.prevDay.close
+              // Focused per-trade field-level log for the user-specified
+              // test contracts, with explicit null flags for quote/trade.
+              if(isTestContract) {
+                console.info('[PNL-PICK] ' + baseTicker + Math.round(strikeVal), {
+                  detailsTicker: best?.details?.ticker || null,
+                  strike: best?.details?.strike_price ?? null,
+                  expiration: best?.details?.expiration_date ?? null,
+                  contract_type: best?.details?.contract_type ?? null,
+                  fieldsAvailable: {
+                    bid:       priceInfo.bid !== null,
+                    ask:       priceInfo.ask !== null,
+                    midpoint:  priceInfo.mid !== null,
+                    lastTrade: priceInfo.lastTrade !== null,
+                    dayClose:  priceInfo.dayClose !== null,
+                  },
+                  fieldsNull: {
+                    quote:     priceInfo.bid === null && priceInfo.ask === null,
+                    trade:     priceInfo.lastTrade === null,
+                  },
+                  pickedPx:     priceInfo.px,
+                  pickedSource: priceInfo.source,   // live-mark / live-last / live-close
+                })
+              }
               if(price !== null) { dbg.fallbackSucceeded = true; fallbackHit++; dbg.skipReason = null }
               else { dbg.skipReason = dbg.skipReason || 'fallbackResultNoPriceField'; badStrikeMatch++ }
             } else {
@@ -7906,14 +7964,17 @@ async function refreshAllPnL() {
 
   // Post-loop recount by FINAL render state so the summary + status bar
   // reflect what the card will actually display:
-  //   resolvedLiveThisCycle — refreshedThisCycle (livePriceAt === cycleAt)
-  //   reusedCached          — has live-* fields but NOT from this cycle
-  //   importedFallback      — no live-* fields, but imported lastPx/curVal
-  //   unresolvedCount       — nothing to display at all
-  let resolvedLiveThisCycle = 0, reusedCached = 0, importedFallback = 0, unresolvedCount = 0
+  //   liveMarkLast      — resolved this cycle with real-time quote/trade
+  //   liveCloseOnly     — resolved this cycle but ONLY day close (EOD)
+  //   reusedCached      — has live-* fields but NOT from this cycle
+  //   importedFallback  — no live-* fields, but imported lastPx/curVal
+  //   unresolvedCount   — nothing to display at all
+  let liveMarkLast = 0, liveCloseOnly = 0, reusedCached = 0, importedFallback = 0, unresolvedCount = 0
   trades.forEach(ft => {
-    if(ft.livePriceAt === cycleAt) resolvedLiveThisCycle++
-    else if(typeof ft.liveMidPx === 'number' && ft.liveMidPx > 0) reusedCached++
+    if(ft.livePriceAt === cycleAt) {
+      if(ft.livePriceSource === 'live-close') liveCloseOnly++
+      else liveMarkLast++
+    } else if(typeof ft.liveMidPx === 'number' && ft.liveMidPx > 0) reusedCached++
     else if((typeof ft.liveLastPx === 'number' && ft.liveLastPx > 0) ||
             (typeof ft.liveClosePx === 'number' && ft.liveClosePx > 0) ||
             (typeof ft.displayOptionPx === 'number' && ft.displayOptionPx > 0 && typeof ft.livePriceAt === 'number')) reusedCached++
@@ -7921,21 +7982,26 @@ async function refreshAllPnL() {
     else if(typeof ft.curVal === 'number' && ft.curVal > 0) importedFallback++
     else unresolvedCount++
   })
+  const resolvedLiveThisCycle = liveMarkLast + liveCloseOnly
 
   const ts = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})
   const statusKind = unresolvedCount === 0 ? 'ok'
                    : (resolvedLiveThisCycle === 0 && importedFallback === 0 && reusedCached === 0) ? 'err'
                    : 'loading'
-  setApi(
-    'P&L: ' + resolvedLiveThisCycle + ' live, ' + reusedCached + ' cached, ' + importedFallback + ' imported, ' + unresolvedCount + ' unresolved · last ' + ts,
-    statusKind
-  )
+  // Status-bar text. If this cycle produced only EOD pricing for
+  // everything, say so explicitly so the user isn't misled into
+  // treating day-close values as real-time.
+  const isEodRun = liveMarkLast === 0 && liveCloseOnly > 0
+  const statusText = isEodRun
+    ? 'P&L (EOD — no real-time quotes available): ' + liveCloseOnly + ' EOD, ' + reusedCached + ' cached, ' + importedFallback + ' imported, ' + unresolvedCount + ' unresolved · last ' + ts
+    : 'P&L: ' + liveMarkLast + ' live, ' + liveCloseOnly + ' EOD, ' + reusedCached + ' cached, ' + importedFallback + ' imported, ' + unresolvedCount + ' unresolved · last ' + ts
+  setApi(statusText, statusKind)
   if(unresolvedCount > 0) {
     console.warn('[PNL-REFRESH] unresolved trades (' + unresolvedCount + ')', unresolvedDetails)
   }
   console.info('[PNL-REFRESH] summary', {
-    resolvedLiveThisCycle, reusedCached, importedFallback, unresolved: unresolvedCount,
-    total: trades.length,
+    liveMarkLast, liveCloseOnly, reusedCached, importedFallback, unresolved: unresolvedCount,
+    resolvedLiveThisCycle, total: trades.length,
   })
   // Detailed diagnostic summary requested by the user. If stayedImported
   // equals total and directHit+fallbackHit=0, the live path never fired
