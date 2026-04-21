@@ -6747,45 +6747,32 @@ function renderTrades() {
           (isOpen ? '<button class="btn btn-ghost" style="font-size:10px;padding:2px 8px" onclick="closeTrade(' + t.id + ')">Close\x3C/button>' : '') +
           '<button class="btn btn-ghost" style="font-size:10px;padding:2px 8px;color:#ff4560" onclick="deleteTrade(' + t.id + ')">&#10005;\x3C/button>' +
         '\x3C/div>'
-    const bodyInner =
-        '<div>' +
+    // Left column HTML (Decision Ladder only — no grid involved).
+    const ladderInner =
           '<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e;margin-bottom:4px">Decision Ladder\x3C/div>' +
           (!t.entry ? '<div style="font-size:11px;color:#555c6e">Stock price loading... levels will appear shortly\x3C/div>' : !t.atr ? '<div style="font-size:11px;color:#555c6e">Enter ATR to see levels\x3C/div>' :
           ladderRow('+1 ATR',  r2, pct(r2), false, '#00d68f') +
           ladderRow('+.5 ATR', r1, pct(r1), false, '#4da6ff') +
           ladderRow('ENTRY',   t.entry, 0,   true,  '#f0c040') +
-          ladderRow('-.5 ATR', sl, pct(sl), false, '#ff8c42')) +
-        '\x3C/div>' +
-        '<div>' +
-          '<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e;margin-bottom:4px">P/L & Position\x3C/div>' +
-          // NOTE: intentionally NO id="pnl-grid-<id>" here — it is stamped
-          // programmatically by the append loop via bodyEl.querySelector
-          // ('.trade-pnl-grid'), guaranteeing the id ALWAYS matches its
-          // card's tradeId regardless of HTML-parser quirks.
-          '<div class="grid2 trade-pnl-grid" style="gap:6px">' +
-            mkMini(isStk ? 'Avg cost/share' : 'Stock px at entry', t.entry > 0 ? ''
-+t.entry.toFixed(2) : '<span style="color:#ff8c42;font-size:11px">fetching...\x3C/span>', '') +
-            mkMini(isStk ? 'Total cost' : 'Cost basis', basis>0?''
-+Math.round(basis).toLocaleString():'--', '') +
-            mkMini('Current value', curValStr, 'b') +
-            mkMini('Today $', todayGLNum != null
-              ? ((todayGLNum>=0?'+':'-') + Math.abs(Math.round(todayGLNum)).toLocaleString())
-              : '--', (todayGLNum||0)>=0 ? 'g' : 'r') +
-            mkMini('Today %', todayPctNum != null
-              ? ((todayPctNum>=0?'+':'') + todayPctNum.toFixed(2) + '%')
-              : '--', (todayPctNum||0)>=0 ? 'g' : 'r') +
-            mkMini('Total $', totalGLNum != null
-              ? ((totalGLNum>=0?'+':'-') + Math.abs(Math.round(totalGLNum)).toLocaleString())
-              : '--', (totalGLNum||0)>=0 ? 'g' : 'r') +
-            mkMini('Total %', totalPctNum != null
-              ? ((totalPctNum>=0?'+':'') + totalPctNum.toFixed(2) + '%')
-              : '--', (totalPctNum||0)>=0 ? 'g' : 'r') +
-          '\x3C/div>' +
-          ((t.rolls||[]).length ? '<div style="margin-top:9px;padding-top:9px;border-top:1px solid rgba(255,255,255,.06)"><div style="font-size:10px;color:#555c6e;margin-bottom:4px">ROLLS\x3C/div>' + (t.rolls||[]).map(r=>'<div style="font-size:11px;color:#8b91a0;font-family:\'SF Mono\',monospace">'+esc(r.date||'')+' .'
-+(+r.from).toFixed(2)+' ->'
-+(+r.to).toFixed(2)+'\x3C/div>').join('') + '\x3C/div>' : '') +
-          (t.notes ? '<div style="margin-top:7px;font-size:11px;color:#555c6e;border-top:1px solid rgba(255,255,255,.06);padding-top:7px">' + esc(t.notes) + '\x3C/div>' : '') +
-        '\x3C/div>'
+          ladderRow('-.5 ATR', sl, pct(sl), false, '#ff8c42'))
+    // Right column: tiles are built via createElement in buildCard (no
+    // innerHTML involvement for the pnl-grid path). We pre-compute the
+    // tile spec here so buildCard can construct nodes directly.
+    const tileSpec = [
+      [isStk ? 'Avg cost/share' : 'Stock px at entry', t.entry > 0 ? (''+t.entry.toFixed(2)) : '<span style="color:#ff8c42;font-size:11px">fetching...\x3C/span>', ''],
+      [isStk ? 'Total cost' : 'Cost basis', basis>0 ? (''+Math.round(basis).toLocaleString()) : '--', ''],
+      ['Current value', curValStr, 'b'],
+      ['Today $', todayGLNum != null ? ((todayGLNum>=0?'+':'-') + Math.abs(Math.round(todayGLNum)).toLocaleString()) : '--', (todayGLNum||0)>=0 ? 'g' : 'r'],
+      ['Today %', todayPctNum != null ? ((todayPctNum>=0?'+':'') + todayPctNum.toFixed(2) + '%') : '--', (todayPctNum||0)>=0 ? 'g' : 'r'],
+      ['Total $', totalGLNum != null ? ((totalGLNum>=0?'+':'-') + Math.abs(Math.round(totalGLNum)).toLocaleString()) : '--', (totalGLNum||0)>=0 ? 'g' : 'r'],
+      ['Total %', totalPctNum != null ? ((totalPctNum>=0?'+':'') + totalPctNum.toFixed(2) + '%') : '--', (totalPctNum||0)>=0 ? 'g' : 'r'],
+    ]
+    const rollsInner = (t.rolls||[]).length
+      ? ('<div style="margin-top:9px;padding-top:9px;border-top:1px solid rgba(255,255,255,.06)"><div style="font-size:10px;color:#555c6e;margin-bottom:4px">ROLLS\x3C/div>' + (t.rolls||[]).map(r=>'<div style="font-size:11px;color:#8b91a0;font-family:\'SF Mono\',monospace">'+esc(r.date||'')+' .'+(+r.from).toFixed(2)+' ->'+(+r.to).toFixed(2)+'\x3C/div>').join('') + '\x3C/div>')
+      : ''
+    const notesInner = t.notes
+      ? ('<div style="margin-top:7px;font-size:11px;color:#555c6e;border-top:1px solid rgba(255,255,255,.06);padding-top:7px">' + esc(t.notes) + '\x3C/div>')
+      : ''
     const chartInner =
         '<div class="tradingview-widget-container" style="height:380px">' +
           '<iframe scrolling="no" allowtransparency="true" frameborder="0" ' +
@@ -6793,16 +6780,13 @@ function renderTrades() {
           'style="width:100%;height:380px;margin:0;padding:0" id="tv_' + t.id + '">' +
           '\x3C/iframe>' +
         '\x3C/div>'
-    return { tradeId: t.id, headInner, bodyInner, chartInner }
+    return { tradeId: t.id, headInner, ladderInner, tileSpec, rollsInner, notesInner, chartInner }
   }
 
-  // Build each card via DOM APIs, with three SEPARATE innerHTML parse passes
-  // (headEl, bodyEl, chartEl). The pnl-grid's HTML is part of bodyInner only,
-  // so its parse is strictly scoped to bodyEl — the browser cannot move it
-  // into a sibling card even under extreme tag-soup recovery. We then stamp
-  // its id programmatically via bodyEl.querySelector('.trade-pnl-grid'),
-  // guaranteeing pnl-grid-<tradeId> lives INSIDE the matching card by
-  // construction rather than by HTML-string parsing.
+  // Build each card entirely via DOM APIs. The pnl-grid and every metric
+  // tile are created with createElement/appendChild — no innerHTML is
+  // involved anywhere on the grid path, so the HTML parser is completely
+  // out of the picture for the element we care about.
   const listEl = document.getElementById('trades-list')
   listEl.innerHTML = ''
   const appendHeader = (label, color, marginTop) => {
@@ -6812,31 +6796,77 @@ function renderTrades() {
     listEl.appendChild(d)
   }
   const buildCard = (t) => {
-    const { tradeId, headInner, bodyInner, chartInner } = renderOne(t)
+    const { tradeId, headInner, ladderInner, tileSpec, rollsInner, notesInner, chartInner } = renderOne(t)
     const cardEl = document.createElement('div')
     cardEl.className = 'trade-card'
     cardEl.setAttribute('data-trade-id', String(tradeId))
-    // Head — isolated innerHTML parse
+    // Head (innerHTML is safe here — nothing we assert about lives inside)
     const headEl = document.createElement('div')
     headEl.className = 'trade-card-head'
     headEl.innerHTML = headInner
     cardEl.appendChild(headEl)
-    // Body — isolated innerHTML parse; pnl-grid MUST end up inside bodyEl
+    // Body — built node-by-node so the pnl-grid is physically attached
+    // to THIS card's bodyEl and cannot float to a sibling card.
     const bodyEl = document.createElement('div')
     bodyEl.className = 'trade-card-body'
-    bodyEl.innerHTML = bodyInner
+    // Left column (Decision Ladder). innerHTML here is scoped to leftCol,
+    // and leftCol contains no grid/metric elements that we assert about.
+    const leftCol = document.createElement('div')
+    leftCol.innerHTML = ladderInner
+    bodyEl.appendChild(leftCol)
+    // Right column
+    const rightCol = document.createElement('div')
+    // Right-column heading (static text, safe from injection)
+    const rightHead = document.createElement('div')
+    rightHead.style.cssText = 'font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e;margin-bottom:4px'
+    rightHead.textContent = 'P/L & Position'
+    rightCol.appendChild(rightHead)
+    // The pnl-grid itself — element built directly, id set on the element
+    // reference, THEN appended to rightCol → bodyEl → cardEl. The element
+    // and the id are inseparable by the time the tree is assembled.
+    const grid = document.createElement('div')
+    grid.className = 'grid2 trade-pnl-grid'
+    grid.id = 'pnl-grid-' + tradeId
+    grid.setAttribute('data-for-trade', String(tradeId))
+    grid.style.gap = '6px'
+    // Metric tiles — each one is built with createElement too
+    tileSpec.forEach(([label, valHtml, col]) => {
+      const c = col==='g'?'#00d68f':col==='r'?'#ff4560':col==='o'?'#ff8c42':col==='b'?'#4da6ff':'#e8eaf0'
+      const tile = document.createElement('div')
+      tile.className = 'metric'
+      tile.style.padding = '8px 10px'
+      const lab = document.createElement('div')
+      lab.className = 'metric-label'
+      lab.textContent = label
+      const val = document.createElement('div')
+      val.className = 'metric-value'
+      val.style.cssText = 'font-size:14px;color:' + c
+      val.setAttribute('data-label', label)
+      val.innerHTML = valHtml           // value may contain a styled <span>
+      tile.appendChild(lab)
+      tile.appendChild(val)
+      grid.appendChild(tile)
+    })
+    rightCol.appendChild(grid)
+    if(rollsInner) {
+      const rollsEl = document.createElement('div')
+      rollsEl.innerHTML = rollsInner
+      // preserve the wrapper node the original HTML produced
+      while(rollsEl.firstChild) rightCol.appendChild(rollsEl.firstChild)
+    }
+    if(notesInner) {
+      const notesEl = document.createElement('div')
+      notesEl.innerHTML = notesInner
+      while(notesEl.firstChild) rightCol.appendChild(notesEl.firstChild)
+    }
+    bodyEl.appendChild(rightCol)
     cardEl.appendChild(bodyEl)
-    // Chart — isolated innerHTML parse; iframe-induced quirks are scoped here
+    // Chart
     const chartEl = document.createElement('div')
     chartEl.id = 'chart-' + tradeId
     chartEl.style.cssText = 'display:none;border-top:1px solid rgba(255,255,255,.07);padding:0'
     chartEl.innerHTML = chartInner
     cardEl.appendChild(chartEl)
-    // Programmatic id-stamping — belt-and-suspenders guarantee that the
-    // pnl-grid's id matches the card's tradeId. Any HTML-parser quirk that
-    // could have misaligned string ids is neutralized here.
-    const grid = bodyEl.querySelector('.trade-pnl-grid')
-    if(grid) grid.id = 'pnl-grid-' + tradeId
     return cardEl
   }
   if(open.length) {
@@ -6847,18 +6877,33 @@ function renderTrades() {
     appendHeader('Closed (' + closed.length + ')', '#555c6e', true)
     for(const t of closed) listEl.appendChild(buildCard(t))
   }
-  // Post-render invariant check — any violation is a real bug worth logging.
+  // Strong always-on assertion — scoped strictly to cardEl.
   try {
+    let ok = 0, bad = 0
     listEl.querySelectorAll('.trade-card[data-trade-id]').forEach(cardEl => {
       const tid = cardEl.getAttribute('data-trade-id')
+      // Scoped queries only — never document.getElementById.
       const grid = cardEl.querySelector('.trade-pnl-grid')
-      const gridInside = !!grid && cardEl.contains(grid)
-      const idMatches = !!grid && grid.id === 'pnl-grid-' + tid
-      if(!gridInside || !idMatches) {
-        console.warn('[TRADE-CARD-NEST] pnl-grid/card mismatch', { tid, gridId: grid && grid.id, gridInside, idMatches, cardEl })
-      }
+      const gridInside  = !!grid && cardEl.contains(grid)
+      const gridIdOk    = !!grid && grid.id === 'pnl-grid-' + tid
+      const gridAttrOk  = !!grid && grid.getAttribute('data-for-trade') === tid
+      // Verify the VISIBLE metric tiles actually belong to this grid
+      const tiles = cardEl.querySelectorAll('.metric')
+      const firstTileInOwnGrid = tiles.length > 0 && grid && grid.contains(tiles[0])
+      if(!gridInside || !gridIdOk || !gridAttrOk || !firstTileInOwnGrid) {
+        bad++
+        console.warn('[TRADE-CARD-NEST] pnl-grid/card mismatch', {
+          cardTradeId: tid,
+          foundGridId: grid && grid.id,
+          foundGridAttr: grid && grid.getAttribute('data-for-trade'),
+          gridInside, gridIdOk, gridAttrOk, firstTileInOwnGrid,
+          cardFirst400: (cardEl.outerHTML || '').slice(0, 400),
+        })
+      } else { ok++ }
     })
-  } catch(e) { /* diagnostic only */ }
+    // Always log the summary so you can verify the check is running.
+    console.info('[TRADE-CARD-NEST] render v2 complete — ok=' + ok + ' bad=' + bad + ' total=' + (ok+bad))
+  } catch(e) { console.warn('[TRADE-CARD-NEST] check threw', e) }
   // Update live stock price displays if we already have prices
   if(window._livePrices) setTimeout(updateLivePriceTickers, 50)
 }
