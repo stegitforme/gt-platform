@@ -6953,29 +6953,50 @@ function renderTrades() {
     const livePx = (window._livePrices && window._livePrices[underlying]) || t.stockPrice || t.entry || 0
     const pctFromEntry = t.entry ? ((livePx - t.entry) / t.entry * 100) : 0
     // Canonical render-time price pick — shared by the freshness badge AND
-    // the currentVal/totalGL/totalPct recompute later. Declared up here so
-    // `displayPriceSource` is available to the badge block immediately.
+    // the currentVal/totalGL/totalPct recompute later.
+    //
+    // FRESHNESS RULE: a trade is "fresh live" only if its stored
+    // livePriceAt matches its stored lastRefreshAttemptAt (both set by
+    // the last refreshAllPnL cycle). If the most recent refresh did NOT
+    // successfully resolve this trade, livePriceAt is left unchanged from
+    // an earlier successful cycle — that's CACHED, not LIVE.
     const _rpContracts = +t.cts || 0
+    const isFreshLive = (typeof t.livePriceAt === 'number') &&
+                        (typeof t.lastRefreshAttemptAt === 'number') &&
+                        (t.livePriceAt === t.lastRefreshAttemptAt)
     const pickRenderPriceEarly = () => {
       if(isStk) return { px: null, source: null }
       const srcTag = t.livePriceSource
-      if(typeof t.liveMidPx === 'number' && t.liveMidPx > 0)   return { px: t.liveMidPx,   source: 'live-mark'  }
-      if(srcTag === 'live-last'  && typeof t.liveLastPx  === 'number' && t.liveLastPx  > 0) return { px: t.liveLastPx,  source: 'live-last'  }
-      if(srcTag === 'live-close' && typeof t.liveClosePx === 'number' && t.liveClosePx > 0) return { px: t.liveClosePx, source: 'live-close' }
-      if(typeof t.displayOptionPx === 'number' && t.displayOptionPx > 0) return { px: t.displayOptionPx, source: srcTag || 'live-mark' }
-      if(typeof t.lastPx === 'number' && t.lastPx > 0)         return { px: t.lastPx,       source: 'imported'   }
-      if(typeof t.currentPrice === 'number' && t.currentPrice > 0) return { px: t.currentPrice, source: 'imported' }
+      // Live fields may be either fresh (this cycle resolved them) OR
+      // cached (a prior cycle wrote them, this cycle didn't). Tag the
+      // source accordingly so the badge + downstream render reflect it.
+      if(typeof t.liveMidPx === 'number' && t.liveMidPx > 0)
+        return { px: t.liveMidPx, source: isFreshLive ? 'live-mark' : 'cached-live-mark' }
+      if(srcTag === 'live-last'  && typeof t.liveLastPx  === 'number' && t.liveLastPx  > 0)
+        return { px: t.liveLastPx, source: isFreshLive ? 'live-last' : 'cached-live-last' }
+      if(srcTag === 'live-close' && typeof t.liveClosePx === 'number' && t.liveClosePx > 0)
+        return { px: t.liveClosePx, source: isFreshLive ? 'live-close' : 'cached-live-close' }
+      if(typeof t.displayOptionPx === 'number' && t.displayOptionPx > 0)
+        return { px: t.displayOptionPx, source: isFreshLive ? (srcTag || 'live-mark') : ('cached-' + (srcTag || 'live-mark')) }
+      if(typeof t.lastPx === 'number' && t.lastPx > 0)
+        return { px: t.lastPx, source: 'imported' }
+      if(typeof t.currentPrice === 'number' && t.currentPrice > 0)
+        return { px: t.currentPrice, source: 'imported' }
       return { px: null, source: 'unresolved' }
     }
     const _rpPick = pickRenderPriceEarly()
     const displayOptionPx = _rpPick.px
     const displayPriceSource = _rpPick.source
     // Freshness / source-of-truth badge driven by displayPriceSource.
-    //   LIVE-MARK · HH:MM:SS ET   — bid/ask midpoint (primary)
-    //   LIVE-LAST · HH:MM:SS ET   — last trade price
-    //   LIVE-CLOSE · HH:MM ET     — day close fallback (can be stale)
-    //   IMPORTED · HH:MM ET       — Fidelity CSV snapshot
-    //   UNRESOLVED                — no live match and no imported fallback
+    //   LIVE-MARK · HH:MM:SS ET   — this cycle resolved bid/ask midpoint
+    //   LIVE-LAST · HH:MM:SS ET   — this cycle resolved last trade
+    //   LIVE-CLOSE · HH:MM ET     — this cycle resolved day close
+    //   CACHED · HH:MM ET         — live-* fields present but NOT refreshed
+    //                                this cycle (stale-live). The timestamp
+    //                                shows when the cached value was
+    //                                originally captured.
+    //   IMPORTED · HH:MM ET       — Fidelity CSV snapshot (no live ever)
+    //   UNRESOLVED                — no live + no imported fallback
     let sourceBadge = ''
     if(isOpen && !isStk) {
       const src = displayPriceSource || 'unresolved'
@@ -6985,9 +7006,11 @@ function renderTrades() {
         { hour:'2-digit', minute:'2-digit', second: withSeconds ? '2-digit' : undefined, hour12:false, timeZone:'America/New_York' }) : ''
       const mkBadge = (label, color, bg, border, title) =>
         '<span title="' + title + '" style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;letter-spacing:.05em;background:' + bg + ';color:' + color + ';border:1px solid ' + border + '">' + label + (fmt ? ' · ' + fmt + ' ET' : '') + '\x3C/span>'
-      if(src === 'live-mark')       sourceBadge = mkBadge('LIVE-MARK',  '#00d68f', 'rgba(0,214,143,.14)',  'rgba(0,214,143,.32)',  'Bid/ask midpoint')
-      else if(src === 'live-last')  sourceBadge = mkBadge('LIVE-LAST',  '#4da6ff', 'rgba(77,166,255,.14)', 'rgba(77,166,255,.32)', 'Last trade price')
-      else if(src === 'live-close') sourceBadge = mkBadge('LIVE-CLOSE', '#f0c040', 'rgba(240,192,64,.14)', 'rgba(240,192,64,.32)', 'Day close (can be stale intraday)')
+      if(src === 'live-mark')       sourceBadge = mkBadge('LIVE-MARK',  '#00d68f', 'rgba(0,214,143,.14)',  'rgba(0,214,143,.32)',  'Bid/ask midpoint (this cycle)')
+      else if(src === 'live-last')  sourceBadge = mkBadge('LIVE-LAST',  '#4da6ff', 'rgba(77,166,255,.14)', 'rgba(77,166,255,.32)', 'Last trade price (this cycle)')
+      else if(src === 'live-close') sourceBadge = mkBadge('LIVE-CLOSE', '#f0c040', 'rgba(240,192,64,.14)', 'rgba(240,192,64,.32)', 'Day close (this cycle)')
+      else if(src === 'cached-live-mark' || src === 'cached-live-last' || src === 'cached-live-close' || src.indexOf('cached-') === 0)
+        sourceBadge = mkBadge('CACHED', '#8b91a0', 'rgba(139,145,160,.14)', 'rgba(139,145,160,.32)', 'Live price from a previous refresh — current cycle did NOT resolve this contract')
       else if(src === 'imported')   sourceBadge = mkBadge('IMPORTED',   '#f0c040', 'rgba(240,192,64,.14)', 'rgba(240,192,64,.32)', 'Imported Fidelity snapshot (fallback)')
       else                          sourceBadge = '<span title="No live snapshot and no imported fallback" style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;letter-spacing:.05em;background:rgba(255,69,96,.14);color:#ff4560;border:1px solid rgba(255,69,96,.32)">UNRESOLVED\x3C/span>'
     }
@@ -7439,6 +7462,15 @@ async function refreshAllPnL() {
   // now-nonexistent #sp-<id> selector.
   await fetchStockPricesForTrades()
 
+  // Cycle-tracking: every trade gets lastRefreshAttemptAt stamped up-front.
+  // On a successful live write, tr.livePriceAt is set to the SAME cycleAt
+  // value, so `livePriceAt === lastRefreshAttemptAt` unambiguously means
+  // "this exact refresh cycle resolved this trade live". Failed refreshes
+  // touch only lastRefreshAttemptAt, leaving livePriceAt < it → the card
+  // renders a CACHED / STALE-LIVE badge instead of a false LIVE.
+  const cycleAt = Date.now()
+  trades.forEach(tr0 => { tr0.lastRefreshAttemptAt = cycleAt })
+
   // Counters aligned with the source-of-truth rule:
   //   live       = this run fetched a live option snapshot successfully
   //   imported   = no live match this run but an imported Fidelity snapshot
@@ -7527,15 +7559,39 @@ async function refreshAllPnL() {
       // Polygon single-contract snapshot. Path format is
       //   /v3/snapshot/options/{underlying}/O:{occ}
       // and `results` comes back as an OBJECT for that exact contract.
-      // The previous ?ticker= filter on the list endpoint could be silently
-      // dropped, causing results[0] to be a different (e.g. deep-ITM
-      // low-strike) contract that priced near the underlying — which is
-      // why AMD250 read ~243.84 and NVDA185 read ~95.18 (underlying-ish).
       if(t.occ) {
         dbg.occAttempted = true
         dbg.directUrl = '/v3/snapshot/options/'+baseTicker+'/O:'+t.occ
         try {
-          const snapD = await apiGet(dbg.directUrl, false, true)
+          // For test contracts, also do a raw fetch bypassing apiGet's
+          // null-swallowing. This shows the actual HTTP status + body,
+          // which is necessary to explain why resultsCount: 0 happens
+          // (plan permission, wrong OCC, rate-limit, etc).
+          if(isTestContract && KEY) {
+            try {
+              const rawR = await fetch(API + dbg.directUrl + '?apiKey=' + KEY)
+              let rawBody = null
+              try { rawBody = await rawR.clone().json() } catch(e) { rawBody = { _parseError: e.message } }
+              console.info('[PNL-PARSE-RAW] ' + baseTicker + Math.round(strikeVal) + ' RAW single-contract', {
+                requestedOcc: t.occ,
+                requestedStrike: strikeVal,
+                requestedCP: cpType,
+                expectedExpiryISO: expISO,
+                url: dbg.directUrl,
+                httpStatus: rawR.status, ok: rawR.ok,
+                topLevelKeys: rawBody && typeof rawBody === 'object' ? Object.keys(rawBody) : null,
+                status: rawBody?.status,
+                request_id: rawBody?.request_id,
+                error: rawBody?.error || rawBody?.message,
+                resultsType: Array.isArray(rawBody?.results) ? 'array' : (rawBody?.results ? typeof rawBody.results : 'missing'),
+                resultsCount: Array.isArray(rawBody?.results) ? rawBody.results.length : (rawBody?.results ? 1 : 0),
+                fullBody: rawBody,
+              })
+            } catch(rawErr) {
+              console.warn('[PNL-PARSE-RAW] ' + baseTicker + Math.round(strikeVal) + ' raw fetch threw', rawErr && rawErr.message)
+            }
+          }
+          const snapD = await apiGet(dbg.directUrl, /*skipCache*/ isTestContract, /*silent*/ true)
           // Single-contract endpoint → results is an object. Defensive:
           // if a future API change returns an array, take [0].
           const r = (snapD && snapD.results && typeof snapD.results === 'object' && !Array.isArray(snapD.results))
@@ -7543,8 +7599,9 @@ async function refreshAllPnL() {
             : (snapD?.results?.[0] || null)
           dbg.occResultsLen = r ? 1 : 0
           if(isTestContract) {
-            console.info('[PNL-PARSE-RAW] ' + baseTicker + Math.round(strikeVal) + ' single-contract response', {
-              url: dbg.directUrl, status: snapD && snapD.status, hasResults: !!r,
+            console.info('[PNL-PARSE-RAW] ' + baseTicker + Math.round(strikeVal) + ' parsed single-contract', {
+              url: dbg.directUrl, snapDNull: snapD === null || snapD === undefined,
+              status: snapD && snapD.status, hasResults: !!r,
               detailsTicker: r?.details?.ticker, detailsStrike: r?.details?.strike_price,
               detailsType: r?.details?.contract_type, detailsExpiry: r?.details?.expiration_date,
               rawResults: r,
@@ -7581,7 +7638,32 @@ async function refreshAllPnL() {
           '?expiration_date='+expISO+'&contract_type='+cpType+
           '&strike_price.gte='+(strikeVal-1.0)+'&strike_price.lte='+(strikeVal+1.0)+'&limit=10'
         try {
-          const snapData = await apiGet(dbg.fallbackUrl, false, true)
+          if(isTestContract && KEY) {
+            try {
+              const rawFR = await fetch(API + dbg.fallbackUrl + '&apiKey=' + KEY)
+              let rawFBody = null
+              try { rawFBody = await rawFR.clone().json() } catch(e) { rawFBody = { _parseError: e.message } }
+              console.info('[PNL-PARSE-RAW] ' + baseTicker + Math.round(strikeVal) + ' RAW list response', {
+                requestedOcc: t.occ, requestedStrike: strikeVal, requestedCP: cpType,
+                expectedExpiryISO: expISO,
+                url: dbg.fallbackUrl,
+                httpStatus: rawFR.status, ok: rawFR.ok,
+                status: rawFBody?.status,
+                request_id: rawFBody?.request_id,
+                error: rawFBody?.error || rawFBody?.message,
+                resultsType: Array.isArray(rawFBody?.results) ? 'array' : (rawFBody?.results ? typeof rawFBody.results : 'missing'),
+                resultsCount: Array.isArray(rawFBody?.results) ? rawFBody.results.length : (rawFBody?.results ? 1 : 0),
+                returnedContracts: (Array.isArray(rawFBody?.results) ? rawFBody.results : []).map(rc => ({
+                  ticker: rc?.details?.ticker, strike: rc?.details?.strike_price,
+                  type: rc?.details?.contract_type, expiry: rc?.details?.expiration_date,
+                })),
+                fullBody: rawFBody,
+              })
+            } catch(rawFErr) {
+              console.warn('[PNL-PARSE-RAW] ' + baseTicker + Math.round(strikeVal) + ' raw list fetch threw', rawFErr && rawFErr.message)
+            }
+          }
+          const snapData = await apiGet(dbg.fallbackUrl, /*skipCache*/ isTestContract, /*silent*/ true)
           dbg.fallbackResultsLen = (snapData && snapData.results) ? snapData.results.length : 0
           if(isTestContract) {
             console.info('[PNL-PARSE-RAW] ' + baseTicker + Math.round(strikeVal) + ' list response', {
@@ -7751,7 +7833,9 @@ async function refreshAllPnL() {
           tr.liveAsk        = priceInfo.ask
           tr.liveMidPx      = priceInfo.mid
           tr.livePriceSource= priceInfo.source        // 'live-mark' | 'live-last' | 'live-close'
-          tr.livePriceAt    = Date.now()
+          // Stamp with the cycle's start time so renderOne can test
+          // freshness via livePriceAt === lastRefreshAttemptAt.
+          tr.livePriceAt    = cycleAt
           // Canonical display fields (what the card reads)
           tr.displayOptionPx= displayOptionPx
           tr.currentPrice   = displayOptionPx
@@ -7820,16 +7904,39 @@ async function refreshAllPnL() {
 )+Math.abs(Math.round(totalPnL)).toLocaleString()+'\x3C/span>'
   }
 
+  // Post-loop recount by FINAL render state so the summary + status bar
+  // reflect what the card will actually display:
+  //   resolvedLiveThisCycle — refreshedThisCycle (livePriceAt === cycleAt)
+  //   reusedCached          — has live-* fields but NOT from this cycle
+  //   importedFallback      — no live-* fields, but imported lastPx/curVal
+  //   unresolvedCount       — nothing to display at all
+  let resolvedLiveThisCycle = 0, reusedCached = 0, importedFallback = 0, unresolvedCount = 0
+  trades.forEach(ft => {
+    if(ft.livePriceAt === cycleAt) resolvedLiveThisCycle++
+    else if(typeof ft.liveMidPx === 'number' && ft.liveMidPx > 0) reusedCached++
+    else if((typeof ft.liveLastPx === 'number' && ft.liveLastPx > 0) ||
+            (typeof ft.liveClosePx === 'number' && ft.liveClosePx > 0) ||
+            (typeof ft.displayOptionPx === 'number' && ft.displayOptionPx > 0 && typeof ft.livePriceAt === 'number')) reusedCached++
+    else if(typeof ft.lastPx === 'number' && ft.lastPx > 0) importedFallback++
+    else if(typeof ft.curVal === 'number' && ft.curVal > 0) importedFallback++
+    else unresolvedCount++
+  })
+
   const ts = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})
-  const statusKind = unresolved === 0 ? 'ok' : (live === 0 && imported === 0 ? 'err' : 'loading')
+  const statusKind = unresolvedCount === 0 ? 'ok'
+                   : (resolvedLiveThisCycle === 0 && importedFallback === 0 && reusedCached === 0) ? 'err'
+                   : 'loading'
   setApi(
-    'P&L: ' + live + ' live, ' + imported + ' imported, ' + unresolved + ' unresolved · last ' + ts,
+    'P&L: ' + resolvedLiveThisCycle + ' live, ' + reusedCached + ' cached, ' + importedFallback + ' imported, ' + unresolvedCount + ' unresolved · last ' + ts,
     statusKind
   )
-  if(unresolved > 0) {
-    console.warn('[PNL-REFRESH] unresolved trades (' + unresolved + ')', unresolvedDetails)
+  if(unresolvedCount > 0) {
+    console.warn('[PNL-REFRESH] unresolved trades (' + unresolvedCount + ')', unresolvedDetails)
   }
-  console.info('[PNL-REFRESH] summary', { live, imported, unresolved, total: trades.length })
+  console.info('[PNL-REFRESH] summary', {
+    resolvedLiveThisCycle, reusedCached, importedFallback, unresolved: unresolvedCount,
+    total: trades.length,
+  })
   // Detailed diagnostic summary requested by the user. If stayedImported
   // equals total and directHit+fallbackHit=0, the live path never fired
   // for any trade (the probe log above will show the reason — most likely
@@ -7847,10 +7954,9 @@ async function refreshAllPnL() {
     badStrikeMatch,
     badExpiryIso,
   })
-  // Re-render so the decision-dashboard tiles (Current Value / Total $ /
-  // Total %) show the values we just wrote to the trades, and so the
-  // freshness badge reflects the updated priceSource.
-  if(live > 0 || imported > 0 || unresolved > 0) renderTrades()
+  // Always re-render — even when live=0, the CACHED / STALE-LIVE badge
+  // needs to replace the stale LIVE badge shown before this cycle ran.
+  renderTrades()
   } catch(e) {
     console.error('[PRICE-REFRESH-ERROR]', e)
     setApi('P&L refresh failed: ' + e.message, 'err')
