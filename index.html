@@ -7470,6 +7470,12 @@ async function refreshAllPnL() {
   // renders a CACHED / STALE-LIVE badge instead of a false LIVE.
   const cycleAt = Date.now()
   trades.forEach(tr0 => { tr0.lastRefreshAttemptAt = cycleAt })
+  // Per-cycle heal dedup. Each trade.id may heal at most once per
+  // refreshAllPnL invocation. Without this, two log lines per trade
+  // were appearing — even though the OCC mutation is idempotent, both
+  // the localStorage write and the targeted Firebase write fired twice
+  // per cycle.
+  const healedThisCycle = new Set()
 
   // Counters aligned with the source-of-truth rule:
   //   live       = this run fetched a live option snapshot successfully
@@ -7695,7 +7701,16 @@ async function refreshAllPnL() {
               // calls hit the right URL and stop 404ing.
               const canonical = (best?.details?.ticker || '').replace(/^O:/,'').toUpperCase()
               const current   = String(t.occ || '').toUpperCase()
-              if(canonical && canonical !== current) {
+              // Heal guard chain — every condition must pass before we
+              // log, mutate, or write:
+              //   1. canonical must be a non-empty string
+              //   2. canonical must DIFFER from the trade's current OCC
+              //   3. this trade.id must not have healed in this cycle
+              const needsHeal = canonical
+                && canonical !== current
+                && !healedThisCycle.has(t.id)
+              if(needsHeal) {
+                healedThisCycle.add(t.id)
                 console.info('[OCC-SELF-HEAL]', {
                   id: t.id, ticker: t.ticker,
                   oldOcc: current || '(none)', newOcc: canonical,
