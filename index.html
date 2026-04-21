@@ -2905,7 +2905,7 @@ async function fetchScreenerPrices(tickers) {
   const from = new Date(Date.now()-3*864e5).toISOString().split('T')[0]
   let fetched = 0
 
-  for(const t of tickers) {
+  await Promise.all(tickers.map(async t => {
     console.log('[PRICE-DEBUG] fetching ticker', t)
     // Check if already cached before counting toward rate limit
     const path = '/v2/aggs/ticker/'+t+'/range/1/day/'+from+'/'+to+'?adjusted=true&sort=desc&limit=2';
@@ -2960,7 +2960,7 @@ async function fetchScreenerPrices(tickers) {
     } catch(e) {
       // OI failed — no-op; move to next ticker
     }
-  }
+  }))
 
   if(loader) loader.style.display = 'none'
   setApi('Prices loaded: ' + fetched + ' tickers', 'ok')
@@ -3199,6 +3199,15 @@ async function runGTScores() {
   if(btn) { btn.textContent = 'Run GT Scores ▶'; btn.disabled = false }
   // Auto-sort by GT Score descending
   SCR_SORT = { col: 'gt', dir: -1 }
+  console.log('[GT-RERUN]', {
+    visibleTickers: tickers.length,
+    gtCacheCount: Object.keys(GT_SCORES).length,
+    sample: tickers.slice(0,10).map(t => ({
+      t,
+      score: GT_SCORES[t]?.score,
+      ts: GT_SCORES[t]?.ts
+    }))
+  })
   runFilter()
 }
 
