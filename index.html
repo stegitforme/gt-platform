@@ -6643,6 +6643,36 @@ function findDuplicateOpenTrade(candidate, excludeId) {
   return null
 }
 
+// ── Live option price selection ──────────────────────────────────────────
+// Pick the best available display price from a Polygon option snapshot
+// result in strict priority order:
+//   1. live-mark  — midpoint of a valid bid/ask quote
+//   2. live-last  — last trade price
+//   3. live-close — day close (can be stale intraday; last resort)
+// Returns { px, source, bid, ask, mid, lastTrade, dayClose }. `px` is the
+// chosen displayOptionPx; `source` is 'live-mark' / 'live-last' /
+// 'live-close' / null. This is the ONLY place price is selected, so every
+// downstream calculation uses the same number.
+function pickLiveOptionPrice(r) {
+  const num = v => (typeof v === 'number' && isFinite(v) && v > 0) ? v : null
+  const bid = num(r?.last_quote?.bid)
+  const ask = num(r?.last_quote?.ask)
+  const lastTrade = num(r?.last_trade?.price) ?? num(r?.last_trade?.p)
+  const dayClose = num(r?.day?.close) ?? num(r?.day?.c)
+  // Mid-quote if both sides exist. Options can legitimately have wide
+  // spreads; reject only degenerate cases (ask<bid, zero either side).
+  let mid = null
+  if(bid !== null && ask !== null && ask >= bid) {
+    const m = (bid + ask) / 2
+    if(m > 0) mid = +m.toFixed(4)
+  }
+  const out = { px: null, source: null, bid, ask, mid, lastTrade, dayClose }
+  if(mid !== null)       { out.px = mid;       out.source = 'live-mark';  return out }
+  if(lastTrade !== null) { out.px = lastTrade; out.source = 'live-last';  return out }
+  if(dayClose !== null)  { out.px = dayClose;  out.source = 'live-close'; return out }
+  return out
+}
+
 // Build an OCC 21-char symbol (ticker 1-6 + yymmdd 6 + C/P 1 + strikePad 8)
 // given the already-ISO'd expiry + strike + type. Returns '' on bad inputs.
 function buildOCCFromParts(underlying, expISO, strike, type) {
@@ -6922,25 +6952,38 @@ function renderTrades() {
       : ((t.underlying || (t.ticker||'').split(' ')[0]) || '')
     const livePx = (window._livePrices && window._livePrices[underlying]) || t.stockPrice || t.entry || 0
     const pctFromEntry = t.entry ? ((livePx - t.entry) / t.entry * 100) : 0
-    // Freshness / source-of-truth badge for option trades.
-    // Shows where the visible P&L values came from and when:
-    //   Live · HH:MM:SS ET   — live option snapshot (refreshAllPnL success)
-    //   Imported · HH:MM ET  — Fidelity CSV import fallback
-    //   Unresolved           — no live match and no imported fallback
+    // Freshness / source-of-truth badge for option trades. Granular now:
+    //   LIVE-MARK · HH:MM:SS ET   — bid/ask midpoint (primary)
+    //   LIVE-LAST · HH:MM:SS ET   — last trade price
+    //   LIVE-CLOSE · HH:MM ET     — day close fallback (can be stale)
+    //   IMPORTED · HH:MM ET       — Fidelity CSV snapshot
+    //   UNRESOLVED                — no live match and no imported fallback
     let sourceBadge = ''
     if(isOpen && !isStk) {
-      const src = t.priceSource || (typeof t.curVal === 'number' && t.curVal > 0 ? 'imported' : 'unresolved')
-      const at  = t.priceSourceAt || t.importedAt
-      // Format as America/New_York market time
-      const fmt = at ? new Date(at).toLocaleTimeString('en-US',
-        { hour:'2-digit', minute:'2-digit', second: src === 'live' ? '2-digit' : undefined, hour12:false, timeZone:'America/New_York' }) : ''
-      if(src === 'live') {
-        sourceBadge = '<span title="Live option snapshot" style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;letter-spacing:.05em;background:rgba(0,214,143,.14);color:#00d68f;border:1px solid rgba(0,214,143,.32)">LIVE' + (fmt ? ' · ' + fmt + ' ET' : '') + '\x3C/span>'
-      } else if(src === 'imported') {
-        sourceBadge = '<span title="Imported Fidelity snapshot (fallback)" style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;letter-spacing:.05em;background:rgba(240,192,64,.14);color:#f0c040;border:1px solid rgba(240,192,64,.32)">IMPORTED' + (fmt ? ' · ' + fmt + ' ET' : '') + '\x3C/span>'
+      // Prefer the fine-grained livePriceSource stamped by refreshAllPnL;
+      // fall back to the legacy coarse priceSource for trades that haven't
+      // been through the new path yet.
+      let src
+      if(t.livePriceSource === 'live-mark' || t.livePriceSource === 'live-last' || t.livePriceSource === 'live-close') {
+        src = t.livePriceSource
+      } else if(t.priceSource === 'live') {
+        src = 'live-mark'  // conservative upgrade for pre-refactor live stamps
+      } else if(t.priceSource === 'imported' || (typeof t.curVal === 'number' && t.curVal > 0)) {
+        src = 'imported'
       } else {
-        sourceBadge = '<span title="No live snapshot and no imported fallback" style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;letter-spacing:.05em;background:rgba(255,69,96,.14);color:#ff4560;border:1px solid rgba(255,69,96,.32)">UNRESOLVED\x3C/span>'
+        src = 'unresolved'
       }
+      const at  = t.livePriceAt || t.priceSourceAt || t.importedAt
+      const withSeconds = src === 'live-mark' || src === 'live-last'
+      const fmt = at ? new Date(at).toLocaleTimeString('en-US',
+        { hour:'2-digit', minute:'2-digit', second: withSeconds ? '2-digit' : undefined, hour12:false, timeZone:'America/New_York' }) : ''
+      const mkBadge = (label, color, bg, border, title) =>
+        '<span title="' + title + '" style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;letter-spacing:.05em;background:' + bg + ';color:' + color + ';border:1px solid ' + border + '">' + label + (fmt ? ' · ' + fmt + ' ET' : '') + '\x3C/span>'
+      if(src === 'live-mark')       sourceBadge = mkBadge('LIVE-MARK',  '#00d68f', 'rgba(0,214,143,.14)',  'rgba(0,214,143,.32)',  'Bid/ask midpoint')
+      else if(src === 'live-last')  sourceBadge = mkBadge('LIVE-LAST',  '#4da6ff', 'rgba(77,166,255,.14)', 'rgba(77,166,255,.32)', 'Last trade price')
+      else if(src === 'live-close') sourceBadge = mkBadge('LIVE-CLOSE', '#f0c040', 'rgba(240,192,64,.14)', 'rgba(240,192,64,.32)', 'Day close (can be stale intraday)')
+      else if(src === 'imported')   sourceBadge = mkBadge('IMPORTED',   '#f0c040', 'rgba(240,192,64,.14)', 'rgba(240,192,64,.32)', 'Imported Fidelity snapshot (fallback)')
+      else                          sourceBadge = '<span title="No live snapshot and no imported fallback" style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;letter-spacing:.05em;background:rgba(255,69,96,.14);color:#ff4560;border:1px solid rgba(255,69,96,.32)">UNRESOLVED\x3C/span>'
     }
     // Action badge: EXIT WATCH / ROLL WATCH / HOLD (only when we have entry + atr on an open trade)
     let actionBadge = ''
@@ -7406,7 +7449,11 @@ async function refreshAllPnL() {
       // prevClose captures yesterday's close from the same snapshot so we
       // can derive Today $/% live (Fidelity's imported todayGL/todayPct
       // would otherwise remain stale until the next CSV import).
+      // priceInfo holds the full quote context so the chosen displayOptionPx
+      // and every sibling field (bid/ask/mid/last/close/source) are stamped
+      // on the trade for later inspection + card badge rendering.
       let prevClose = null
+      let priceInfo = { px: null, source: null, bid: null, ask: null, mid: null, lastTrade: null, dayClose: null }
       if(t.occ) {
         dbg.occAttempted = true
         dbg.directUrl = '/v3/snapshot/options/'+baseTicker+'?ticker=O:'+t.occ
@@ -7415,8 +7462,8 @@ async function refreshAllPnL() {
           dbg.occResultsLen = (snapD && snapD.results) ? snapD.results.length : 0
           if(snapD?.results?.[0]) {
             const r = snapD.results[0]
-            if(r.day?.close) price = r.day.close
-            else if(r.last_quote?.ask) price = (r.last_quote.bid + r.last_quote.ask)/2
+            priceInfo = pickLiveOptionPrice(r)
+            price = priceInfo.px
             if(typeof r.prevDay?.c === 'number') prevClose = r.prevDay.c
             else if(typeof r.prevDay?.close === 'number') prevClose = r.prevDay.close
             if(price !== null) { dbg.occSucceeded = true; directHit++ }
@@ -7454,8 +7501,8 @@ async function refreshAllPnL() {
               if(diff < bestDiff) { best = r; bestDiff = diff }
             }
             best = best || snapData.results[0]
-            if(best?.day?.close) price = best.day.close
-            else if(best?.last_quote?.ask) price = (best.last_quote.bid+best.last_quote.ask)/2
+            priceInfo = pickLiveOptionPrice(best)
+            price = priceInfo.px
             if(typeof best?.prevDay?.c === 'number') prevClose = best.prevDay.c
             else if(typeof best?.prevDay?.close === 'number') prevClose = best.prevDay.close
             if(price !== null) { dbg.fallbackSucceeded = true; fallbackHit++; dbg.skipReason = null }
@@ -7468,6 +7515,14 @@ async function refreshAllPnL() {
           fetchErrors++
         }
       }
+      // Stamp price-selection fields on the diagnostic record
+      dbg.bid = priceInfo.bid
+      dbg.ask = priceInfo.ask
+      dbg.mid = priceInfo.mid
+      dbg.lastTrade = priceInfo.lastTrade
+      dbg.dayClose = priceInfo.dayClose
+      dbg.displayOptionPx = priceInfo.px
+      dbg.priceSource = priceInfo.source
 
       dbg.price = price
       if(price === null) {
@@ -7491,55 +7546,100 @@ async function refreshAllPnL() {
       }
 
       if(price !== null) {
-        const currentVal = price * 100 * t.cts
-        const costBasis  = (t.cost || 0) * 100 * t.cts
-        const pnl        = currentVal - costBasis
-        const pnlPct     = costBasis > 0 ? (pnl / costBasis * 100) : 0
+        // Cost basis is Fidelity's imported costTotal when available (it
+        // reflects the exact fill price to the cent); fall back to
+        // cost·100·cts only if we have no Fidelity figure. Never overwrite
+        // an imported costTotal on refresh.
+        const costBasisTotal = (typeof t.costTotal === 'number' && t.costTotal > 0)
+          ? t.costTotal
+          : ((t.cost || 0) * 100 * t.cts)
+        const displayOptionPx = price
+        const currentVal      = displayOptionPx * 100 * t.cts
+        const totalGL         = currentVal - costBasisTotal
+        const totalPct        = costBasisTotal > 0 ? (totalGL / costBasisTotal * 100) : 0
         // Today $/% derived from prev-day close when the snapshot gave us one.
         // This makes live refresh the source of truth for Today numbers too,
         // rather than carrying forward Fidelity's stale imported Today $/%.
-        let todayGL = null, todayPct = null
+        let todayGL = null, todayPct = null, todaySource = null
         if(typeof prevClose === 'number' && prevClose > 0) {
           const prevVal = prevClose * 100 * t.cts
           todayGL  = currentVal - prevVal
           todayPct = prevVal > 0 ? (todayGL / prevVal * 100) : 0
+          todaySource = 'live-prevclose'
         }
-        totalPnL += pnl
+        totalPnL += totalGL
+
+        // Focused diagnostic for known test contracts the user specified.
+        const testUnderlying = (baseTicker || '').toUpperCase()
+        const testStrike = Math.round(strikeVal)
+        const isTestTrade =
+          (testUnderlying === 'NVDA' && testStrike === 185) ||
+          (testUnderlying === 'AMD'  && testStrike === 250) ||
+          (testUnderlying === 'BCS'  && testStrike === 22)
+        if(isTestTrade) {
+          console.info('[PNL-TEST] ' + testUnderlying + testStrike, {
+            id: t.id, ticker: t.ticker, occ: t.occ,
+            bid: priceInfo.bid, ask: priceInfo.ask, midpoint: priceInfo.mid,
+            lastTrade: priceInfo.lastTrade, dayClose: priceInfo.dayClose,
+            chosenDisplayOptionPx: displayOptionPx, priceSource: priceInfo.source,
+            contracts: t.cts,
+            costBasisTotal, currentVal,
+            totalGL, totalPct: +totalPct.toFixed(2),
+          })
+        }
 
         // Live pricing is the SOURCE OF TRUTH when we have it. Overwrite
-        // every visible option-pricing field on the trade, and stamp
-        // priceSource='live' + priceSourceAt. Imported values remain in
-        // the importedXxx fields as a fallback for future refreshes.
+        // every visible option-pricing field on the trade. Imported values
+        // remain in the importedXxx fields as a fallback for future refreshes.
         const allTrades = TRADES
         const tr = allTrades.find(x => x.id === t.id)
         if(tr) {
-          tr.currentPrice = price
-          tr.lastPx       = price
-          tr.pnl          = pnl
-          tr.pnlPct       = pnlPct
-          tr.curVal       = currentVal
-          tr.totalGL      = pnl
-          tr.totalPct     = pnlPct
+          // Explicit live-price fields (primary source of truth)
+          tr.liveMarkPx     = priceInfo.source === 'live-mark'  ? priceInfo.px : null
+          tr.liveLastPx     = priceInfo.source === 'live-last'  ? priceInfo.px : (priceInfo.lastTrade ?? null)
+          tr.liveClosePx    = priceInfo.dayClose
+          tr.liveBid        = priceInfo.bid
+          tr.liveAsk        = priceInfo.ask
+          tr.liveMidPx      = priceInfo.mid
+          tr.livePriceSource= priceInfo.source        // 'live-mark' | 'live-last' | 'live-close'
+          tr.livePriceAt    = Date.now()
+          // Canonical display fields (what the card reads)
+          tr.displayOptionPx= displayOptionPx
+          tr.currentPrice   = displayOptionPx
+          tr.lastPx         = displayOptionPx
+          tr.pnl            = totalGL
+          tr.pnlPct         = totalPct
+          tr.curVal         = currentVal
+          tr.totalGL        = totalGL
+          tr.totalPct       = totalPct
           if(todayGL !== null) {
-            tr.todayGL  = Math.round(todayGL)
-            tr.todayPct = +todayPct.toFixed(2)
+            tr.todayGL     = Math.round(todayGL)
+            tr.todayPct    = +todayPct.toFixed(2)
+            tr.todaySource = todaySource
+          } else {
+            tr.todaySource = (typeof tr.importedTodayGL === 'number') ? 'imported' : null
           }
-          tr.priceSource   = 'live'
-          tr.priceSourceAt = Date.now()
+          // Legacy priceSource still set so existing renderers that don't
+          // know about livePriceSource see a sensible string.
+          tr.priceSource    = 'live'
+          tr.priceSourceAt  = tr.livePriceAt
           if(typeof prevClose === 'number') tr.prevClose = prevClose
+          // NEVER overwrite imported costTotal — it is the source of truth
+          // for the Fidelity fill. (No write to tr.costTotal here.)
         }
         saveTrades()
 
-        // Update DOM directly
+        // Update DOM directly (uses new totalGL/totalPct from the
+        // source-of-truth recalc above, not the legacy pnl/pnlPct names).
         const pnlEl = document.getElementById('pnl-' + t.id)
         if(pnlEl) {
-          const c = pnl >= 0 ? '#00d68f' : '#ff4560'
-          pnlEl.innerHTML = '<span style="color:'+c+'">'+(pnl>=0?'+'
+          const c = totalGL >= 0 ? '#00d68f' : '#ff4560'
+          pnlEl.innerHTML = '<span style="color:'+c+'">'+(totalGL>=0?'+'
 :'-'
-)+Math.abs(Math.round(pnl)).toLocaleString()+'\x3C/span>' +
-            ' <span style="font-size:10px;color:'+c+'">'+(pnlPct>=0?'+':'')+pnlPct.toFixed(1)+'%\x3C/span>' +
+)+Math.abs(Math.round(totalGL)).toLocaleString()+'\x3C/span>' +
+            ' <span style="font-size:10px;color:'+c+'">'+(totalPct>=0?'+':'')+totalPct.toFixed(1)+'%\x3C/span>' +
             ' <span style="font-size:10px;color:#555c6e">@'
-+price.toFixed(2)+'\x3C/span>'
++displayOptionPx.toFixed(2)+'\x3C/span>'
         }
         live++
       }
