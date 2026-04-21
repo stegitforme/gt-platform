@@ -6711,8 +6711,12 @@ function renderTrades() {
                         ? (todayGLNum / (curValNum - todayGLNum) * 100)
                         : null
 
-    return '<div class="trade-card" data-trade-id="' + t.id + '">' +
-      '<div class="trade-card-head">' +
+    // Return the card's three subsections as SEPARATE HTML strings. Each
+    // subsection is parsed into its own container div in the append loop, so
+    // a malformed/quirky parse in one subsection can never relocate elements
+    // from another (the pnl-grid's HTML is inside bodyInner, hence its
+    // parse is strictly scoped to bodyEl). See the append loop below.
+    const headInner =
         '<div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">' +
           '<span style="font-family:\'SF Mono\',monospace;font-weight:700;font-size:15px;color:#f0c040">' + esc(t.ticker) + '\x3C/span>' +
           typeTag +
@@ -6720,24 +6724,18 @@ function renderTrades() {
           '<span class="dim" style="font-size:11px">' + esc(qtyLabel) + '\x3C/span>' +
           '<span class="dim" style="font-size:10px">' + esc(t.date||'') + '\x3C/span>' +
           statusBadge +
-          // Live stock price — auto-refreshes every 5 min during market hours
           '<span id="live-px-' + t.id + '" style="font-size:11px;padding:2px 7px;background:rgba(77,166,255,.06);border:1px solid rgba(77,166,255,.12);border-radius:4px;white-space:nowrap">' +
-          (t.stockPrice||t.entry ? '<span style="font-size:10px;color:#555c6e">'+(t.ticker.split(' ')[0])+'\x3C/span> <span style="font-family:SF Mono,monospace;font-weight:600;color:#4da6ff">'
+          (t.stockPrice||t.entry ? '<span style="font-size:10px;color:#555c6e">'+esc(t.ticker.split(' ')[0])+'\x3C/span> <span style="font-family:SF Mono,monospace;font-weight:600;color:#4da6ff">'
 +((t.stockPrice||t.entry)||0).toFixed(2)+'\x3C/span>' : '<span style="font-size:10px;color:#555c6e">loading...\x3C/span>') +
           '\x3C/span>' +
-          // % vs entry (quick scan)
           ((t.entry && livePx) ? '<span style="font-size:10px;font-family:\'SF Mono\',monospace;color:' + (pctFromEntry>=0?'#00d68f':'#ff4560') + '">' + (pctFromEntry>=0?'+':'') + pctFromEntry.toFixed(1) + '%\x3C/span>' : '') +
-          // High-visibility action badge (EXIT WATCH / ROLL WATCH / HOLD)
           actionBadge +
-          // Current option price from Fidelity
           (t.lastPx ? '<span style="font-family:\'SF Mono\',monospace;font-size:12px;color:#4da6ff;background:rgba(77,166,255,.08);border:1px solid rgba(77,166,255,.2);padding:2px 7px;border-radius:4px">'
  + (+t.lastPx).toFixed(2) + '\x3C/span>' : '') +
-          // Total P&L
           (t.totalGL !== undefined ? '<span style="font-family:\'SF Mono\',monospace;font-size:12px;font-weight:600;color:' + (t.totalGL>=0?'#00d68f':'#ff4560') + '">' + (t.totalGL>=0?'+'
 :'-'
 ) + Math.abs(Math.round(t.totalGL)).toLocaleString() + '\x3C/span>' : pnlStr) +
           (t.totalPct !== undefined ? '<span style="font-size:11px;color:' + (t.totalPct>=0?'#00d68f':'#ff4560') + '">' + (t.totalPct>=0?'+':'') + t.totalPct.toFixed(1) + '%\x3C/span>' : '') +
-          // Today P&L
           (t.todayGL !== undefined && t.todayGL !== 0 ? '<span style="font-size:10px;color:#555c6e">today: <span style="color:' + (t.todayGL>=0?'#00d68f':'#ff4560') + '">' + (t.todayGL>=0?'+'
 :'-'
 ) + Math.abs(Math.round(t.todayGL)).toLocaleString() + '\x3C/span>\x3C/span>' : '') +
@@ -6748,13 +6746,11 @@ function renderTrades() {
           (isOpen ? '<button class="btn btn-ghost" style="font-size:10px;padding:2px 8px" onclick="rollTrade(' + t.id + ')">Roll\x3C/button>' : '') +
           (isOpen ? '<button class="btn btn-ghost" style="font-size:10px;padding:2px 8px" onclick="closeTrade(' + t.id + ')">Close\x3C/button>' : '') +
           '<button class="btn btn-ghost" style="font-size:10px;padding:2px 8px;color:#ff4560" onclick="deleteTrade(' + t.id + ')">&#10005;\x3C/button>' +
-        '\x3C/div>' +
-      '\x3C/div>' +
-      '<div class="trade-card-body">' +
+        '\x3C/div>'
+    const bodyInner =
         '<div>' +
           '<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e;margin-bottom:4px">Decision Ladder\x3C/div>' +
           (!t.entry ? '<div style="font-size:11px;color:#555c6e">Stock price loading... levels will appear shortly\x3C/div>' : !t.atr ? '<div style="font-size:11px;color:#555c6e">Enter ATR to see levels\x3C/div>' :
-          // +1 ATR  →  +.5 ATR  →  ENTRY  →  -.5 ATR  (Entry visually distinct)
           ladderRow('+1 ATR',  r2, pct(r2), false, '#00d68f') +
           ladderRow('+.5 ATR', r1, pct(r1), false, '#4da6ff') +
           ladderRow('ENTRY',   t.entry, 0,   true,  '#f0c040') +
@@ -6762,10 +6758,11 @@ function renderTrades() {
         '\x3C/div>' +
         '<div>' +
           '<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e;margin-bottom:4px">P/L & Position\x3C/div>' +
-          // Unique id + scoped class so any future per-card update path queries
-          // #pnl-grid-<id> (or cardEl.querySelector) instead of a global .grid2
-          // (which would hit the Market tab first).
-          '<div id="pnl-grid-' + t.id + '" class="grid2 trade-pnl-grid" style="gap:6px">' +
+          // NOTE: intentionally NO id="pnl-grid-<id>" here — it is stamped
+          // programmatically by the append loop via bodyEl.querySelector
+          // ('.trade-pnl-grid'), guaranteeing the id ALWAYS matches its
+          // card's tradeId regardless of HTML-parser quirks.
+          '<div class="grid2 trade-pnl-grid" style="gap:6px">' +
             mkMini(isStk ? 'Avg cost/share' : 'Stock px at entry', t.entry > 0 ? ''
 +t.entry.toFixed(2) : '<span style="color:#ff8c42;font-size:11px">fetching...\x3C/span>', '') +
             mkMini(isStk ? 'Total cost' : 'Cost basis', basis>0?''
@@ -6784,65 +6781,81 @@ function renderTrades() {
               ? ((totalPctNum>=0?'+':'') + totalPctNum.toFixed(2) + '%')
               : '--', (totalPctNum||0)>=0 ? 'g' : 'r') +
           '\x3C/div>' +
-          ((t.rolls||[]).length ? '<div style="margin-top:9px;padding-top:9px;border-top:1px solid rgba(255,255,255,.06)"><div style="font-size:10px;color:#555c6e;margin-bottom:4px">ROLLS\x3C/div>' + (t.rolls||[]).map(r=>'<div style="font-size:11px;color:#8b91a0;font-family:\'SF Mono\',monospace">'+r.date+' .'
-+r.from.toFixed(2)+' ->'
-+r.to.toFixed(2)+'\x3C/div>').join('') + '\x3C/div>' : '') +
+          ((t.rolls||[]).length ? '<div style="margin-top:9px;padding-top:9px;border-top:1px solid rgba(255,255,255,.06)"><div style="font-size:10px;color:#555c6e;margin-bottom:4px">ROLLS\x3C/div>' + (t.rolls||[]).map(r=>'<div style="font-size:11px;color:#8b91a0;font-family:\'SF Mono\',monospace">'+esc(r.date||'')+' .'
++(+r.from).toFixed(2)+' ->'
++(+r.to).toFixed(2)+'\x3C/div>').join('') + '\x3C/div>' : '') +
           (t.notes ? '<div style="margin-top:7px;font-size:11px;color:#555c6e;border-top:1px solid rgba(255,255,255,.06);padding-top:7px">' + esc(t.notes) + '\x3C/div>' : '') +
-        '\x3C/div>' +
-      '\x3C/div>' +
-      '<div id="chart-' + t.id + '" style="display:none;border-top:1px solid rgba(255,255,255,.07);padding:0">' +
+        '\x3C/div>'
+    const chartInner =
         '<div class="tradingview-widget-container" style="height:380px">' +
           '<iframe scrolling="no" allowtransparency="true" frameborder="0" ' +
           'src="https://s.tradingview.com/widgetembed/?frameElementId=tv_' + t.id + '&symbol=' + encodeURIComponent((t.underlying || (t.ticker||'').split(' ')[0] || '')) + '&interval=D&hidesidetoolbar=0&symboledit=1&saveimage=1&toolbarbg=1e2330&studies=[]&theme=dark&style=1&timezone=America%2FNew_York&studies_overrides={}&overrides={}&enabled_features=[]&disabled_features=[]&locale=en&utm_source=gt-platform" ' +
           'style="width:100%;height:380px;margin:0;padding:0" id="tv_' + t.id + '">' +
           '\x3C/iframe>' +
-        '\x3C/div>' +
-      '\x3C/div>' +
-    '\x3C/div>'
+        '\x3C/div>'
+    return { tradeId: t.id, headInner, bodyInner, chartInner }
   }
 
-  // Render each card as its own <template> element and append individually.
-  // Previously we concatenated every card's HTML into one blob and assigned
-  // via innerHTML. If any single card's markup was imbalanced (data-driven
-  // HTML in notes/ticker/desc, or simply from a cross-browser parser quirk),
-  // the browser's tag-soup recovery would move following siblings — like
-  // pnl-grid-<id> — OUT of their intended card. Isolating each card to its
-  // own <template>.innerHTML parse pass contains that damage to a single
-  // card and guarantees cardEl.contains(pnl-grid-<tradeId>) === true.
+  // Build each card via DOM APIs, with three SEPARATE innerHTML parse passes
+  // (headEl, bodyEl, chartEl). The pnl-grid's HTML is part of bodyInner only,
+  // so its parse is strictly scoped to bodyEl — the browser cannot move it
+  // into a sibling card even under extreme tag-soup recovery. We then stamp
+  // its id programmatically via bodyEl.querySelector('.trade-pnl-grid'),
+  // guaranteeing pnl-grid-<tradeId> lives INSIDE the matching card by
+  // construction rather than by HTML-string parsing.
   const listEl = document.getElementById('trades-list')
   listEl.innerHTML = ''
-  const parseCard = h => {
-    const tpl = document.createElement('template')
-    tpl.innerHTML = String(h || '').trim()
-    return tpl.content.firstElementChild
-  }
   const appendHeader = (label, color, marginTop) => {
     const d = document.createElement('div')
     d.style.cssText = 'font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:' + color + ';margin:' + (marginTop ? '14px 0 8px' : '0 0 8px')
     d.textContent = label
     listEl.appendChild(d)
   }
+  const buildCard = (t) => {
+    const { tradeId, headInner, bodyInner, chartInner } = renderOne(t)
+    const cardEl = document.createElement('div')
+    cardEl.className = 'trade-card'
+    cardEl.setAttribute('data-trade-id', String(tradeId))
+    // Head — isolated innerHTML parse
+    const headEl = document.createElement('div')
+    headEl.className = 'trade-card-head'
+    headEl.innerHTML = headInner
+    cardEl.appendChild(headEl)
+    // Body — isolated innerHTML parse; pnl-grid MUST end up inside bodyEl
+    const bodyEl = document.createElement('div')
+    bodyEl.className = 'trade-card-body'
+    bodyEl.innerHTML = bodyInner
+    cardEl.appendChild(bodyEl)
+    // Chart — isolated innerHTML parse; iframe-induced quirks are scoped here
+    const chartEl = document.createElement('div')
+    chartEl.id = 'chart-' + tradeId
+    chartEl.style.cssText = 'display:none;border-top:1px solid rgba(255,255,255,.07);padding:0'
+    chartEl.innerHTML = chartInner
+    cardEl.appendChild(chartEl)
+    // Programmatic id-stamping — belt-and-suspenders guarantee that the
+    // pnl-grid's id matches the card's tradeId. Any HTML-parser quirk that
+    // could have misaligned string ids is neutralized here.
+    const grid = bodyEl.querySelector('.trade-pnl-grid')
+    if(grid) grid.id = 'pnl-grid-' + tradeId
+    return cardEl
+  }
   if(open.length) {
     appendHeader('Open (' + open.length + ')', '#00d68f', false)
-    for(const t of open) {
-      const card = parseCard(renderOne(t))
-      if(card) listEl.appendChild(card)
-    }
+    for(const t of open) listEl.appendChild(buildCard(t))
   }
   if(closed.length) {
     appendHeader('Closed (' + closed.length + ')', '#555c6e', true)
-    for(const t of closed) {
-      const card = parseCard(renderOne(t))
-      if(card) listEl.appendChild(card)
-    }
+    for(const t of closed) listEl.appendChild(buildCard(t))
   }
   // Post-render invariant check — any violation is a real bug worth logging.
   try {
     listEl.querySelectorAll('.trade-card[data-trade-id]').forEach(cardEl => {
-      const tid = cardEl.dataset.tradeId
-      const grid = document.getElementById('pnl-grid-' + tid)
-      if(!grid || !cardEl.contains(grid)) {
-        console.warn('[TRADE-CARD-NEST] pnl-grid not inside its card', tid, {grid, cardEl})
+      const tid = cardEl.getAttribute('data-trade-id')
+      const grid = cardEl.querySelector('.trade-pnl-grid')
+      const gridInside = !!grid && cardEl.contains(grid)
+      const idMatches = !!grid && grid.id === 'pnl-grid-' + tid
+      if(!gridInside || !idMatches) {
+        console.warn('[TRADE-CARD-NEST] pnl-grid/card mismatch', { tid, gridId: grid && grid.id, gridInside, idMatches, cardEl })
       }
     })
   } catch(e) { /* diagnostic only */ }
