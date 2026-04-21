@@ -3163,11 +3163,12 @@ async function runGTScores() {
   if(btn) { btn.textContent = 'Running...'; btn.disabled = true }
   setApi('Calculating GT Scores...', 'loading')
 
-  // Get currently visible tickers from scr-body
+  // Get currently visible tickers from scr-body.
+  // Row layout: 1=⭐, 2=#, 3=Ticker, 4=Live Price, ... — ticker lives in column 3.
   const rows = document.querySelectorAll('#scr-body tr')
   const tickers = []
   rows.forEach(r => {
-    const td = r.querySelector('td:nth-child(2)')
+    const td = r.querySelector('td:nth-child(3)')
     if(td) { const t = td.firstChild ? td.firstChild.textContent.trim() : td.textContent.split('\n')[0].trim(); if(t && t.length <= 7) tickers.push(t) }
   })
 
