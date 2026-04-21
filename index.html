@@ -2803,7 +2803,7 @@ function runFilter() {
   }).filter(Boolean).sort((a,b) => {
     if(typeof SCR_SORT === 'undefined' || !SCR_SORT) return b.score - a.score
     const col = SCR_SORT.col, dir = SCR_SORT.dir
-    if(col === 'gt')    { const gDiff = (GT_SCORES[b.t]?.score||0) - (GT_SCORES[a.t]?.score||0); return gDiff !== 0 ? dir * gDiff : (b.score||0) - (a.score||0) }
+    if(col === 'gt')    { const gDiff = (GT_SCORES[b.t]?.score||0) - (GT_SCORES[a.t]?.score||0); return gDiff !== 0 ? -dir * gDiff : (b.score||0) - (a.score||0) }
     if(col === 'sig')   return dir * ((b.d.r||0) - (a.d.r||0))
     if(col === 'vol')    return dir * ((b.d.v||0) - (a.d.v||0))
     if(col === 'fg')    return dir * (b.d.fg - a.d.fg)
@@ -2964,6 +2964,10 @@ async function fetchScreenerPrices(tickers) {
 
   if(loader) loader.style.display = 'none'
   setApi('Prices loaded: ' + fetched + ' tickers', 'ok')
+  // One rebuild after all prices land — paints Price (col 4) and Spread (col 8)
+  // from the now-populated LIVE_PRICES. GT cells read from GT_SCORES cache and
+  // stay stable because we're not in a mid-flight scoring loop.
+  if(typeof runFilter === 'function') runFilter()
 }
 
 // ── GT SCORE ── calculated from Polygon daily bars ──────────────────────────
