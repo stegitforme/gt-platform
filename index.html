@@ -7703,11 +7703,36 @@ async function refreshAllPnL() {
                   listStrike: best.details.strike_price,
                   listExpiry: best.details.expiration_date,
                   listType: best.details.contract_type,
+                  persistedTo: 'localStorage + Firebase users/{uid}/platform/trades',
                 })
                 t.occ = canonical
-                // Persist the healed OCC so the next cycle's single-
-                // contract endpoint works.
+                t.occHealedAt = Date.now()
+                t.occHealedFrom = current || ''
+                // Persist locally first (synchronous, can't fail).
                 try { saveTrades() } catch(e) {}
+                // Persist to Firebase as the durable cross-device source
+                // of truth. Two writes for reliability:
+                //   (a) targeted write to users/{uid}/platform/trades —
+                //       fast, fires immediately on each heal, so even if
+                //       the tab is closed before fbAutoSave's debounce
+                //       fires the heal still survives.
+                //   (b) full-platform fbAutoSave — keeps platform.savedAt
+                //       in sync so loadFromFirebase's freshness check
+                //       still uses Firebase's trades on next boot.
+                try {
+                  if(typeof fbSave === 'function' && window.FBUID) {
+                    fbSave('platform/trades', TRADES).then(ok => {
+                      console.info('[OCC-SELF-HEAL] Firebase write', {
+                        id: t.id, ticker: t.ticker, occ: t.occ,
+                        path: 'users/' + window.FBUID + '/platform/trades',
+                        ok: !!ok,
+                      })
+                    }).catch(err => {
+                      console.warn('[OCC-SELF-HEAL] Firebase write failed', err && err.message)
+                    })
+                  }
+                } catch(e) { /* fbSave isn't loaded — fbAutoSave below covers us */ }
+                try { if(typeof fbAutoSave === 'function') fbAutoSave(2000) } catch(e) {}
               }
               if(isTestContract) {
                 console.info('[OCC-MISMATCH] ' + baseTicker + Math.round(strikeVal), {
