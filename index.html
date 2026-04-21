@@ -5413,6 +5413,15 @@ function convertCandidateToTrade(idx) {
     rolls:  []
   }
   if(occ) trade.occ = occ
+  // Duplicate-open-trade guard for the Planner → Trade conversion path.
+  const dupP = typeof findDuplicateOpenTrade === 'function' ? findDuplicateOpenTrade(trade) : null
+  if(dupP) {
+    setApi('Planner candidate matches existing open trade id ' + dupP.id + ' — not creating a duplicate.', 'err')
+    console.warn('[PLANNER-TRADE] duplicate rejected', { candidate: trade, existing: dupP })
+    c.tradeId = dupP.id
+    savePlannerCandidates()
+    return
+  }
   TRADES.push(trade)
   c.tradeId = trade.id
   saveTrades()
@@ -6354,6 +6363,12 @@ async function runBulkImport() {
       status: 'open',
       rolls:  []
     }
+    // Duplicate-open-trade guard for bulk import.
+    const dupBulk = typeof findDuplicateOpenTrade === 'function' ? findDuplicateOpenTrade(trade) : null
+    if(dupBulk) {
+      console.warn('[BULK-IMPORT] skipped duplicate', { candidate: trade, existing: dupBulk })
+      continue
+    }
     TRADES.push(trade)
     imported++
 
@@ -6469,6 +6484,43 @@ function parseTradeExpiryISO(desc) {
   return ''
 }
 
+// Duplicate-open-trade detector. Returns the existing OPEN trade that
+// canonically matches the given trade-like object, or null if none.
+// Match rule (exact, all five must agree):
+//   1. underlying (case-insensitive, letters only)
+//   2. expiryISO  (derive from desc if the trade has no expiryISO yet)
+//   3. strike     (rounded to cents)
+//   4. contractType (Put/Call, lowercased)
+//   5. status === 'open'
+// Stocks are deduped by underlying + status='open' + isStock (no strike/expiry).
+function findDuplicateOpenTrade(candidate, excludeId) {
+  if(!candidate) return null
+  const normU = s => String(s || '').toUpperCase().replace(/[^A-Z]/g,'')
+  const normT = s => /put/i.test(String(s||'')) ? 'put' : 'call'
+  const cUnd = normU(candidate.underlying || (candidate.ticker||'').split(' ')[0])
+  if(!cUnd) return null
+  const cIsStock = !!candidate.isStock || candidate.type === 'Stock'
+  const cExp = candidate.expiryISO || parseTradeExpiryISO(candidate.desc || candidate.expiry || '')
+  const cStrike = Math.round((+candidate.strike || 0) * 100) / 100
+  const cType = normT(candidate.type)
+  for(const t of TRADES) {
+    if(t.status !== 'open') continue
+    if(excludeId != null && t.id === excludeId) continue
+    const tUnd = normU(t.underlying || (t.ticker||'').split(' ')[0])
+    if(tUnd !== cUnd) continue
+    const tIsStock = !!t.isStock || t.type === 'Stock'
+    if(tIsStock !== cIsStock) continue
+    if(tIsStock) return t                            // stock match on underlying+open
+    const tExp = t.expiryISO || parseTradeExpiryISO(t.desc || t.expiry || '')
+    if(!tExp || !cExp || tExp !== cExp) continue
+    const tStrike = Math.round((+t.strike || 0) * 100) / 100
+    if(tStrike !== cStrike) continue
+    if(normT(t.type) !== cType) continue
+    return t
+  }
+  return null
+}
+
 // Build an OCC 21-char symbol (ticker 1-6 + yymmdd 6 + C/P 1 + strikePad 8)
 // given the already-ISO'd expiry + strike + type. Returns '' on bad inputs.
 function buildOCCFromParts(underlying, expISO, strike, type) {
@@ -6514,6 +6566,44 @@ function saveTrade() {
     parsedExpiry: expISO || '(unparsed)', strike: t.strike, type: t.type,
     occ: t.occ || '(not built)'
   })
+  // Duplicate-open-trade guard — prevents a second NVDA 180C May-26 open
+  // trade from being silently created alongside an existing one.
+  const dup = findDuplicateOpenTrade(t)
+  if(dup) {
+    const label = (t.underlying || '') + ' ' + (t.type === 'Stock' ? 'stock' : ((+t.strike||0) + (/put/i.test(t.type)?'P':'C') + ' ' + (t.expiryISO || t.desc || '')))
+    const keep = confirm(
+      'An open ' + label.trim() + ' trade already exists (id ' + dup.id + ').\n\n' +
+      'OK = update the existing trade with these values (merge).\n' +
+      'Cancel = abandon this entry (recommended).'
+    )
+    if(!keep) {
+      setApi('Duplicate open trade detected — entry discarded.', 'err')
+      console.warn('[SAVE-TRADE] duplicate rejected', { candidate: t, existing: dup })
+      return
+    }
+    // Merge: copy populated fields from the new entry onto the existing trade.
+    // Only overwrite where the new value is meaningful (truthy / > 0).
+    const mergeIfSet = (k, v) => { if(v !== undefined && v !== null && v !== '' && v !== 0) dup[k] = v }
+    mergeIfSet('cts',    t.cts)
+    mergeIfSet('cost',   t.cost)
+    mergeIfSet('entry',  t.entry)
+    mergeIfSet('atr',    t.atr)
+    mergeIfSet('strike', t.strike)
+    mergeIfSet('desc',   t.desc)
+    mergeIfSet('date',   t.date)
+    mergeIfSet('notes',  t.notes)
+    mergeIfSet('type',   t.type)
+    mergeIfSet('occ',    t.occ)
+    mergeIfSet('expiryISO', t.expiryISO)
+    saveTrades()
+    document.getElementById('add-form').style.display = 'none'
+    renderTrades()
+    renderPortfolioRisk()
+    fbAutoSave(1000)
+    setApi('Merged into existing open trade id ' + dup.id, 'ok')
+    if(typeof refreshAllPnL === 'function') setTimeout(refreshAllPnL, 150)
+    return
+  }
   TRADES.push(t)
   saveTrades()
   document.getElementById('add-form').style.display = 'none'
@@ -6623,6 +6713,19 @@ function renderTrades() {
     .replace(/"/g,'&quot;').replace(/'/g,'&#39;')
   const open   = TRADES.filter(t => t.status === 'open').sort(sortFn)
   const closed = TRADES.filter(t => t.status === 'closed').sort(sortFn)
+  // Flag any open trades that are canonical duplicates of another open
+  // trade (same underlying+expiry+strike+type). The card's Current value
+  // tile shows "Duplicate / unresolved" so the user can spot them and
+  // delete the extra one. Keyed by id so per-card lookup is O(1).
+  const _dupIds = new Set()
+  for(const t of open) {
+    // Pass the trade's own id as excludeId so findDuplicateOpenTrade
+    // returns the OTHER open trade that canonically matches (if any),
+    // not the trade itself.
+    const other = findDuplicateOpenTrade(t, t.id)
+    if(other) { _dupIds.add(t.id); _dupIds.add(other.id) }
+  }
+  const isDuplicateOpenTrade = t => _dupIds.has(t.id)
   document.getElementById('trade-count').textContent = open.length + ' open' + (closed.length ? ' · ' + closed.length + ' closed' : '')
   const totalGL = TRADES.filter(t=>t.status==='open').reduce((s,t)=>s+(t.totalGL||0),0)
   const pnlEl = document.getElementById('total-pnl-display')
@@ -6734,9 +6837,24 @@ function renderTrades() {
     const curValNum = (typeof t.curVal === 'number' && t.curVal > 0)
       ? t.curVal
       : (optPxNum ? optPxNum * 100 * (t.cts || 1) : null)
+    // Explicit state for the Current value tile so "Loading..." is no
+    // longer a catch-all for three distinct conditions:
+    //   - have a value          → show the number
+    //   - duplicate open trade  → "Duplicate / unresolved"
+    //   - option w/ no OCC      → "Contract unresolved"
+    //   - option w/ OCC but no price yet → "Fetching price…"
+    //   - anything else         → "—"
+    const _isDup = isOpen && !isStk && (typeof isDuplicateOpenTrade === 'function') && isDuplicateOpenTrade(t)
+    const _unresolvedContract = isOpen && !isStk && !t.occ && !t.expiryISO
     const curValStr = curValNum != null
       ? ''+Math.round(curValNum).toLocaleString()
-      : '<span style="color:#8b91a0;font-size:11px;font-weight:500">Loading...\x3C/span>'
+      : _isDup
+        ? '<span style="color:#ff8c42;font-size:11px;font-weight:600">Duplicate / unresolved\x3C/span>'
+        : _unresolvedContract
+          ? '<span style="color:#ff4560;font-size:11px;font-weight:600">Contract unresolved\x3C/span>'
+          : (isOpen && !isStk && t.occ)
+            ? '<span style="color:#8b91a0;font-size:11px;font-weight:500">Fetching price…\x3C/span>'
+            : '<span style="color:#555c6e;font-size:11px">—\x3C/span>'
     const costBasisNum = (typeof t.costTotal === 'number' && t.costTotal > 0) ? t.costTotal
                        : (basis > 0 ? basis : null)
     // Total $ / Total %: prefer stored (Fidelity/refreshAllPnL) values; else
@@ -7499,6 +7617,10 @@ function syncOptionsToTrades() {
       pnl:    p.pnl,
       pct:    p.pct
     }
+    // Canonical-parts dedup (underlying+expiry+strike+type) in addition
+    // to the earlier ticker-match check above.
+    const dupSync = typeof findDuplicateOpenTrade === 'function' ? findDuplicateOpenTrade(trade) : null
+    if(dupSync) { skipped++; return }
     TRADES.push(trade)
     added++
   })
