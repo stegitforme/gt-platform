@@ -7186,6 +7186,59 @@ async function refreshAllPnL() {
   setApi('Fetching live prices for ' + trades.length + ' trades...', 'loading')
   if(btn) { btn.textContent = 'Updating...'; btn.disabled = true }
 
+  // ── Instrumented options-pricing probe ────────────────────────────────────
+  // The option-snapshot calls below are routed through apiGet, which for
+  // /v3/snapshot/options/* falls through to Polygon's REST API using the
+  // API key in localStorage['gt_api_key']. If that key is empty or invalid,
+  // apiGet returns null silently and every trade falls through to "kept
+  // imported value" — exactly the "0 live / N imported" observation.
+  // Run a one-shot probe on the first open option trade so the log shows
+  // the actual HTTP status + response shape, not just "null".
+  console.info('[PNL-REFRESH-PROBE] start', {
+    polygonKeyPresent: !!KEY,
+    polygonKeyLen: KEY ? KEY.length : 0,
+    apiBase: API,
+    openTrades: trades.length,
+  })
+  const probeTrade = trades.find(x => x.occ)
+  if(probeTrade) {
+    const probeTicker = (probeTrade.ticker || '').split(' ')[0].replace(/[^A-Z]/g,'')
+    const probePath = '/v3/snapshot/options/'+probeTicker+'?ticker=O:'+probeTrade.occ
+    const probeUrl  = API + probePath + (KEY ? ('&apiKey=' + KEY.slice(0,4) + '…' + KEY.slice(-4)) : '(NO KEY)')
+    console.info('[PNL-REFRESH-PROBE] test trade', {
+      id: probeTrade.id, ticker: probeTrade.ticker, occ: probeTrade.occ, url: probeUrl,
+    })
+    try {
+      if(!KEY) {
+        console.error('[PNL-REFRESH-PROBE] ABORT: Polygon API key missing. Every option snapshot will return null.',
+          { hint: 'Set a Polygon API key via the app\'s API-key input (stored in localStorage[gt_api_key]).' })
+      } else {
+        const r = await fetch(API + probePath + '&apiKey=' + KEY)
+        let bodyShape = null
+        try {
+          const j = await r.clone().json()
+          bodyShape = {
+            status: j && j.status,
+            resultsLen: (j && j.results) ? j.results.length : 0,
+            firstResultKeys: (j && j.results && j.results[0]) ? Object.keys(j.results[0]) : null,
+            firstDayClose: j?.results?.[0]?.day?.close ?? null,
+            firstPrevDayC: j?.results?.[0]?.prevDay?.c ?? null,
+            firstLastQuoteBid: j?.results?.[0]?.last_quote?.bid ?? null,
+            firstLastQuoteAsk: j?.results?.[0]?.last_quote?.ask ?? null,
+            error: j && (j.error || j.message) || null,
+          }
+        } catch(bodyErr) { bodyShape = { parseError: bodyErr.message } }
+        console.info('[PNL-REFRESH-PROBE] response', {
+          httpStatus: r.status, ok: r.ok, bodyShape,
+        })
+      }
+    } catch(probeErr) {
+      console.error('[PNL-REFRESH-PROBE] fetch threw', probeErr && probeErr.message)
+    }
+  } else {
+    console.warn('[PNL-REFRESH-PROBE] no open option trade has an .occ to probe with')
+  }
+
   // Batch-refresh live stock prices via the canonical path
   // (fetchStockPricesForTrades → updateLivePriceTickers → #live-px-<id>).
   // Replaces the old per-trade Polygon aggs call that wrote to the
@@ -7200,6 +7253,10 @@ async function refreshAllPnL() {
   //   unresolved = no live + no imported; card shows the explicit
   //                "Contract unresolved" / "Fetching…" state
   let live = 0, imported = 0, unresolved = 0, totalPnL = 0
+  // Diagnostic counters requested by the user.
+  let attemptedLive = 0, directHit = 0, fallbackHit = 0, stayedImported = 0,
+      missingOcc = 0, fetchErrors = 0, emptyResult = 0, badStrikeMatch = 0,
+      badExpiryIso = 0
   const unresolvedDetails = []
 
   for(const t of trades) {
@@ -7223,62 +7280,93 @@ async function refreshAllPnL() {
         if(rebuilt && !t.occ) t.occ = rebuilt
       }
 
+      // Diagnostic record the user requested — populated through both
+      // branches below so every trade's log line is self-contained.
       const dbg = {
         id: t.id, ticker: t.ticker, underlying: baseTicker,
-        desc: expRaw, parsedExpiry: expISO || '(unparsed)',
-        strike: strikeVal, occ: t.occ || '(none)',
-        occMatched: false, fallbackMatched: false, price: null,
+        expiryISO: expISO || null, parsedExpiry: expISO || '(unparsed)',
+        strike: strikeVal, type: t.type || 'Call',
+        occ: t.occ || null, occExists: !!t.occ,
+        occAttempted: false, occSucceeded: false,
+        fallbackAttempted: false, fallbackSucceeded: false,
+        directUrl: null, fallbackUrl: null,
+        occResultsLen: null, fallbackResultsLen: null,
+        skipReason: null, // set if we end up keeping imported / unresolved
+        price: null,
       }
+      if(!expISO) dbg.skipReason = 'badExpiryIso'
+      if(!t.occ)  dbg.skipReason = dbg.skipReason || 'missingOcc'
 
       // prevClose captures yesterday's close from the same snapshot so we
       // can derive Today $/% live (Fidelity's imported todayGL/todayPct
       // would otherwise remain stale until the next CSV import).
       let prevClose = null
       if(t.occ) {
-        // Direct OCC snapshot — most accurate
-        const snapD = await apiGet('/v3/snapshot/options/'+baseTicker+'?ticker=O:'+t.occ, false, true)
-        if(snapD?.results?.[0]) {
-          const r = snapD.results[0]
-          if(r.day?.close) price = r.day.close
-          else if(r.last_quote?.ask) price = (r.last_quote.bid + r.last_quote.ask)/2
-          if(typeof r.prevDay?.c === 'number') prevClose = r.prevDay.c
-          else if(typeof r.prevDay?.close === 'number') prevClose = r.prevDay.close
-          if(price !== null) dbg.occMatched = true
+        dbg.occAttempted = true
+        dbg.directUrl = '/v3/snapshot/options/'+baseTicker+'?ticker=O:'+t.occ
+        try {
+          const snapD = await apiGet(dbg.directUrl, false, true)
+          dbg.occResultsLen = (snapD && snapD.results) ? snapD.results.length : 0
+          if(snapD?.results?.[0]) {
+            const r = snapD.results[0]
+            if(r.day?.close) price = r.day.close
+            else if(r.last_quote?.ask) price = (r.last_quote.bid + r.last_quote.ask)/2
+            if(typeof r.prevDay?.c === 'number') prevClose = r.prevDay.c
+            else if(typeof r.prevDay?.close === 'number') prevClose = r.prevDay.close
+            if(price !== null) { dbg.occSucceeded = true; directHit++ }
+            else { dbg.skipReason = 'occResultNoPriceField' }
+          } else {
+            dbg.skipReason = 'occEmptyResult'
+          }
+        } catch(occErr) {
+          dbg.skipReason = 'occFetchThrew:' + (occErr && occErr.message)
+          fetchErrors++
         }
+      } else {
+        missingOcc++
       }
+      if(dbg.occAttempted || t.occ) attemptedLive++
+
       // Fallback: search by expiry + strike (widen strike window to ±1.0
       // so off-by-cents strike parsing and fractional-dollar strikes still
       // match, then pick the closest strike from the results).
       if(!price && expISO && strikeVal && baseTicker) {
+        dbg.fallbackAttempted = true
         const cpType = /put/i.test(String(t.type||'')) ? 'put' : 'call'
-        const snapData = await apiGet(
-          '/v3/snapshot/options/'+baseTicker+
+        dbg.fallbackUrl = '/v3/snapshot/options/'+baseTicker+
           '?expiration_date='+expISO+'&contract_type='+cpType+
-          '&strike_price.gte='+(strikeVal-1.0)+'&strike_price.lte='+(strikeVal+1.0)+'&limit=10',
-          false, true)
-        if(snapData?.results?.length) {
-          // closest-strike match (handles half-dollar strikes)
-          let best = null, bestDiff = Infinity
-          for(const r of snapData.results) {
-            const k = r.details?.strike_price
-            if(typeof k !== 'number') continue
-            const diff = Math.abs(k - strikeVal)
-            if(diff < bestDiff) { best = r; bestDiff = diff }
+          '&strike_price.gte='+(strikeVal-1.0)+'&strike_price.lte='+(strikeVal+1.0)+'&limit=10'
+        try {
+          const snapData = await apiGet(dbg.fallbackUrl, false, true)
+          dbg.fallbackResultsLen = (snapData && snapData.results) ? snapData.results.length : 0
+          if(snapData?.results?.length) {
+            let best = null, bestDiff = Infinity
+            for(const r of snapData.results) {
+              const k = r.details?.strike_price
+              if(typeof k !== 'number') continue
+              const diff = Math.abs(k - strikeVal)
+              if(diff < bestDiff) { best = r; bestDiff = diff }
+            }
+            best = best || snapData.results[0]
+            if(best?.day?.close) price = best.day.close
+            else if(best?.last_quote?.ask) price = (best.last_quote.bid+best.last_quote.ask)/2
+            if(typeof best?.prevDay?.c === 'number') prevClose = best.prevDay.c
+            else if(typeof best?.prevDay?.close === 'number') prevClose = best.prevDay.close
+            if(price !== null) { dbg.fallbackSucceeded = true; fallbackHit++; dbg.skipReason = null }
+            else { dbg.skipReason = dbg.skipReason || 'fallbackResultNoPriceField'; badStrikeMatch++ }
+          } else {
+            dbg.skipReason = dbg.skipReason || 'fallbackEmptyResult'; emptyResult++
           }
-          best = best || snapData.results[0]
-          if(best?.day?.close) price = best.day.close
-          else if(best?.last_quote?.ask) price = (best.last_quote.bid+best.last_quote.ask)/2
-          if(typeof best?.prevDay?.c === 'number') prevClose = best.prevDay.c
-          else if(typeof best?.prevDay?.close === 'number') prevClose = best.prevDay.close
-          if(price !== null) dbg.fallbackMatched = true
+        } catch(fbErr) {
+          dbg.skipReason = dbg.skipReason || ('fallbackFetchThrew:' + (fbErr && fbErr.message))
+          fetchErrors++
         }
       }
 
       dbg.price = price
       if(price === null) {
         if(hadImportedValue) {
-          imported++
-          // Flag the trade so the card's freshness badge reads "Imported".
+          imported++; stayedImported++
           const tr2 = TRADES.find(x => x.id === t.id)
           if(tr2 && tr2.priceSource !== 'live') {
             tr2.priceSource   = 'imported'
@@ -7387,6 +7475,23 @@ async function refreshAllPnL() {
     console.warn('[PNL-REFRESH] unresolved trades (' + unresolved + ')', unresolvedDetails)
   }
   console.info('[PNL-REFRESH] summary', { live, imported, unresolved, total: trades.length })
+  // Detailed diagnostic summary requested by the user. If stayedImported
+  // equals total and directHit+fallbackHit=0, the live path never fired
+  // for any trade (the probe log above will show the reason — most likely
+  // polygonKeyPresent=false).
+  console.info('[PNL-REFRESH-DIAG]', {
+    total: trades.length,
+    attemptedLive,
+    directHit,
+    fallbackHit,
+    stayedImported,
+    unresolved,
+    missingOcc,
+    fetchErrors,
+    emptyResult,
+    badStrikeMatch,
+    badExpiryIso,
+  })
   // Re-render so the decision-dashboard tiles (Current Value / Total $ /
   // Total %) show the values we just wrote to the trades, and so the
   // freshness badge reflects the updated priceSource.
