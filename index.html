@@ -6428,6 +6428,59 @@ function openAddTrade() {
   document.getElementById('nt-dt').value = new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}).replace(',','')
 }
 
+// Parse a trade expiry description to ISO (YYYY-MM-DD). Handles:
+//   "2026-05-15"    → 2026-05-15
+//   "May-15-2026"   → 2026-05-15
+//   "May 15 2026"   → 2026-05-15
+//   "May 15, 2026"  → 2026-05-15
+//   "May-26"        → 2026-05-15  (3rd Friday of May 2026)
+//   "May 26"        → 2026-05-15
+//   "Jan-27"        → 2027-01-15  (3rd Friday of Jan 2027 — Jan 15 2027)
+// Returns '' on any unrecognized input. All month-year forms assume the
+// standard monthly option expiry (third Friday), which is what Fidelity,
+// Tradier, and Polygon use for month-only contract descriptions.
+function parseTradeExpiryISO(desc) {
+  if(!desc || typeof desc !== 'string') return ''
+  const s = desc.trim()
+  if(!s) return ''
+  const MONTHS = {jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12}
+  const pad = n => String(n).padStart(2,'0')
+  // YYYY-MM-DD
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/)
+  if(m) return m[1] + '-' + pad(+m[2]) + '-' + pad(+m[3])
+  // Mon(-| |,? )DD(-| |,? )YYYY|YY
+  m = s.match(/^([A-Za-z]{3,})[\s,\-]+(\d{1,2})[\s,\-]+(\d{2,4})$/)
+  if(m) {
+    const mo = MONTHS[m[1].slice(0,3).toLowerCase()]; if(!mo) return ''
+    let y = +m[3]; if(y < 100) y += 2000
+    return y + '-' + pad(mo) + '-' + pad(+m[2])
+  }
+  // Mon(-| )YY|YYYY  → third Friday of that month
+  m = s.match(/^([A-Za-z]{3,})[\s\-]+(\d{2,4})$/)
+  if(m) {
+    const mo = MONTHS[m[1].slice(0,3).toLowerCase()]; if(!mo) return ''
+    let y = +m[2]; if(y < 100) y += 2000
+    // dow of the 1st, UTC to avoid tz drift; 0=Sun..6=Sat, Friday=5
+    const d1 = new Date(Date.UTC(y, mo-1, 1)).getUTCDay()
+    const firstFri = 1 + ((5 - d1 + 7) % 7)
+    const thirdFri = firstFri + 14
+    return y + '-' + pad(mo) + '-' + pad(thirdFri)
+  }
+  return ''
+}
+
+// Build an OCC 21-char symbol (ticker 1-6 + yymmdd 6 + C/P 1 + strikePad 8)
+// given the already-ISO'd expiry + strike + type. Returns '' on bad inputs.
+function buildOCCFromParts(underlying, expISO, strike, type) {
+  if(!underlying || !expISO || !(strike > 0)) return ''
+  const m = expISO.match(/^(\d{4})-(\d{2})-(\d{2})$/); if(!m) return ''
+  const tk = String(underlying).toUpperCase().replace(/[^A-Z]/g,'')
+  if(!tk) return ''
+  const cp = /put/i.test(String(type||'')) ? 'P' : 'C'
+  const strikePad = String(Math.round(strike * 1000)).padStart(8,'0')
+  return tk + m[1].slice(2) + m[2] + m[3] + cp + strikePad
+}
+
 function saveTrade() {
   const t = {
     id:     Date.now(),
@@ -6444,30 +6497,23 @@ function saveTrade() {
     rolls:  [],
   }
   t.underlying = String(t.ticker || '').split(' ')[0].trim().toUpperCase()
+  // Infer type from the ticker suffix ("NVDA 180C" / "NVDA 180P"); defaults
+  // to Call. Populating t.type means refreshAllPnL's OCC rebuild + fallback
+  // search both pick the correct contract type for puts.
+  if(!t.type) t.type = /[\s\-]\d+(\.\d+)?P$/i.test(t.ticker) || /\bPUT\b/i.test(t.ticker) ? 'Put' : 'Call'
   if(!t.ticker || !t.entry || !t.atr) { alert('Ticker, entry price, and ATR are required.'); return }
-  // Best-effort OCC build so refreshAllPnL can find the option snapshot on
-  // the next refresh (Fidelity-imported trades already have .occ; manual
-  // New Trade entries had none, which is why their P&L tiles stayed blank).
-  try {
-    if(t.strike && t.desc) {
-      let y, mo, da
-      const iso = t.desc.match(/^(\d{4})-(\d{2})-(\d{2})$/)      // 2026-05-15
-      const mdy = t.desc.match(/^([A-Za-z]{3,})[ -](\d{1,2})[ ,-]+(\d{2,4})$/) // May-15-2026 / May 15 2026
-      if(iso) { y = iso[1]; mo = iso[2]; da = iso[3] }
-      else if(mdy) {
-        const monthMap = {jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'}
-        mo = monthMap[mdy[1].slice(0,3).toLowerCase()]
-        da = String(+mdy[2]).padStart(2,'0')
-        y  = mdy[3].length === 2 ? ('20' + mdy[3]) : mdy[3]
-      }
-      if(y && mo && da) {
-        const cp = (t.type||'Call').toLowerCase().includes('put') ? 'P' : 'C'
-        const tk = t.underlying.replace(/[^A-Z]/g,'')
-        const strikePad = String(Math.round(t.strike * 1000)).padStart(8,'0')
-        t.occ = tk + y.slice(2) + mo + da + cp + strikePad
-      }
-    }
-  } catch(e) { /* best-effort only */ }
+  // OCC build via unified parser — handles "May-26" / "Jan-27" month-year
+  // forms which the previous regex missed, leaving t.occ empty and causing
+  // the primary snapshot lookup in refreshAllPnL to be skipped.
+  const expISO = parseTradeExpiryISO(t.desc)
+  const occ = buildOCCFromParts(t.underlying, expISO, t.strike, t.type)
+  if(occ) t.occ = occ
+  if(expISO) t.expiryISO = expISO  // cache parsed expiry for refresh path
+  console.info('[SAVE-TRADE] built trade', {
+    id: t.id, ticker: t.ticker, underlying: t.underlying, desc: t.desc,
+    parsedExpiry: expISO || '(unparsed)', strike: t.strike, type: t.type,
+    occ: t.occ || '(not built)'
+  })
   TRADES.push(t)
   saveTrades()
   document.getElementById('add-form').style.display = 'none'
@@ -6932,24 +6978,40 @@ async function refreshAllPnL() {
   // now-nonexistent #sp-<id> selector.
   await fetchStockPricesForTrades()
 
-  let updated = 0, totalPnL = 0
+  // Counters: updated = fetched an option price THIS run;
+  //            alreadyImported = had curVal before the loop (Fidelity) and
+  //                              kept/refreshed it;
+  //            unresolved = finished the loop with neither a fresh price
+  //                         nor any stored curVal.
+  let updated = 0, alreadyImported = 0, unresolved = 0, totalPnL = 0
+  const unresolvedDetails = []
 
   for(const t of trades) {
+    const hadImportedValue = (typeof t.curVal === 'number' && t.curVal > 0)
     try {
       // Option price via OCC snapshot (preferred) or expiry+strike search.
       let price = null
       const baseTicker = t.ticker ? t.ticker.split(' ')[0].replace(/[^A-Z]/g,'') : '';
       const strikeVal  = t.strike || 0
-      const expRaw     = t.desc || t.expiry || '';
-      let expISO = '';
-      try { const d=new Date(expRaw.replace(/-/g,' ')); if(!isNaN(d)) expISO=d.toISOString().split('T')[0] } catch(e){}
-      // Best-effort OCC build for manually-added trades that never got .occ
-      // stamped (saveTrade path pre-fix). Lets the OCC branch below work for
-      // existing stuck trades like NVDA without a migration step.
-      if(!t.occ && expISO && strikeVal && baseTicker) {
-        const cpChar = (t.type||'Call').toLowerCase().includes('put') ? 'P' : 'C'
-        const y2 = expISO.slice(2,4), mm = expISO.slice(5,7), dd = expISO.slice(8,10)
-        t.occ = baseTicker + y2 + mm + dd + cpChar + String(Math.round(strikeVal * 1000)).padStart(8,'0')
+      // Unified expiry parser handles "May-26", "May-15-2026", "2026-05-15".
+      // Prefer a stored expiryISO (stamped by saveTrade) so we don't re-parse
+      // the same desc on every refresh.
+      const expRaw     = t.desc || t.expiry || ''
+      const expISO     = t.expiryISO || parseTradeExpiryISO(expRaw)
+      if(expISO && !t.expiryISO) t.expiryISO = expISO  // cache for next run
+      // Rebuild OCC if missing OR if the cached one predates the unified
+      // parser. We re-stamp only when we can produce a value; never blank
+      // a previously-set .occ.
+      if(baseTicker && strikeVal && expISO) {
+        const rebuilt = buildOCCFromParts(baseTicker, expISO, strikeVal, t.type||'Call')
+        if(rebuilt && !t.occ) t.occ = rebuilt
+      }
+
+      const dbg = {
+        id: t.id, ticker: t.ticker, underlying: baseTicker,
+        desc: expRaw, parsedExpiry: expISO || '(unparsed)',
+        strike: strikeVal, occ: t.occ || '(none)',
+        occMatched: false, fallbackMatched: false, price: null,
       }
 
       if(t.occ) {
@@ -6959,21 +7021,47 @@ async function refreshAllPnL() {
           const r = snapD.results[0]
           if(r.day?.close) price = r.day.close
           else if(r.last_quote?.ask) price = (r.last_quote.bid + r.last_quote.ask)/2
+          if(price !== null) dbg.occMatched = true
         }
       }
-      // Fallback: search by expiry + strike
+      // Fallback: search by expiry + strike (widen strike window to ±1.0
+      // so off-by-cents strike parsing and fractional-dollar strikes still
+      // match, then pick the closest strike from the results).
       if(!price && expISO && strikeVal && baseTicker) {
-        const cpType = (t.type||'Call').toLowerCase().includes('put') ? 'put' : 'call';
+        const cpType = /put/i.test(String(t.type||'')) ? 'put' : 'call'
         const snapData = await apiGet(
           '/v3/snapshot/options/'+baseTicker+
           '?expiration_date='+expISO+'&contract_type='+cpType+
-          '&strike_price.gte='+(strikeVal-0.5)+'&strike_price.lte='+(strikeVal+0.5)+'&limit=5',
+          '&strike_price.gte='+(strikeVal-1.0)+'&strike_price.lte='+(strikeVal+1.0)+'&limit=10',
           false, true)
         if(snapData?.results?.length) {
-          const best = snapData.results.find(r=>Math.abs((r.details?.strike_price||0)-strikeVal)<0.1) || snapData.results[0]
+          // closest-strike match (handles half-dollar strikes)
+          let best = null, bestDiff = Infinity
+          for(const r of snapData.results) {
+            const k = r.details?.strike_price
+            if(typeof k !== 'number') continue
+            const diff = Math.abs(k - strikeVal)
+            if(diff < bestDiff) { best = r; bestDiff = diff }
+          }
+          best = best || snapData.results[0]
           if(best?.day?.close) price = best.day.close
           else if(best?.last_quote?.ask) price = (best.last_quote.bid+best.last_quote.ask)/2
+          if(price !== null) dbg.fallbackMatched = true
         }
+      }
+
+      dbg.price = price
+      if(price === null) {
+        if(hadImportedValue) {
+          alreadyImported++
+          console.info('[PNL-REFRESH] kept imported value', dbg)
+        } else {
+          unresolved++
+          unresolvedDetails.push(dbg)
+          console.warn('[PNL-REFRESH] UNRESOLVED — no OCC + no fallback match', dbg)
+        }
+      } else {
+        console.info('[PNL-REFRESH] resolved', dbg)
       }
 
       if(price !== null) {
@@ -7010,8 +7098,15 @@ async function refreshAllPnL() {
         }
         updated++
       }
-    } catch(e) { console.log('P&L fetch error', t.ticker, e) }
-    
+    } catch(e) {
+      console.warn('[PNL-REFRESH] fetch threw', { id: t.id, ticker: t.ticker, err: e && e.message })
+      if(!hadImportedValue) {
+        unresolved++
+        unresolvedDetails.push({ id: t.id, ticker: t.ticker, error: e && e.message })
+      } else {
+        alreadyImported++
+      }
+    }
     // Rate limit gap for non-cached calls
     await new Promise(r => setTimeout(r, 200))
   }
@@ -7024,7 +7119,16 @@ async function refreshAllPnL() {
 )+Math.abs(Math.round(totalPnL)).toLocaleString()+'\x3C/span>'
   }
 
-  setApi('P&L updated: ' + updated + '/' + trades.length + ' trades . last ' + new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}), 'ok')
+  const ts = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})
+  const statusKind = unresolved === 0 ? 'ok' : (updated === 0 && alreadyImported === 0 ? 'err' : 'loading')
+  setApi(
+    'P&L: ' + updated + ' updated, ' + alreadyImported + ' imported, ' + unresolved + ' unresolved · last ' + ts,
+    statusKind
+  )
+  if(unresolved > 0) {
+    console.warn('[PNL-REFRESH] unresolved trades (' + unresolved + ')', unresolvedDetails)
+  }
+  console.info('[PNL-REFRESH] summary', { updated, alreadyImported, unresolved, total: trades.length })
   // Re-render so the decision-dashboard tiles (Current Value / Total $ /
   // Total %) show the values we just wrote to the trades.
   if(updated > 0) renderTrades()
