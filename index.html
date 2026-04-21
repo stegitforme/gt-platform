@@ -6952,7 +6952,25 @@ function renderTrades() {
       : ((t.underlying || (t.ticker||'').split(' ')[0]) || '')
     const livePx = (window._livePrices && window._livePrices[underlying]) || t.stockPrice || t.entry || 0
     const pctFromEntry = t.entry ? ((livePx - t.entry) / t.entry * 100) : 0
-    // Freshness / source-of-truth badge for option trades. Granular now:
+    // Canonical render-time price pick — shared by the freshness badge AND
+    // the currentVal/totalGL/totalPct recompute later. Declared up here so
+    // `displayPriceSource` is available to the badge block immediately.
+    const _rpContracts = +t.cts || 0
+    const pickRenderPriceEarly = () => {
+      if(isStk) return { px: null, source: null }
+      const srcTag = t.livePriceSource
+      if(typeof t.liveMidPx === 'number' && t.liveMidPx > 0)   return { px: t.liveMidPx,   source: 'live-mark'  }
+      if(srcTag === 'live-last'  && typeof t.liveLastPx  === 'number' && t.liveLastPx  > 0) return { px: t.liveLastPx,  source: 'live-last'  }
+      if(srcTag === 'live-close' && typeof t.liveClosePx === 'number' && t.liveClosePx > 0) return { px: t.liveClosePx, source: 'live-close' }
+      if(typeof t.displayOptionPx === 'number' && t.displayOptionPx > 0) return { px: t.displayOptionPx, source: srcTag || 'live-mark' }
+      if(typeof t.lastPx === 'number' && t.lastPx > 0)         return { px: t.lastPx,       source: 'imported'   }
+      if(typeof t.currentPrice === 'number' && t.currentPrice > 0) return { px: t.currentPrice, source: 'imported' }
+      return { px: null, source: 'unresolved' }
+    }
+    const _rpPick = pickRenderPriceEarly()
+    const displayOptionPx = _rpPick.px
+    const displayPriceSource = _rpPick.source
+    // Freshness / source-of-truth badge driven by displayPriceSource.
     //   LIVE-MARK · HH:MM:SS ET   — bid/ask midpoint (primary)
     //   LIVE-LAST · HH:MM:SS ET   — last trade price
     //   LIVE-CLOSE · HH:MM ET     — day close fallback (can be stale)
@@ -6960,19 +6978,7 @@ function renderTrades() {
     //   UNRESOLVED                — no live match and no imported fallback
     let sourceBadge = ''
     if(isOpen && !isStk) {
-      // Prefer the fine-grained livePriceSource stamped by refreshAllPnL;
-      // fall back to the legacy coarse priceSource for trades that haven't
-      // been through the new path yet.
-      let src
-      if(t.livePriceSource === 'live-mark' || t.livePriceSource === 'live-last' || t.livePriceSource === 'live-close') {
-        src = t.livePriceSource
-      } else if(t.priceSource === 'live') {
-        src = 'live-mark'  // conservative upgrade for pre-refactor live stamps
-      } else if(t.priceSource === 'imported' || (typeof t.curVal === 'number' && t.curVal > 0)) {
-        src = 'imported'
-      } else {
-        src = 'unresolved'
-      }
+      const src = displayPriceSource || 'unresolved'
       const at  = t.livePriceAt || t.priceSourceAt || t.importedAt
       const withSeconds = src === 'live-mark' || src === 'live-last'
       const fmt = at ? new Date(at).toLocaleTimeString('en-US',
@@ -7009,26 +7015,48 @@ function renderTrades() {
            + '<div style="font-family:\'SF Mono\',monospace;font-size:10px;text-align:right;color:' + pc + '">' + (pctv>=0?'+':'') + pctv.toFixed(1) + '%\x3C/div>'
            + '\x3C/div>'
     }
-    // ── Current-value + P/L resolution ──────────────────────────────────────
-    // Fields come from multiple sources (Fidelity CSV import, refreshAllPnL
-    // option-price loop, manual New Trade). Any path may leave some fields
-    // unset — most visibly on the first manually-added trade (e.g. NVDA)
-    // that was never part of a Fidelity import AND hadn't been snapshotted
-    // yet by refreshAllPnL. Derive the missing ones from whatever is present
-    // so "Loading..." and "--" only appear when we truly cannot compute.
-    const optPxNum = (typeof t.lastPx === 'number' && t.lastPx > 0)       ? t.lastPx
-                   : (typeof t.currentPrice === 'number' && t.currentPrice > 0) ? t.currentPrice
-                   : null
-    const curValNum = (typeof t.curVal === 'number' && t.curVal > 0)
-      ? t.curVal
-      : (optPxNum ? optPxNum * 100 * (t.cts || 1) : null)
-    // Explicit state for the Current value tile so "Loading..." is no
-    // longer a catch-all for three distinct conditions:
-    //   - have a value          → show the number
-    //   - duplicate open trade  → "Duplicate / unresolved"
-    //   - option w/ no OCC      → "Contract unresolved"
-    //   - option w/ OCC but no price yet → "Fetching price…"
-    //   - anything else         → "—"
+    // ── Canonical Open-Trades pricing (one-price-drives-everything) ─────────
+    // The ONE chosen price is selected here at render time. All visible
+    // numbers on the card are recomputed from it — never read from cached
+    // t.curVal / t.totalGL which can go stale between refreshes or diverge
+    // from Fidelity after a fresh refresh. Selection priority:
+    //
+    //    1. liveMidPx         (live-mark,  refreshAllPnL midpoint)
+    //    2. liveLastPx        (live-last,  last trade at refresh time)
+    //    3. liveClosePx       (live-close, day close — may be stale)
+    //    4. displayOptionPx   (generic live chosen-px)
+    //    5. lastPx            (imported Fidelity snapshot)
+    //    6. currentPrice      (legacy field from earlier refresh paths)
+    //    → null (unresolved)
+    const contracts = _rpContracts  // (set earlier, right above the source-badge block)
+    // Cost basis: Fidelity's costTotal is the authoritative figure
+    // (to-the-cent, includes commissions). Fall back to cost·100·cts ONLY
+    // when no Fidelity import exists for this trade.
+    const costBasisTotal = (typeof t.costTotal === 'number' && t.costTotal > 0)
+      ? t.costTotal
+      : ((+t.cost || 0) * 100 * contracts)
+    // Recompute currentVal / totalGL / totalPct ON THE FLY from the one
+    // chosen price. No persisted cache involvement — what you see is the
+    // math of the chosen price times contracts, every time.
+    const curValNum = isStk
+      ? ((typeof t.curVal === 'number' && t.curVal > 0) ? t.curVal : null)
+      : (displayOptionPx !== null && contracts > 0 ? displayOptionPx * 100 * contracts : null)
+    const totalGLNum  = (curValNum !== null && costBasisTotal > 0)
+      ? (curValNum - costBasisTotal)
+      : (typeof t.totalGL === 'number' ? t.totalGL : null)
+    const totalPctNum = (totalGLNum !== null && costBasisTotal > 0)
+      ? (totalGLNum / costBasisTotal * 100)
+      : (typeof t.totalPct === 'number' ? t.totalPct : null)
+    // Today $/% stay independent of the total P&L recompute. Prefer the
+    // live prev-close derivation stamped by refreshAllPnL; fall back to
+    // Fidelity's imported todayGL/todayPct, then derive % from $ if the
+    // CSV had one but not the other.
+    const todayGLNum  = (typeof t.todayGL === 'number') ? t.todayGL : null
+    const todayPctNum = (typeof t.todayPct === 'number' && !isNaN(t.todayPct)) ? t.todayPct
+                      : (todayGLNum != null && curValNum != null && (curValNum - todayGLNum) > 0)
+                        ? (todayGLNum / (curValNum - todayGLNum) * 100)
+                        : null
+    // Explicit state for the Current value tile
     const _isDup = isOpen && !isStk && (typeof isDuplicateOpenTrade === 'function') && isDuplicateOpenTrade(t)
     const _unresolvedContract = isOpen && !isStk && !t.occ && !t.expiryISO
     const curValStr = curValNum != null
@@ -7040,25 +7068,33 @@ function renderTrades() {
           : (isOpen && !isStk && t.occ)
             ? '<span style="color:#8b91a0;font-size:11px;font-weight:500">Fetching price…\x3C/span>'
             : '<span style="color:#555c6e;font-size:11px">—\x3C/span>'
-    const costBasisNum = (typeof t.costTotal === 'number' && t.costTotal > 0) ? t.costTotal
-                       : (basis > 0 ? basis : null)
-    // Total $ / Total %: prefer stored (Fidelity/refreshAllPnL) values; else
-    // derive from curVal - costBasis and cost basis.
-    const totalGLNum  = (typeof t.totalGL === 'number') ? t.totalGL
-                      : (typeof t.pnl === 'number') ? t.pnl
-                      : (curValNum != null && costBasisNum != null) ? (curValNum - costBasisNum)
-                      : null
-    const totalPctNum = (typeof t.totalPct === 'number') ? t.totalPct
-                      : (typeof t.pnlPct === 'number') ? t.pnlPct
-                      : (totalGLNum != null && costBasisNum > 0) ? (totalGLNum / costBasisNum * 100)
-                      : null
-    // Today %: Fidelity sometimes exports Today $ without Today %. Derive
-    // from Today $ and prior-day value (curVal - todayGL) when missing.
-    const todayGLNum  = (typeof t.todayGL === 'number') ? t.todayGL : null
-    const todayPctNum = (typeof t.todayPct === 'number' && !isNaN(t.todayPct)) ? t.todayPct
-                      : (todayGLNum != null && curValNum != null && (curValNum - todayGLNum) > 0)
-                        ? (todayGLNum / (curValNum - todayGLNum) * 100)
-                        : null
+    // Render-time diagnostic for the user-specified test contracts.
+    // Fires every render so the user can verify the math against
+    // Fidelity's screen even without a Polygon refresh.
+    if(isOpen && !isStk) {
+      const _uk = ((t.underlying) || (t.ticker||'').split(' ')[0] || '').toUpperCase()
+      const _sk = Math.round(+t.strike || 0)
+      const isTestContract =
+        (_uk === 'NVDA' && _sk === 185) ||
+        (_uk === 'AMD'  && _sk === 250) ||
+        (_uk === 'BCS'  && _sk === 22)  ||
+        (_uk === 'SKM'  && _sk === 35)
+      if(isTestContract && typeof console !== 'undefined' && console.info) {
+        console.info('[PNL-TEST] ' + _uk + _sk + ' (render)', {
+          id: t.id, ticker: t.ticker, occ: t.occ || null,
+          bid: t.liveBid ?? null, ask: t.liveAsk ?? null,
+          midpoint: t.liveMidPx ?? null,
+          last: (t.livePriceSource === 'live-last' ? t.liveLastPx : null) ?? null,
+          close: t.liveClosePx ?? null,
+          chosenDisplayOptionPx: displayOptionPx,
+          livePriceSource: displayPriceSource,
+          contracts, costTotal: costBasisTotal,
+          currentVal: curValNum,
+          totalGL: totalGLNum,
+          totalPct: totalPctNum !== null ? +totalPctNum.toFixed(2) : null,
+        })
+      }
+    }
 
     // Return the card's three subsections as SEPARATE HTML strings. Each
     // subsection is parsed into its own container div in the append loop, so
@@ -7575,15 +7611,16 @@ async function refreshAllPnL() {
         const isTestTrade =
           (testUnderlying === 'NVDA' && testStrike === 185) ||
           (testUnderlying === 'AMD'  && testStrike === 250) ||
-          (testUnderlying === 'BCS'  && testStrike === 22)
+          (testUnderlying === 'BCS'  && testStrike === 22)  ||
+          (testUnderlying === 'SKM'  && testStrike === 35)
         if(isTestTrade) {
-          console.info('[PNL-TEST] ' + testUnderlying + testStrike, {
+          console.info('[PNL-TEST] ' + testUnderlying + testStrike + ' (refresh)', {
             id: t.id, ticker: t.ticker, occ: t.occ,
             bid: priceInfo.bid, ask: priceInfo.ask, midpoint: priceInfo.mid,
             lastTrade: priceInfo.lastTrade, dayClose: priceInfo.dayClose,
-            chosenDisplayOptionPx: displayOptionPx, priceSource: priceInfo.source,
+            chosenDisplayOptionPx: displayOptionPx, livePriceSource: priceInfo.source,
             contracts: t.cts,
-            costBasisTotal, currentVal,
+            costTotal: costBasisTotal, currentVal,
             totalGL, totalPct: +totalPct.toFixed(2),
           })
         }
