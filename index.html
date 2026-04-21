@@ -3742,12 +3742,15 @@ async function fetchStockPricesForTrades() {
       })
     })
 
-    if(updated > 0) { saveTrades(); renderTrades(); renderPortfolioRisk() }
-    setApi('Live prices updated for ' + Object.keys(prices).length + ' stocks ✓', 'ok')
-
-    // Store prices globally for the live ticker
+    // Store prices globally BEFORE renderTrades so the decision-dashboard
+    // precompute (livePx, pctFromEntry, action badge) sees fresh data.
     window._livePrices = prices
     window._livePricesAt = new Date()
+
+    if(updated > 0) { saveTrades(); renderTrades(); renderPortfolioRisk() }
+    else { renderTrades() }   // always re-render so action badge / % vs entry refresh
+    setApi('Live prices updated for ' + Object.keys(prices).length + ' stocks ✓', 'ok')
+
     updateLivePriceTickers()
 
   } catch(e) {
@@ -6624,7 +6627,7 @@ function renderTrades() {
       ? ''+Math.round(curValNum).toLocaleString()
       : '<span style="color:#8b91a0;font-size:11px;font-weight:500">Loading...\x3C/span>'
 
-    return '<div class="trade-card">' +
+    return '<div class="trade-card" data-trade-id="' + t.id + '">' +
       '<div class="trade-card-head">' +
         '<div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">' +
           '<span style="font-family:\'SF Mono\',monospace;font-weight:700;font-size:15px;color:#f0c040">' + t.ticker + '\x3C/span>' +
@@ -6675,7 +6678,10 @@ function renderTrades() {
         '\x3C/div>' +
         '<div>' +
           '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e;margin-bottom:7px">P/L & Position\x3C/div>' +
-          '<div class="grid2" style="gap:6px">' +
+          // Unique id + scoped class so any future per-card update path queries
+          // #pnl-grid-<id> (or cardEl.querySelector) instead of a global .grid2
+          // (which would hit the Market tab first).
+          '<div id="pnl-grid-' + t.id + '" class="grid2 trade-pnl-grid" style="gap:6px">' +
             mkMini(isStk ? 'Avg cost/share' : 'Stock px at entry', t.entry > 0 ? ''
 +t.entry.toFixed(2) : '<span style="color:#ff8c42;font-size:11px">fetching...\x3C/span>', '') +
             mkMini(isStk ? 'Total cost' : 'Cost basis', basis>0?''
@@ -6786,10 +6792,18 @@ async function refreshAllPnL() {
         const pnlPct     = costBasis > 0 ? (pnl / costBasis * 100) : 0
         totalPnL += pnl
 
-        // Update the trade in storage
+        // Update the trade in storage. Also populate the fields the new
+        // decision-dashboard card reads (curVal / totalGL / totalPct) so the
+        // tiles actually refresh — not just the legacy pnl / pnlPct.
+        // todayGL/todayPct remain Fidelity-sourced and are not overwritten.
         const allTrades = TRADES
         const tr = allTrades.find(x => x.id === t.id)
-        if(tr) { tr.currentPrice = price; tr.pnl = pnl; tr.pnlPct = pnlPct }
+        if(tr) {
+          tr.currentPrice = price; tr.pnl = pnl; tr.pnlPct = pnlPct
+          tr.curVal   = currentVal
+          tr.totalGL  = pnl
+          tr.totalPct = pnlPct
+        }
         saveTrades()
 
         // Update DOM directly
@@ -6820,6 +6834,9 @@ async function refreshAllPnL() {
   }
 
   setApi('P&L updated: ' + updated + '/' + trades.length + ' trades . last ' + new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}), 'ok')
+  // Re-render so the decision-dashboard tiles (Current Value / Total $ /
+  // Total %) show the values we just wrote to the trades.
+  if(updated > 0) renderTrades()
   } catch(e) {
     console.error('[PRICE-REFRESH-ERROR]', e)
     setApi('P&L refresh failed: ' + e.message, 'err')
