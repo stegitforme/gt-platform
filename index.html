@@ -5358,7 +5358,7 @@ function renderCandidateTable() {
       if(b === 'flagged') return { txt:'E: \u26a0', col:'#f0c040', title:'Earnings flagged — no date available' }
       return { txt:'E: —', col:'#333a4a', title:'No earnings data' }
     })()
-    return "<tr style='border-bottom:1px solid #0d1117'>"+
+    return "<tr class='cand-row"+(sym===window._SELECTED_CAND_SYM?' active':'')+"' data-cand-idx='"+idx+"' style='border-bottom:1px solid #0d1117;cursor:pointer'>"+
       "<td style='padding:5px 10px;font-weight:600'>"+sym+" <span style='font-size:10px;font-weight:400;color:"+eData.col+";margin-left:4px' title='"+eData.title+"'>"+eData.txt+"\x3C/span>\x3C/td>"+
       "<td style='padding:5px 4px;color:#8b91a0;font-size:11px'>"+sector+"\x3C/td>"+
       "<td style='padding:5px 4px;text-align:right'>"+(atr>0?"$"+atr.toFixed(2):"—")+"\x3C/td>"+
@@ -5660,6 +5660,77 @@ function toggleQuickSize() {
   body.style.display=open?"none":"block";
   if(icon)icon.textContent=open?"▼ expand":"▲ collapse"
 }
+
+// ── CANDIDATES → QUICK SIZE BRIDGE ────────────────────────────────────────────
+// Click a candidate row (not a button/input within it) to prefill the Quick
+// Size calculator, run calc(), highlight the active row, and scroll the
+// calculator into view. Uses the real Quick Size input ids (tkr, entry,
+// atr, delta, strike, expiry, optcost) — not the qs-* aliases some drafts
+// referenced. selectedSym is mirrored on window so re-renders of the
+// candidate table preserve the .active highlight.
+function _setQsVal(id, val) {
+  const el = document.getElementById(id); if(!el) return
+  if(val !== undefined && val !== null && val !== '') el.value = val
+  el.dispatchEvent(new Event('input', { bubbles: true }))
+}
+function selectCandidateForSizing(c, row) {
+  if(!c) return
+  const sym = c.sym || c.ticker || ''
+  window._SELECTED_CAND_SYM = sym
+  // Expand the Quick Size card if it's collapsed.
+  const qsBody = document.getElementById('qs-body')
+  if(qsBody && qsBody.style.display === 'none') toggleQuickSize()
+  // Best live price for the underlying
+  const livePx = (typeof LIVE_PRICES !== 'undefined' && LIVE_PRICES[sym] && LIVE_PRICES[sym].price)
+    || c.price || c.last || 0
+  // Prefill the canonical Quick Size inputs
+  _setQsVal('tkr',     sym)
+  _setQsVal('entry',   livePx || '')
+  _setQsVal('atr',     c.atr || '')
+  _setQsVal('delta',   c.delta || +document.getElementById('pl-default-delta')?.value || 0.80)
+  _setQsVal('strike',  c.strike || '')
+  _setQsVal('expiry',  c.exp || c.expiry || '')
+  _setQsVal('optcost', c.optcost || '')
+  // Recompute. calc() reads all the inputs above and updates the scenario
+  // table + metric tiles; fetchTicker() would pull fresh Polygon data but
+  // that's a heavier call the user can trigger with the Fetch Live button.
+  if(typeof calc === 'function') { try { calc() } catch(e) {} }
+  // Highlight the selected row
+  document.querySelectorAll('#pl-cand-body .cand-row').forEach(r => r.classList.remove('active'))
+  if(row && row.classList) row.classList.add('active')
+  // Scroll the Quick Size card into view
+  const qsAnchor = document.getElementById('qs-body') || document.querySelector('#sizer .card:last-child')
+  if(qsAnchor && qsAnchor.scrollIntoView) qsAnchor.scrollIntoView({ behavior:'smooth', block:'center' })
+}
+// Delegated click handler on the candidate tbody. Attach once — survives
+// the innerHTML-rewrite in renderCandidateTable because it's on the
+// tbody element, not the rows.
+(function wireCandRowClicks() {
+  const tbody = document.getElementById('pl-cand-body')
+  if(!tbody || tbody._candClickWired) return
+  tbody._candClickWired = true
+  tbody.addEventListener('click', function(e) {
+    // Ignore clicks on interactive descendants (buttons, inputs, selects).
+    if(e.target.closest('button,input,select,textarea,a')) return
+    const tr = e.target.closest('tr.cand-row')
+    if(!tr) return
+    const idx = +tr.getAttribute('data-cand-idx')
+    const c = (typeof PLANNER_CANDIDATES !== 'undefined') ? PLANNER_CANDIDATES[idx] : null
+    if(!c) return
+    selectCandidateForSizing(c, tr)
+  })
+})()
+// Scoped CSS for the active-row highlight + hover affordance.
+;(function injectCandRowCss() {
+  if(document.getElementById('cand-row-css')) return
+  const st = document.createElement('style')
+  st.id = 'cand-row-css'
+  st.textContent =
+    '#pl-cand-body .cand-row{transition:background .12s}'
+  + '#pl-cand-body .cand-row:hover{background:rgba(255,255,255,.03)}'
+  + '#pl-cand-body .cand-row.active{outline:1px solid #f0c040;outline-offset:-1px;background:rgba(240,192,64,.08)}'
+  document.head.appendChild(st)
+})()
 // ── CLUSTER / CORRELATION AWARENESS ──────────────────────────────────────────
 var CLUSTER_MAP = {'Tech':'AI/Tech','Communication':'AI/Tech','NVDA':'AI/Tech','AMD':'AI/Tech','AVGO':'AI/Tech','TSM':'AI/Tech','CLS':'AI/Tech','LRCX':'AI/Tech','SMCI':'AI/Tech','VRT':'AI/Tech','GLW':'AI/Tech','Financials':'Rates/Finance','HOOD':'Rates/Finance','BCS':'Rates/Finance','SKM':'Rates/Finance','GS':'Rates/Finance','JPM':'Rates/Finance','Energy':'Oil/Energy','XOM':'Oil/Energy','CVX':'Oil/Energy','Healthcare':'Healthcare','Industrials':'Industrial','EMBJ':'Industrial','Discretionary':'Consumer','AMZN':'Consumer','Space':'Space/Defense','LUNR':'Space/Defense','Staples':'Defensive','Utilities':'Defensive','REIT':'Defensive'}
 function getCluster(sym) { return CLUSTER_MAP[sym] || CLUSTER_MAP[getSector(sym)] || getSector(sym) || "Other" }
