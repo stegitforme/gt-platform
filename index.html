@@ -656,7 +656,7 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
       <input type="number" id="pl-default-risk" value="5500" step="100" style="width:80px;font-size:12px;padding:3px 6px" oninput="plannerCalc()">
       <span style="font-size:11px;color:#555c6e">Delta</span>
       <input type="number" id="pl-default-delta" value="0.80" step="0.01" min="0.01" max="1" style="width:55px;font-size:12px;padding:3px 6px" oninput="plannerCalc()">
-      <button onclick="refreshCandidateATRs()" class="btn btn-ghost" style="font-size:11px;padding:3px 10px">↻ Refresh ATR</button> <button onclick="rankCandidates();renderCandidateTable()" class="btn btn-ghost" style="font-size:11px;padding:3px 10px">↕ Rank</button> <span id="pl-atr-updated" style="font-size:10px;color:#555c6e"></span> <span id="pl-atr-updated" style="font-size:10px;color:#555c6e"></span>
+      <button id="pl-fetch-prices-btn" onclick="fetchPlannerPrices()" class="btn btn-ghost" style="font-size:11px;padding:3px 10px" title="Fetch live stock prices for Planner candidates. Reuses the shared price cache — skips symbols already fresh.">↻ Prices</button> <button onclick="refreshCandidateATRs()" class="btn btn-ghost" style="font-size:11px;padding:3px 10px">↻ Refresh ATR</button> <button onclick="rankCandidates();renderCandidateTable()" class="btn btn-ghost" style="font-size:11px;padding:3px 10px">↕ Rank</button> <span id="pl-atr-updated" style="font-size:10px;color:#555c6e"></span>
     </div>
   </div>
   <div class="card-body" style="padding:0">
@@ -5325,7 +5325,54 @@ async function initPlanner() {
   plannerCalc()
   // Auto-fetch ATRs for candidates
   fetchAllCandidateATRs()
+  // Auto-fetch live prices for candidate symbols so -.5 ATR / -1 ATR
+  // stop columns and the → Trade button's price-gate populate without
+  // the user first having to visit Screener and click Fetch Prices.
+  fetchPlannerPrices()
   if(typeof renderRiskIntelligence==='function') renderRiskIntelligence()
+}
+
+// Planner-side live-price refresh. Reuses the same Screener price
+// fetcher (fetchScreenerPrices) which populates the shared LIVE_PRICES
+// cache + apiGet's 5-minute API_CACHE, so calls from both surfaces
+// share results. Skips symbols whose prices are already cached fresh
+// (< 5 min) to avoid redundant API hits; if everything is fresh, just
+// rerenders. After a real fetch, re-renders the Candidates table so
+// the new stop columns paint and Trade buttons re-enable.
+async function fetchPlannerPrices() {
+  if(!Array.isArray(PLANNER_CANDIDATES) || !PLANNER_CANDIDATES.length) return
+  const syms = Array.from(new Set(
+    PLANNER_CANDIDATES.map(c => c && c.sym).filter(s => !!s)
+  ))
+  if(!syms.length) return
+  // Which symbols need a fresh fetch? LIVE_PRICES[sym] is populated by
+  // either fetchScreenerPrices (price, bid, ask, chg) or
+  // fetchStockPricesForTrades (just price). Consider any entry with a
+  // non-zero price valid; the underlying apiGet cache already handles
+  // the staleness boundary (5-min TTL on the /v2/aggs path).
+  const stale = syms.filter(s => {
+    const lp = (typeof LIVE_PRICES !== 'undefined') ? LIVE_PRICES[s] : null
+    return !lp || !(typeof lp.price === 'number' && lp.price > 0)
+  })
+  const btn = document.getElementById('pl-fetch-prices-btn')
+  if(!stale.length) {
+    // All fresh — just re-render so stop columns reflect cached state.
+    if(typeof renderCandidateTable === 'function') renderCandidateTable()
+    if(btn) { btn.textContent = '↻ Prices (cached)'; setTimeout(() => { if(btn) btn.textContent = '↻ Prices' }, 1500) }
+    return
+  }
+  if(btn) { btn.textContent = 'Fetching…'; btn.disabled = true }
+  try {
+    if(typeof fetchScreenerPrices === 'function') {
+      // Pass only the stale subset so the request is minimal.
+      await fetchScreenerPrices(stale)
+    }
+    if(typeof renderCandidateTable === 'function') renderCandidateTable()
+  } catch(e) {
+    console.warn('[PLANNER-PRICES] fetch failed:', e && e.message)
+  } finally {
+    if(btn) { btn.textContent = '↻ Prices'; btn.disabled = false }
+  }
 }
 
 function savePlannerCandidates() {
@@ -5575,7 +5622,11 @@ async function addCandidate(sym) {
   savePlannerCandidates()
   renderCandidateTable()
   plannerCalc()
+  // Fire ATR + live-price fetches for the newly-added ticker so stop
+  // columns populate without waiting for the user to click Refresh.
+  // Both are cached (apiGet's 5-min TTL) so no-op on repeats.
   await fetchCandidateATR(sym)
+  if(typeof fetchPlannerPrices === 'function') fetchPlannerPrices()
 }
 function removeCandidate(idx) {
   PLANNER_CANDIDATES.splice(idx,1)
