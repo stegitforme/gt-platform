@@ -46,59 +46,10 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#0a0c0f;color:#e8
    the Candidates internal scroll actually coexist rather than both
    pushing the rail past its max-height. */
 .sizer-page .sizer-right > .card{min-height:0}
-/* Quick Size expanded body: capped height with its own internal scroll.
-   Before: #qs-body grew to fit all content (scenarios + metrics + quality
-   + add trade + levels + fields) which pushed the Candidates card far
-   enough up that lower rows were only reachable by scrolling the rail
-   and losing Quick Size visibility. Now Quick Size scrolls inside
-   itself, Candidates keeps its own scroll area, and the rail's
-   overflow-y:auto remains a last-resort fallback. */
-.sizer-page #qs-body{max-height:min(55vh,600px);overflow-y:auto;overflow-anchor:none;overscroll-behavior:contain}
-/* ── 2-COLUMN SPLIT WHEN QUICK SIZE IS EXPANDED ─────────────────────────────
-   Default (QS collapsed): right rail is a vertical flex column. The
-   Quick Size card just shows its head; Candidates dominates.
-   Expanded (QS open, viewport ≥ 1200px): rail becomes a 2-column grid
-   with Candidates on the left and Quick Size on the right, each in its
-   own full-height pane with independent internal scroll. Below 1200px
-   we fall back to the stacked layout because splitting a narrow rail
-   into two cramps the candidate table. */
-@media (min-width: 1200px) {
-  .sizer-page.qs-expanded .sizer-right {
-    display: grid;
-    grid-template-columns: minmax(420px, 1fr) minmax(500px, 1fr);
-    grid-template-rows: 1fr;
-    gap: 14px;
-    max-height: calc(100vh - 105px);
-    overflow: hidden;   /* rail doesn't scroll — children manage internal scroll */
-  }
-  .sizer-page.qs-expanded .sizer-right > .card {
-    margin-bottom: 0;
-    min-width: 0;
-    min-height: 0;
-    align-self: start;
-    max-height: calc(100vh - 105px);
-    display: flex;
-    flex-direction: column;
-  }
-  .sizer-page.qs-expanded .sizer-right > .card > .card-body {
-    min-width: 0;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-    flex: 1 1 auto;
-  }
-  /* In the dedicated Candidates pane, the table wrapper can use the full
-     rail height instead of the shared-rail cap. */
-  .sizer-page.qs-expanded #pl-cand-table {
-    flex: 1 1 auto;
-    max-height: calc(100vh - 200px);
-  }
-  /* Quick Size gets its own column, so its body can also go taller. */
-  .sizer-page.qs-expanded #qs-body {
-    max-height: calc(100vh - 200px);
-  }
-}
-@media(max-width:900px){.sizer-page.active{grid-template-columns:1fr;padding:0 10px}.sizer-page .sizer-left{position:static}.sizer-page #pl-cand-table{max-height:50vh}.sizer-page #qs-body{max-height:70vh}}
+/* Quick Size card removed from Planner — the Candidates table now
+   carries all decision info (+ GT Score / -.5 ATR / -1 ATR columns).
+   Legacy DOM IDs are preserved as hidden stubs in the HTML. */
+@media(max-width:900px){.sizer-page.active{grid-template-columns:1fr;padding:0 10px}.sizer-page .sizer-left{position:static}.sizer-page #pl-cand-table{max-height:50vh}}
 .trades-page{display:none;padding:20px;min-height:calc(100vh - 105px);overflow-y:auto}
 .trades-page.active{display:block}
 .card{background:#111318;border:1px solid rgba(255,255,255,0.07);border-radius:10px;margin-bottom:14px;overflow:hidden}
@@ -724,6 +675,9 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
           <th style="padding:6px 10px;text-align:left">Ticker</th>
           <th style="padding:6px 4px;text-align:left">Sector</th>
           <th style="padding:6px 4px;text-align:right">ATR</th>
+          <th style="padding:6px 4px;text-align:right" title="GT Score — 0–100 scoring across trend, momentum, RS, structure, volume">GT</th>
+          <th style="padding:6px 4px;text-align:right" title="Stock stop at entry − 0.5 · ATR (based on current stock price)">-.5 ATR</th>
+          <th style="padding:6px 4px;text-align:right" title="Stock stop at entry − 1.0 · ATR (based on current stock price)">-1 ATR</th>
           <th style="padding:6px 4px;text-align:right">Delta</th>
           <th style="padding:6px 4px;text-align:right">RPC</th>
           <th style="padding:6px 4px;text-align:right">Risk $</th>
@@ -734,77 +688,53 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
           <th style="padding:6px 4px;text-align:center">Status</th>
           <th style="padding:6px 4px"></th>
         </tr></thead>
-        <tbody id="pl-cand-body"><tr><td colspan="10" style="padding:12px;text-align:center;color:#555c6e">Star stocks in Screener or add a ticker above</td></tr></tbody>
+        <tbody id="pl-cand-body"><tr><td colspan="15" style="padding:12px;text-align:center;color:#555c6e">Star stocks in Screener or add a ticker above</td></tr></tbody>
         <tfoot><tr style="border-top:1px solid #1e2d3d;font-weight:700">
-          <td colspan="5" style="padding:6px 10px;font-size:11px;color:#555c6e">TOTAL NEW RISK</td>
+          <td colspan="8" style="padding:6px 10px;font-size:11px;color:#555c6e">TOTAL NEW RISK</td>
           <td id="pl-cand-risk-total" style="padding:6px 4px;text-align:right;color:#f0c040">--</td>
           <td id="pl-cand-cts-total" style="padding:6px 4px;text-align:right;color:#555c6e">--</td>
           <td id="pl-cand-cap-total" style="padding:6px 4px;text-align:right;color:#555c6e">--</td>
-          <td colspan="2"></td>
+          <td colspan="4"></td>
         </tr></tfoot>
       </table>
     </div>
   </div>
 </div>
-<div class="card">
-  <div class="card-head" onclick="toggleQuickSize()" style="cursor:pointer;display:flex;justify-content:space-between">
-    <span class="card-title">Quick Size — Single Trade Calculator</span>
-    <span id="qs-toggle-icon" style="color:#555c6e;font-size:12px">▼ expand</span>
-  </div>
-  <div id="qs-body" style="display:none">
-    <div style="display:flex;gap:12px;flex-wrap:wrap">
-      <div class="sidebar" style="min-width:200px;flex:0 0 220px">
-        <div class="card-body" style="padding:12px">
-          <div class="field"><label style="font-size:10px">TICKER</label><input type="text" id="tkr" placeholder="NVDA" oninput="this.value=this.value.toUpperCase()" onkeydown="if(event.key==='Enter')fetchTicker(this.value)"></div>
-          <div style="display:flex;gap:6px">
-            <!-- N input hidden: Quick Size now reads per-trade risk from
-                 the Planner's "Default risk $" (#pl-default-risk). Kept
-                 in the DOM so legacy references still resolve. -->
-            <div class="field" style="flex:1;margin:0;display:none"><label style="font-size:10px">÷ N</label><input type="number" id="risk-n-trades" value="10" oninput="calc()"></div>
-            <div class="field" style="flex:1;margin:0"><label style="font-size:10px">DELTA</label><input type="number" id="delta" value="0.80" step="0.01" oninput="calc()"></div>
-          </div>
-          <div class="field"><label style="font-size:10px">ENTRY $</label><input type="number" id="entry" placeholder="0.00" step="0.01" oninput="calc()"></div>
-          <div class="field"><label style="font-size:10px">ATR $</label><input type="number" id="atr" placeholder="0.00" step="0.01" oninput="calc()"></div>
-          <div class="field"><label style="font-size:10px">OPTION COST $</label><input type="number" id="optcost" placeholder="0.00" step="0.01" oninput="calc()"></div>
-          <div class="field"><label style="font-size:10px">STRIKE</label><input type="number" id="strike" placeholder="0" oninput="calc()"></div>
-          <div class="field"><label style="font-size:10px">EXPIRY</label><input type="text" id="expiry" value="May-15-2026"></div>
-          <div id="tkr-st" style="font-size:11px;color:#555c6e;margin-top:4px"></div>
-          <button class="btn btn-gold" style="width:100%;margin-top:8px" onclick="fetchTicker(document.getElementById('tkr').value)">Fetch Live</button>
-        </div>
-      </div>
-      <div class="main-pane" style="flex:1;min-width:300px">
-        <div class="card-body" style="padding:12px">
-          <div style="font-size:12px;font-weight:700;color:#e8eaf0;margin-bottom:8px" id="sz-ticker">--</div>
-          <table id="atr-scenario-table" style="width:100%;border-collapse:collapse;font-family:monospace;font-size:13px;background:#0d1117;border-radius:8px"><tr style="color:#555c6e;font-size:10px"><th style="text-align:left;padding:5px 10px">Stop</th><th style="padding:5px 10px">Contracts</th><th style="padding:5px 10px">Max Loss</th><th style="padding:5px 10px">Risk/Ct</th></tr><tr><td colspan="4" style="padding:10px;text-align:center;font-size:12px;color:#555c6e">Enter ticker + ATR above</td></tr></table>
-          <div class="grid3" style="margin-top:10px">
-            <div class="metric"><div class="metric-label">Per-Trade Risk</div><div id="m-risk" class="metric-value gold">--</div><div id="m-risk-s" class="metric-sub">budget ÷ N</div></div>
-            <div class="metric"><div class="metric-label">Capital Deployed</div><div id="m-cap" class="metric-value b">--</div><div id="m-cap-s" class="metric-sub">total cost</div></div>
-            <div class="metric"><div class="metric-label">+50% Target</div><div id="m-g30" class="metric-value g">--</div><div class="metric-sub">on cost basis</div></div>
-          </div>
-          <div style="display:none"><span id="m-cts">--</span><span id="m-cts-s"></span><span id="m-hl">--</span><span id="m-fl">--</span></div>
-          <!-- Option quality readout — populated by renderOptionQuality()
-               after autoFillOptionFromChain resolves. Empty by default
-               so the area collapses until a chain contract is selected. -->
-          <div id="qs-quality" style="margin-top:10px"></div>
-          <!-- Add Trade: canonicalizes Quick Size inputs and pushes into
-               TRADES using the same saveTrade path the New Trade form uses
-               (findDuplicateOpenTrade, buildOCCFromParts, fbAutoSave, etc). -->
-          <div id="qs-add-trade-wrap" style="margin-top:10px">
-            <button id="qs-add-trade-btn" type="button" onclick="addQuickSizeTradeToManager()"
-              style="width:100%;padding:10px 14px;border-radius:8px;border:1px solid rgba(240,192,64,.35);background:#f0c040;color:#111;font-weight:700;cursor:pointer;font-family:inherit">
-              + Add Trade to Manager
-            </button>
-            <div id="qs-add-trade-msg" style="margin-top:6px;font-size:11px;min-height:15px;color:#8b91a0"></div>
-          </div>
-          <div id="lvl-body" style="margin-top:10px"></div>
-        </div>
-      </div>
-    </div>
-    <!-- Roll Calculator -->
-    <div id="roll-section" style="padding:0 12px 12px"></div>
-    <!-- Expected Move -->
-    <div id="em-section" style="padding:0 12px 12px"></div>
-  </div>
+<!-- Quick Size removed per Planner simplification.
+     The Candidates table now carries all the decision info (GT Score,
+     -.5 ATR, -1 ATR added as columns). "→ Trade" on a candidate row
+     creates the open trade directly via convertCandidateToTrade.
+     A few legacy DOM IDs (tkr, entry, atr, delta, optcost, strike,
+     expiry, risk-n-trades, sz-ticker, etc.) are preserved as hidden
+     stubs below so calc()/fetchTicker()/saveRiskSettings() don't
+     throw on missing elements. -->
+<div style="display:none" aria-hidden="true">
+  <input type="text"   id="tkr">
+  <input type="number" id="delta"   value="0.80">
+  <input type="number" id="entry">
+  <input type="number" id="atr">
+  <input type="number" id="optcost">
+  <input type="number" id="strike">
+  <input type="text"   id="expiry"  value="May-15-2026">
+  <input type="number" id="risk-n-trades" value="10">
+  <input type="text"   id="roll-entry">
+  <input type="text"   id="roll-atr">
+  <span id="sz-ticker"></span>
+  <span id="tkr-st"></span>
+  <span id="m-risk"></span><span id="m-risk-s"></span>
+  <span id="m-cap"></span><span id="m-cap-s"></span>
+  <span id="m-g30"></span>
+  <span id="m-cts"></span><span id="m-cts-s"></span>
+  <span id="m-hl"></span><span id="m-fl"></span>
+  <div id="atr-scenario-table"></div>
+  <div id="lvl-body"></div>
+  <div id="roll-section"></div>
+  <div id="em-section"></div>
+  <div id="qs-body"></div>
+  <span id="qs-toggle-icon"></span>
+  <div id="qs-quality"></div>
+  <div id="qs-add-trade-wrap"><button id="qs-add-trade-btn"></button><div id="qs-add-trade-msg"></div></div>
+  <div id="roll-hist"></div>
 </div>
 </div><!-- /.sizer-right -->
 <input type="hidden" id="acct" value="350000">
@@ -5460,10 +5390,22 @@ function renderCandidateTable() {
       if(b === 'flagged') return { txt:'E: \u26a0', col:'#f0c040', title:'Earnings flagged — no date available' }
       return { txt:'E: —', col:'#333a4a', title:'No earnings data' }
     })()
+    // Decision helpers per row — GT Score + stock stop levels.
+    //   entry = current stock price (LIVE_PRICES preferred, else c.price)
+    //   stop05 = entry - 0.5 · ATR   (matches Open Trades "-.5 ATR" ladder)
+    //   stop10 = entry - 1.0 · ATR
+    var stockPx = (typeof LIVE_PRICES !== 'undefined' && LIVE_PRICES[sym] && LIVE_PRICES[sym].price) || c.price || 0
+    var stop05 = (stockPx > 0 && atr > 0) ? (stockPx - 0.5 * atr) : 0
+    var stop10 = (stockPx > 0 && atr > 0) ? (stockPx - 1.0 * atr) : 0
+    var gtScore = (typeof GT_SCORES !== 'undefined' && GT_SCORES[sym] && typeof GT_SCORES[sym].score === 'number') ? Math.round(GT_SCORES[sym].score) : null
+    var gtCol = gtScore == null ? '#333a4a' : gtScore >= 80 ? '#00d68f' : gtScore >= 60 ? '#f0c040' : gtScore >= 40 ? '#ff8c42' : '#ff4560'
     return "<tr class='cand-row"+(sym===window._SELECTED_CAND_SYM?' active':'')+"' data-cand-idx='"+idx+"' style='border-bottom:1px solid #0d1117;cursor:pointer'>"+
       "<td style='padding:5px 10px;font-weight:600'>"+sym+" <span style='font-size:10px;font-weight:400;color:"+eData.col+";margin-left:4px' title='"+eData.title+"'>"+eData.txt+"\x3C/span>\x3C/td>"+
       "<td style='padding:5px 4px;color:#8b91a0;font-size:11px'>"+sector+"\x3C/td>"+
       "<td style='padding:5px 4px;text-align:right'>"+(atr>0?"$"+atr.toFixed(2):"—")+"\x3C/td>"+
+      "<td style='padding:5px 4px;text-align:right;font-weight:700;color:"+gtCol+"' title='GT Score'>"+(gtScore==null?"—":gtScore)+"\x3C/td>"+
+      "<td style='padding:5px 4px;text-align:right;color:#ff8c42;font-family:\"SF Mono\",monospace;font-size:11px' title='Entry − 0.5·ATR stop (" + (stockPx>0?"based on $"+stockPx.toFixed(2):"need price") + ")'>"+(stop05>0?"$"+stop05.toFixed(2):"—")+"\x3C/td>"+
+      "<td style='padding:5px 4px;text-align:right;color:#ff4560;font-family:\"SF Mono\",monospace;font-size:11px' title='Entry − 1.0·ATR stop'>"+(stop10>0?"$"+stop10.toFixed(2):"—")+"\x3C/td>"+
       "<td style='padding:5px 4px;text-align:right'><input type='number' value='"+delta.toFixed(2)+"' step='0.01' min='0.1' max='1' style='width:50px;font-size:11px;padding:2px 4px;text-align:right' onchange='updateCandidateDelta("+idx+",this.value)'>\x3C/td>"+
       "<td style='padding:5px 4px;text-align:right;color:#555c6e'>"+(rpc>0?"$"+Math.round(rpc):"—")+"\x3C/td>"+
       "<td style='padding:5px 4px;text-align:right'><input type='number' value='"+Math.round(riskAlloc)+"' step='100' style='width:65px;font-size:11px;padding:2px 4px;text-align:right' onchange='updateCandidateRisk("+idx+",this.value)'>\x3C/td>"+
@@ -5485,7 +5427,7 @@ function renderCandidateTable() {
           if(lpx<=0) miss.push('price')
           if(cts<1) miss.push('cts')
           tradeBtn = miss.length===0
-            ? "<button id='cand-trade-"+idx+"' onclick='event.stopPropagation();prepCandidateInQuickSize("+idx+")' style='background:#1e2d3d;color:#00d68f;border:1px solid #00d68f;border-radius:3px;cursor:pointer;font-size:10px;padding:2px 7px;margin-right:6px' title='Open this candidate in Quick Size — review + click Add Trade to create the open trade'>→ Trade\x3C/button>"
+            ? "<button id='cand-trade-"+idx+"' onclick='event.stopPropagation();convertCandidateToTrade("+idx+")' style='background:#1e2d3d;color:#00d68f;border:1px solid #00d68f;border-radius:3px;cursor:pointer;font-size:10px;padding:2px 7px;margin-right:6px' title='Create open trade in Trade Manager'>→ Trade\x3C/button>"
             : "<button disabled style='background:transparent;color:#333a4a;border:1px solid #1e2d3d;border-radius:3px;cursor:not-allowed;font-size:10px;padding:2px 7px;margin-right:6px' title='Waiting on: "+miss.join(', ')+"'>→ Trade\x3C/button>"
         }
         return "<td style='padding:5px 4px;text-align:center;white-space:nowrap'>"+tradeBtn+"<button onclick='removeCandidate("+idx+")' style='background:none;border:none;color:#555c6e;cursor:pointer;font-size:14px' title='Remove'>✕\x3C/button>\x3C/td>"
@@ -5786,16 +5728,14 @@ function plannerCalc() {
 }
 
 function toggleQuickSize() {
+  // Quick Size UI removed from Planner — this is now a no-op guarded
+  // by the null check below. Kept in place so any lingering external
+  // caller still resolves rather than throwing.
   var body=document.getElementById("qs-body");var icon=document.getElementById("qs-toggle-icon")
   if(!body)return
-  var open=body.style.display!=="none"    // state BEFORE the flip
+  var open=body.style.display!=="none"
   body.style.display=open?"none":"block";
   if(icon)icon.textContent=open?"▼ expand":"▲ collapse"
-  // Sync the layout class so the Planner rail switches to a 2-column
-  // split (Candidates | Quick Size) when expanded, and back to a single
-  // Candidates-dominant column when collapsed. CSS does the rest.
-  var sp=document.getElementById("sizer")
-  if(sp) sp.classList.toggle("qs-expanded", !open)   // !open == the NEW state (now expanded or not)
 }
 
 // ── CANDIDATES → QUICK SIZE BRIDGE ────────────────────────────────────────────
@@ -6629,6 +6569,16 @@ function getPlannerPerTradeRisk() {
 
 function calc() {
   saveRiskSettings()
+  // Risk-budget driven updates that other pages rely on must always run,
+  // even now that Quick Size is gone.
+  if(typeof renderPortfolioRisk === 'function')  renderPortfolioRisk()
+  if(typeof updateTmRiskSummary === 'function')  updateTmRiskSummary()
+  if(typeof updateRiskMeter     === 'function')  updateRiskMeter()
+  // Quick Size removed — if its primary write-target is a hidden stub
+  // (no visible UI to paint), bail before the rest of the function so
+  // we don't do useless DOM writes on every risk-budget keystroke.
+  const szTicker = document.getElementById('sz-ticker')
+  if(!szTicker || szTicker.offsetParent === null) return
   const rb      = +document.getElementById('risk-budget')?.value || +localStorage.getItem('gt_risk_budget') || 21000
   const nTrades = +document.getElementById('risk-n-trades')?.value || 10
   const delta   = +document.getElementById('delta').value || 0.80
@@ -6636,12 +6586,10 @@ function calc() {
   const atr     = +document.getElementById('atr').value
   const optcost = +document.getElementById('optcost').value
   const ticker  = document.getElementById('tkr').value || '';
-  // Per-trade risk comes from the Planner now — NOT from budget ÷ N.
-  // N input kept in the DOM (hidden) so any legacy refs don't break.
   const plannerPerTrade = getPlannerPerTradeRisk()
   const perTrade = plannerPerTrade > 0 ? plannerPerTrade : (rb / nTrades)
   const perTradeSource = plannerPerTrade > 0 ? 'planner' : 'budget÷N'
-  document.getElementById('sz-ticker').textContent = ticker
+  szTicker.textContent = ticker
   if(!entry || !atr) return
   const rpc   = atr * delta * 100
   const cts_h = Math.max(1, Math.floor(perTrade / (rpc * 0.5)))
@@ -6689,6 +6637,9 @@ function calc() {
 }
 
 function renderLevels(entry, atr) {
+  const body = document.getElementById('lvl-body')
+  // Quick Size removed — lvl-body is a hidden stub now. No-op.
+  if(!body) return
   const h  = atr * 0.5
   const r1 = entry + h,   r2 = entry + atr,   r3 = entry + atr * 2
   const sl = entry - h,   em = entry - atr * 2
@@ -6699,7 +6650,7 @@ function renderLevels(entry, atr) {
  + price.toFixed(2) + '\x3C/div><div class="level-dist">' + (dist>=0?'+':'') + dist + '%\x3C/div>\x3C/div>'
   }
 
-  document.getElementById('lvl-body').innerHTML =
+  body.innerHTML =
     lvlRow('bg-g','#00d68f','Entry price', entry, 0) +
     lvlRow('bg-b','#4da6ff','.5 ATR roll point', r1, pct(r1)) +
     lvlRow('bg-b','#4da6ff','1x ATR roll point', r2, pct(r2)) +
