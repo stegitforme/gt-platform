@@ -1083,28 +1083,27 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
     </div>
   </div>
 
-  <!-- §3 VOL GUARD LOGIC -->
+  <!-- §3 VOL ACCELERATION GUARD (simplified) -->
   <div class="card" style="margin-bottom:14px">
     <div class="card-head">
       <span class="card-title">③ Vol Acceleration Guard</span>
-      <span id="strat-guard-state" style="font-size:10px;color:#555c6e"></span>
+      <span id="strat-guard-badge" style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:4px;background:rgba(139,145,160,.08);color:#8b91a0;border:1px solid rgba(139,145,160,.22);letter-spacing:.05em">INACTIVE</span>
     </div>
     <div class="card-body" style="padding:14px 18px">
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px">
-        <div style="background:#0a0c0f;border:1px solid rgba(255,255,255,.06);border-radius:6px;padding:10px 12px">
-          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#555c6e;margin-bottom:4px">Trigger A</div>
-          <div style="font-size:12px;color:#e8eaf0">Vol rises <b style="color:#ff8c42">≥ 30%</b> vs 5 days ago</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+        <div style="background:#0a0c0f;border:1px solid rgba(255,255,255,.06);border-radius:6px;padding:12px 14px">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#555c6e;margin-bottom:6px">Trigger A</div>
+          <div style="font-size:13px;color:#e8eaf0;font-weight:600">Vol &gt; 45%</div>
         </div>
-        <div style="background:#0a0c0f;border:1px solid rgba(255,255,255,.06);border-radius:6px;padding:10px 12px">
-          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#555c6e;margin-bottom:4px">Trigger B</div>
-          <div style="font-size:12px;color:#e8eaf0">Current vol <b style="color:#ff8c42">&gt; 45%</b> annualized</div>
+        <div style="background:#0a0c0f;border:1px solid rgba(255,255,255,.06);border-radius:6px;padding:12px 14px">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#555c6e;margin-bottom:6px">Trigger B</div>
+          <div style="font-size:13px;color:#e8eaf0;font-weight:600">Rapid spike</div>
         </div>
-        <div style="background:#0a0c0f;border:1px solid rgba(240,192,64,.2);border-radius:6px;padding:10px 12px">
-          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#f0c040;margin-bottom:4px">Action</div>
-          <div style="font-size:12px;color:#e8eaf0">Cap TQQQ at <b style="color:#f0c040">50%</b> regardless of vol formula</div>
+        <div style="background:#0a0c0f;border:1px solid rgba(240,192,64,.22);border-radius:6px;padding:12px 14px">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#f0c040;margin-bottom:6px">Action</div>
+          <div style="font-size:12px;color:#e8eaf0;line-height:1.5">→ Reduce TQQQ<br>→ Move to SGOV</div>
         </div>
       </div>
-      <div style="font-size:11px;color:#8b91a0;line-height:1.5">The guard protects against rapid vol spikes that vol-targeting alone reacts to too slowly. Both triggers must fire — chronically high vol alone does not fire the guard.</div>
     </div>
   </div>
 
@@ -1138,6 +1137,7 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
       </div>
     </div>
     <div class="card-body" style="padding:14px">
+      <div id="bt-summary-header" style="display:none;margin-bottom:14px;padding:14px 16px;background:rgba(240,192,64,.05);border:1px solid rgba(240,192,64,.18);border-radius:8px"></div>
       <div id="bt-metrics" style="display:none;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:10px;margin-bottom:14px"></div>
       <div id="bt-chart-wrap" style="display:none;background:#0a0c0f;border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:12px;margin-bottom:14px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
@@ -1175,31 +1175,14 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
   <!-- §6 METHODOLOGY -->
   <div class="card" style="margin-bottom:14px">
     <div class="card-head"><span class="card-title">⑥ Methodology</span></div>
-    <div class="card-body" style="padding:14px 18px;font-size:12px;color:#c2c7d2;line-height:1.65">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-        <div>
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#4da6ff;margin-bottom:6px">Signal inputs</div>
-          <ul style="margin:0;padding-left:16px">
-            <li>QQQ daily closes (proxy for TQQQ exposure)</li>
-            <li>20-day realized volatility, annualized (√252)</li>
-            <li>200-day moving average gate</li>
-            <li>Vol acceleration: 5-day vol rate-of-change</li>
-          </ul>
-        </div>
-        <div>
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#4da6ff;margin-bottom:6px">Allocation rules</div>
-          <ul style="margin:0;padding-left:16px">
-            <li>Below 200MA → <b style="color:#ff4560">0% TQQQ / 100% SGOV</b></li>
-            <li>Above 200MA, vol ≤ 35% → <b style="color:#00d68f">100% TQQQ</b></li>
-            <li>Above 200MA, vol &gt; 35% → scaled to <b>35% ÷ realized vol</b>, rounded to nearest 10%</li>
-            <li>Vol Accel Guard fires → cap TQQQ at <b style="color:#f0c040">50%</b></li>
-          </ul>
-        </div>
-      </div>
-      <div style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,.06)">
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#4da6ff;margin-bottom:6px">Execution</div>
-        <div>Signal evaluated <b>once per week</b> (Friday close). Rebalance trade executed the following Monday open. No intraday signals — intraday estimates are not used to drive allocation. All allocation changes flow from the single weekly signal published at <a href="https://stegitforme.github.io/tqqq-vol-target/" target="_blank" style="color:#4da6ff">stegitforme.github.io/tqqq-vol-target</a>.</div>
-      </div>
+    <div class="card-body" style="padding:14px 20px">
+      <ul style="margin:0;padding-left:18px;font-size:13px;color:#c2c7d2;line-height:1.85">
+        <li>Weekly rebalance (Friday close)</li>
+        <li>Target volatility: <b style="color:#f0c040">35%</b></li>
+        <li>Uses 20-day realized vol</li>
+        <li>Optional 200MA filter</li>
+        <li>Cash allocation = <b style="color:#4da6ff">SGOV</b></li>
+      </ul>
     </div>
   </div>
 
@@ -1909,6 +1892,11 @@ async function loadMarketData() {
   try { fetchSectorData() } catch(e) { console.warn('[MARKET-INIT] fetchSectorData', e) }
 }
 
+// DEPRECATED — do NOT call for allocation. The single source of truth is
+// window.signal.current, populated by fetchOfficialSignal() from the weekly
+// history.csv. This function is retained only for its underlying vol-series
+// computations (which are not currently wired into any UI — the Strategy tab's
+// §2 vol chart does its own independent QQQ fetch via renderStrategyVolChart).
 async function fetchTQQQSignal() {
   const btn = document.querySelector('[onclick="fetchTQQQSignal()"]')
   if(btn) { btn.textContent = 'Loading...'; btn.disabled = true }
@@ -2154,10 +2142,28 @@ function saveRebAccounts() {
   fbAutoSave(3000)  // sync after 3s of inactivity
 }
 
-// Canonical weekly-signal loader. Single source of truth for TQQQ allocation
-// across the entire app (Home card, Strategy tab, rebalancer). Parses the
-// history.csv published by the weekly_report.py pipeline, stashes the latest
-// row on window._officialSignal, then renders wherever DOM targets exist.
+// ─── SIGNAL FOUNDATION ─────────────────────────────────────────────────────
+// Single normalized signal object. Every downstream consumer (Home card,
+// Strategy tab §1/§4/§7, rebalancer, rebalance CTA) reads from here — never
+// from the DOM, never from a recomputed intraday estimate.
+//
+//   window.signal.current  → latest history.csv row { RunDate, AllocTQQQ, ... }
+//   window.signal.prev     → prior row (for "change vs last week")
+//   window.signal.history  → full array of rows, oldest → newest
+//   window.signal.meta     → strategy parameters used across the UI
+//
+// window._officialSignal is kept as a read-only compat alias; do not write to
+// it directly — mutate window.signal and it will shadow-populate.
+window.signal = window.signal || {
+  current: null,
+  prev:    null,
+  history: [],
+  meta: { targetVol: 35, guardVol: 45, rebalanceDay: 'Friday' }
+}
+
+// Canonical weekly-signal loader. Parses the history.csv published by the
+// weekly_report.py pipeline, populates window.signal, renders into every
+// DOM target that exists on the current page.
 async function fetchOfficialSignal() {
   try {
     const r = await fetch('https://raw.githubusercontent.com/stegitforme/tqqq-vol-target/main/logs/history.csv?v='+Date.now())
@@ -2173,6 +2179,11 @@ async function fetchOfficialSignal() {
     const rows = lines.slice(1).map(parseRow)
     const row  = rows[rows.length-1]
     const prev = rows.length >= 2 ? rows[rows.length-2] : null
+
+    window.signal.current = row
+    window.signal.prev    = prev
+    window.signal.history = rows
+    // Back-compat: older call sites read window._officialSignal
     window._officialSignal = { row: row, prev: prev, rows: rows }
 
     renderOfficialSignalCards(row, prev, rows)
@@ -2192,88 +2203,149 @@ async function fetchOfficialSignal() {
   }
 }
 
+// Regime buckets driven by AllocTQQQ fraction (per spec: 70 / 40 thresholds).
 function regimeFor(allocFrac) {
-  if(allocFrac >= 0.80) return { label: 'Aggressive', color: '#00d68f', bg: 'rgba(0,214,143,.1)', bd: 'rgba(0,214,143,.35)' }
-  if(allocFrac >= 0.40) return { label: 'Normal',     color: '#f0c040', bg: 'rgba(240,192,64,.1)', bd: 'rgba(240,192,64,.35)' }
-  return                       { label: 'Defensive',  color: '#ff8c42', bg: 'rgba(255,140,66,.1)', bd: 'rgba(255,140,66,.35)' }
+  if(allocFrac >= 0.70) return { label: 'AGGRESSIVE', color: '#00d68f', bg: 'rgba(0,214,143,.1)', bd: 'rgba(0,214,143,.35)' }
+  if(allocFrac >= 0.40) return { label: 'NORMAL',     color: '#f0c040', bg: 'rgba(240,192,64,.1)', bd: 'rgba(240,192,64,.35)' }
+  return                       { label: 'DEFENSIVE',  color: '#ff4560', bg: 'rgba(255,69,96,.1)',  bd: 'rgba(255,69,96,.35)' }
 }
 
-// Compute the next Friday close (16:00 ET) from "now" in a readable form.
+// "Next update" label: days + readable time.
 function nextSignalUpdateLabel() {
   try {
     const nowET = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }))
     const day = nowET.getDay() // 0 Sun .. 6 Sat
     let daysUntilFri = (5 - day + 7) % 7
-    // If it's Friday after 16:00 ET, point to next week
     if(day === 5 && nowET.getHours() >= 16) daysUntilFri = 7
-    if(daysUntilFri === 0 && day !== 5) daysUntilFri = 7
-    if(daysUntilFri === 0) daysUntilFri = 0
     const target = new Date(nowET.getTime() + daysUntilFri*86400000)
     target.setHours(16,0,0,0)
     const dStr = target.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' })
     if(daysUntilFri === 0) return 'Today 4:00pm ET'
     if(daysUntilFri === 1) return 'Tomorrow 4:00pm ET'
-    return dStr + ' 4:00pm ET'
+    return 'in '+daysUntilFri+'d · '+dStr
   } catch(e) { return 'Next Friday close' }
 }
 
-function renderOfficialSignalCards(row, prev, rows) {
-  const date    = row['RunDate'] || '--'
+// ─── PORTFOLIO DELTA HELPERS ───────────────────────────────────────────────
+// Current TQQQ/SGOV allocation across all rebalancer accounts. Returns null
+// if the rebalancer has no funded accounts (delta cannot be computed).
+function getCurrentPortfolioAlloc() {
+  try {
+    if(!Array.isArray(REB_ACCOUNTS)) return null
+    let tq=0, sg=0
+    REB_ACCOUNTS.forEach(function(a){ tq += (+a.tqqq||0); sg += (+a.sgov||0) })
+    const total = tq + sg
+    if(total <= 0) return null
+    return { tqqq: tq, sgov: sg, total: total, tqqqPct: tq/total*100, sgovPct: sg/total*100 }
+  } catch(e) { return null }
+}
+
+// Click handler for the Home card's Rebalance CTA. Reuses the existing
+// multi-account balancer — no duplicate allocation math. Ensures the
+// target is set from window.signal.current, scrolls the user there.
+function goToRebalancer() {
+  const sig = window.signal && window.signal.current
+  if(sig) {
+    const target = Math.round((+sig['AllocTQQQ']||0)*100)
+    const el = document.getElementById('reb-tqqq-pct')
+    if(el) { el.value = target; try { rebCalc() } catch(e) {} }
+  }
+  // Switch to Portfolio tab (rebalancer card lives there)
+  const navBtns = document.querySelectorAll('.nav button')
+  const portBtn = navBtns[navBtns.length-1]  // Portfolio is the last tab
+  try { show('portfolio', portBtn) } catch(e) {}
+  // Scroll the rebalancer card into view + flash border
+  setTimeout(function(){
+    const card = document.getElementById('rebalancer-card')
+    if(card) {
+      card.scrollIntoView({ behavior:'smooth', block:'start' })
+      const prevBd = card.style.borderColor
+      card.style.transition = 'border-color .4s ease'
+      card.style.borderColor = '#f0c040'
+      setTimeout(function(){ card.style.borderColor = prevBd }, 1400)
+    }
+  }, 80)
+}
+
+// Shared renderer — used by Home card AND Strategy §1. `variant` = 'home'
+// appends a Portfolio Delta block + Rebalance CTA; 'strategy' omits them.
+function buildSignalCardHtml(row, prev, variant) {
   const allocF  = +row['AllocTQQQ'] || 0
   const tqqqPct = Math.round(allocF*100)
   const sgovPct = 100 - tqqqPct
-  const vol     = row['RealizedVol20d'] ? (+row['RealizedVol20d']*100).toFixed(1)+'%' : '--'
+  const volNum  = +row['RealizedVol20d']
+  const vol     = isFinite(volNum) ? (volNum*100).toFixed(1)+'%' : '--'
+  const target  = (window.signal && window.signal.meta && window.signal.meta.targetVol) || 35
   const guard   = row['VolAccelGuard'] === 'True'
   const aboveMa = row['MA200_Gate'] === 'True'
   const regime  = regimeFor(allocF)
   const nextUpd = nextSignalUpdateLabel()
 
   // Change vs last week
-  let deltaHtml = ''
+  let deltaHtml = '<span style="color:#555c6e">—</span>'
   if(prev) {
     const prevPct = Math.round((+prev['AllocTQQQ']||0)*100)
     const delta = tqqqPct - prevPct
     if(delta === 0) {
-      deltaHtml = '<span style="color:#555c6e">unchanged vs ' + (prev['RunDate']||'last week') + '</span>'
+      deltaHtml = '<span style="color:#555c6e">unchanged</span>'
     } else {
-      const arrow = delta > 0 ? '▲' : '▼'
+      const arrow = delta > 0 ? '↑' : '↓'
       const col   = delta > 0 ? '#00d68f' : '#ff4560'
-      deltaHtml = '<span style="color:'+col+';font-weight:600">'+arrow+' '+Math.abs(delta)+'pp</span>' +
-                  '<span style="color:#555c6e"> vs '+(prev['RunDate']||'last week')+' ('+prevPct+'%)</span>'
+      deltaHtml = '<span style="color:'+col+';font-weight:700">'+arrow+' '+Math.abs(delta)+'pp</span>' +
+                  '<span style="color:#555c6e;font-size:10px"> vs '+prevPct+'%</span>'
     }
   }
 
-  const tqqqCol = allocF >= 0.80 ? '#00d68f' : allocF >= 0.50 ? '#f0c040' : allocF > 0 ? '#ff8c42' : '#ff4560'
+  const tqqqCol = allocF >= 0.70 ? '#00d68f' : allocF >= 0.40 ? '#f0c040' : allocF > 0 ? '#ff8c42' : '#ff4560'
   const sgovCol = sgovPct >= 50 ? '#4da6ff' : '#8b91a0'
-  const guardBg = guard ? 'rgba(240,192,64,.15)' : 'rgba(139,145,160,.06)'
-  const guardFg = guard ? '#f0c040' : '#8b91a0'
-  const guardBd = guard ? 'rgba(240,192,64,.45)' : 'rgba(139,145,160,.2)'
-  const guardTx = guard ? '⚡ FIRED — TQQQ capped at 50%' : 'standby'
-  const maBg    = aboveMa ? 'rgba(0,214,143,.1)' : 'rgba(255,69,96,.1)'
-  const maFg    = aboveMa ? '#00d68f' : '#ff4560'
-  const maBd    = aboveMa ? 'rgba(0,214,143,.3)' : 'rgba(255,69,96,.3)'
-  const maTx    = aboveMa ? '✓ QQQ above 200MA' : '✗ QQQ below 200MA'
 
-  const html =
+  // Simplified ON/OFF ACTIVE/INACTIVE badge pills
+  const maOn    = aboveMa
+  const maBg    = maOn ? 'rgba(0,214,143,.1)' : 'rgba(255,69,96,.1)'
+  const maFg    = maOn ? '#00d68f' : '#ff4560'
+  const maBd    = maOn ? 'rgba(0,214,143,.3)' : 'rgba(255,69,96,.3)'
+  const maTx    = '200MA: '+(maOn ? 'ON' : 'OFF')
+
+  // Vol Guard is ACTIVE if current vol already ≥ guard floor OR guard fired
+  const guardNum = +row['RealizedVol20d'] || 0
+  const guardFloor = (window.signal && window.signal.meta && window.signal.meta.guardVol) || 45
+  const guardActive = guard || guardNum*100 >= guardFloor
+  const guardBg = guardActive ? 'rgba(240,192,64,.15)' : 'rgba(139,145,160,.06)'
+  const guardFg = guardActive ? '#f0c040' : '#8b91a0'
+  const guardBd = guardActive ? 'rgba(240,192,64,.45)' : 'rgba(139,145,160,.2)'
+  const guardTx = 'Vol Guard: '+(guardActive ? 'ACTIVE' : 'INACTIVE')
+
+  // Allocation tiles
+  let html =
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">' +
       '<div style="padding:16px 18px;background:rgba(0,214,143,.06);border:1px solid rgba(0,214,143,.22);border-radius:8px;text-align:center">' +
-        '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#555c6e;margin-bottom:6px">TQQQ Target</div>' +
-        '<div style="font-size:40px;font-weight:700;color:'+tqqqCol+';line-height:1;font-family:\'SF Mono\',monospace">'+tqqqPct+'%</div>' +
+        '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#555c6e;margin-bottom:6px">TQQQ</div>' +
+        '<div style="font-size:42px;font-weight:700;color:'+tqqqCol+';line-height:1;font-family:\'SF Mono\',monospace">'+tqqqPct+'%</div>' +
       '</div>' +
       '<div style="padding:16px 18px;background:rgba(77,166,255,.06);border:1px solid rgba(77,166,255,.22);border-radius:8px;text-align:center">' +
-        '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#555c6e;margin-bottom:6px">SGOV Target</div>' +
-        '<div style="font-size:40px;font-weight:700;color:'+sgovCol+';line-height:1;font-family:\'SF Mono\',monospace">'+sgovPct+'%</div>' +
+        '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#555c6e;margin-bottom:6px">SGOV</div>' +
+        '<div style="font-size:42px;font-weight:700;color:'+sgovCol+';line-height:1;font-family:\'SF Mono\',monospace">'+sgovPct+'%</div>' +
       '</div>' +
-    '</div>' +
-    '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px">' +
-      '<span style="font-size:11px;font-weight:700;padding:4px 10px;border-radius:4px;background:'+regime.bg+';color:'+regime.color+';border:1px solid '+regime.bd+';letter-spacing:.05em;text-transform:uppercase">'+regime.label+'</span>' +
-      '<span style="font-size:11px;padding:4px 10px;border-radius:4px;background:'+maBg+';color:'+maFg+';border:1px solid '+maBd+'">'+maTx+'</span>' +
-      '<span style="font-size:11px;padding:4px 10px;border-radius:4px;background:'+guardBg+';color:'+guardFg+';border:1px solid '+guardBd+'">'+guardTx+'</span>' +
-    '</div>' +
-    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;font-size:11px">' +
+    '</div>'
+
+  // Regime + status badge row
+  html +=
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px">' +
+      '<span style="font-size:11px;font-weight:700;padding:5px 12px;border-radius:4px;background:'+regime.bg+';color:'+regime.color+';border:1px solid '+regime.bd+';letter-spacing:.08em">'+regime.label+'</span>' +
+      '<span style="font-size:11px;font-weight:600;padding:5px 10px;border-radius:4px;background:'+maBg+';color:'+maFg+';border:1px solid '+maBd+'">'+maTx+'</span>' +
+      '<span style="font-size:11px;font-weight:600;padding:5px 10px;border-radius:4px;background:'+guardBg+';color:'+guardFg+';border:1px solid '+guardBd+'">'+guardTx+'</span>' +
+    '</div>'
+
+  // Core metrics — 4 columns: Vol / Target / Next / Change
+  html +=
+    '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;font-size:11px;margin-bottom:' + (variant === 'home' ? '14px' : '0') + '">' +
       '<div style="padding:8px 10px;background:#0a0c0f;border:1px solid rgba(255,255,255,.05);border-radius:6px">' +
-        '<div style="color:#555c6e;font-size:10px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px">Realized Vol 20d</div>' +
+        '<div style="color:#555c6e;font-size:10px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px">20d Vol</div>' +
         '<div style="font-family:\'SF Mono\',monospace;color:#e8eaf0;font-size:13px;font-weight:600">'+vol+'</div>' +
+      '</div>' +
+      '<div style="padding:8px 10px;background:#0a0c0f;border:1px solid rgba(255,255,255,.05);border-radius:6px">' +
+        '<div style="color:#555c6e;font-size:10px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px">Target Vol</div>' +
+        '<div style="font-family:\'SF Mono\',monospace;color:#f0c040;font-size:13px;font-weight:600">'+target+'%</div>' +
       '</div>' +
       '<div style="padding:8px 10px;background:#0a0c0f;border:1px solid rgba(255,255,255,.05);border-radius:6px">' +
         '<div style="color:#555c6e;font-size:10px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px">Next Update</div>' +
@@ -2281,25 +2353,75 @@ function renderOfficialSignalCards(row, prev, rows) {
       '</div>' +
       '<div style="padding:8px 10px;background:#0a0c0f;border:1px solid rgba(255,255,255,.05);border-radius:6px">' +
         '<div style="color:#555c6e;font-size:10px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px">Change</div>' +
-        '<div style="font-size:12px">'+(deltaHtml || '<span style="color:#555c6e">—</span>')+'</div>' +
+        '<div style="font-size:12px">'+deltaHtml+'</div>' +
       '</div>' +
     '</div>'
 
-  const dateLabel = 'From: '+date
+  // Home-only: portfolio delta + Rebalance CTA
+  if(variant === 'home') {
+    const port = getCurrentPortfolioAlloc()
+    if(port) {
+      const curPct = Math.round(port.tqqqPct)
+      const diff   = tqqqPct - curPct
+      const diffCol = Math.abs(diff) < 2 ? '#00d68f' : Math.abs(diff) < 8 ? '#f0c040' : '#ff8c42'
+      const action = Math.abs(diff) < 1 ?
+        '<span style="color:#00d68f;font-weight:700">✓ on target</span>' :
+        '<span style="color:'+diffCol+';font-weight:700">'+(diff>0?'+':'')+diff+'% TQQQ</span>' +
+        '<span style="color:#555c6e;font-size:10px"> · '+(diff>0?'BUY':'SELL')+' $'+Math.abs(Math.round(port.total*diff/100)).toLocaleString()+'</span>'
+      html +=
+        '<div style="padding:10px 14px;background:rgba(240,192,64,.05);border:1px solid rgba(240,192,64,.18);border-radius:8px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">' +
+          '<div style="flex:1;min-width:160px">' +
+            '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#f0c040;margin-bottom:4px">Portfolio Delta</div>' +
+            '<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:#c2c7d2">' +
+              '<span>Current: <b style="color:#e8eaf0;font-family:\'SF Mono\',monospace">'+curPct+'%</b> TQQQ</span>' +
+              '<span>Target: <b style="color:'+tqqqCol+';font-family:\'SF Mono\',monospace">'+tqqqPct+'%</b></span>' +
+              '<span>Action: '+action+'</span>' +
+            '</div>' +
+          '</div>' +
+          '<button onclick="goToRebalancer()" class="btn btn-gold" style="padding:7px 16px;font-size:12px;font-weight:600">Rebalance →</button>' +
+        '</div>'
+    } else {
+      html +=
+        '<div style="padding:10px 14px;background:#0a0c0f;border:1px dashed rgba(255,255,255,.08);border-radius:8px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">' +
+          '<span style="font-size:11px;color:#8b91a0;flex:1">No rebalancer accounts funded yet. Set account balances to see the portfolio delta.</span>' +
+          '<button onclick="goToRebalancer()" class="btn btn-ghost" style="padding:6px 14px;font-size:11px;color:#4da6ff;border-color:rgba(77,166,255,.3)">Open Rebalancer →</button>' +
+        '</div>'
+    }
+  }
+
+  return html
+}
+
+function renderOfficialSignalCards(row, prev, rows) {
+  const dateLabel = 'From: '+(row['RunDate'] || '--')
+
+  const homeHtml = buildSignalCardHtml(row, prev, 'home')
   const home = document.getElementById('official-signal-body')
-  if(home) home.innerHTML = html
+  if(home) home.innerHTML = homeHtml
   const homeDate = document.getElementById('official-signal-date')
   if(homeDate) homeDate.textContent = dateLabel
 
-  // Strategy tab §1 mirrors the same card
+  // Strategy tab §1 uses the "strategy" variant (no portfolio delta/CTA)
+  const stratHtml = buildSignalCardHtml(row, prev, 'strategy')
   const strat = document.getElementById('strat-sig-body')
-  if(strat) strat.innerHTML = html
+  if(strat) strat.innerHTML = stratHtml
   const stratDate = document.getElementById('strat-sig-date')
   if(stratDate) stratDate.textContent = dateLabel
 
+  const vol     = row['RealizedVol20d'] ? (+row['RealizedVol20d']*100).toFixed(1)+'%' : '--'
+  const guard   = row['VolAccelGuard'] === 'True'
+  const guardNum = +row['RealizedVol20d'] || 0
+  const guardFloor = (window.signal && window.signal.meta && window.signal.meta.guardVol) || 45
+  const guardActive = guard || guardNum*100 >= guardFloor
+
   // Strategy tab meta spans
-  const guardState = document.getElementById('strat-guard-state')
-  if(guardState) guardState.textContent = guard ? 'FIRED — capped at 50%' : 'standby'
+  const guardBadge = document.getElementById('strat-guard-badge')
+  if(guardBadge) {
+    guardBadge.textContent = guardActive ? 'ACTIVE' : 'INACTIVE'
+    guardBadge.style.background = guardActive ? 'rgba(240,192,64,.15)' : 'rgba(139,145,160,.08)'
+    guardBadge.style.color      = guardActive ? '#f0c040' : '#8b91a0'
+    guardBadge.style.borderColor= guardActive ? 'rgba(240,192,64,.45)' : 'rgba(139,145,160,.22)'
+  }
   const volMeta = document.getElementById('strat-vol-meta')
   if(volMeta) volMeta.textContent = 'current: '+vol
   const allocMeta = document.getElementById('strat-alloc-meta')
@@ -2315,20 +2437,13 @@ function renderOfficialSignalCards(row, prev, rows) {
 }
 
 function rebSyncSignal() {
-  // Single source of truth: the parsed official signal row. Fallback to
-  // window.tqqqPct (set by the now-rarely-used intraday calculator) only if
-  // the official signal has not loaded yet.
-  const off = window._officialSignal && window._officialSignal.row
-  if(off) {
-    const alloc = Math.round((+off['AllocTQQQ']||0)*100)
-    const el = document.getElementById('reb-tqqq-pct')
-    if(el && +el.value !== alloc) { el.value = alloc; rebCalc() }
-    return
-  }
-  if(typeof tqqqPct !== 'undefined' && tqqqPct > 0) {
-    const el = document.getElementById('reb-tqqq-pct')
-    if(el && +el.value !== tqqqPct) { el.value = tqqqPct; rebCalc() }
-  }
+  // Single source of truth: window.signal.current. No DOM-based reads, no
+  // intraday estimates, no alternate allocation math.
+  const cur = window.signal && window.signal.current
+  if(!cur) return
+  const alloc = Math.round((+cur['AllocTQQQ']||0)*100)
+  const el = document.getElementById('reb-tqqq-pct')
+  if(el && +el.value !== alloc) { el.value = alloc; rebCalc() }
 }
 
 // ── Strategy tab charts + log ─────────────────────────────────────────────
@@ -2343,10 +2458,10 @@ function initStrategyTab() {
   // the vol chart; it does not drive allocation.
   try { renderStrategyVolChart() } catch(e) { console.warn('[STRATEGY] vol chart', e) }
   // If the official signal is already cached, draw §4 + §7 now too.
-  const sig = window._officialSignal
-  if(sig && sig.rows) {
-    try { renderStrategyAllocChart(sig.rows) } catch(e) {}
-    try { renderStrategySignalLog(sig.rows) } catch(e) {}
+  const rows = window.signal && window.signal.history
+  if(rows && rows.length) {
+    try { renderStrategyAllocChart(rows) } catch(e) {}
+    try { renderStrategySignalLog(rows) } catch(e) {}
   }
 }
 
@@ -2418,34 +2533,86 @@ function renderStrategyAllocChart(rows) {
   const W = canvas.clientWidth, H = canvas.clientHeight
   canvas.width = W*dpr; canvas.height = H*dpr
   ctx.scale(dpr,dpr)
-  ctx.clearRect(0,0,W,H)
   const pad = {l: 32, r: 8, t: 10, b: 22}
   const plotW = W-pad.l-pad.r, plotH = H-pad.t-pad.b
   const barW = plotW / allocs.length
-  // y axis grid
-  ctx.strokeStyle = 'rgba(255,255,255,.05)'; ctx.font = '10px "SF Mono", monospace'; ctx.fillStyle = '#555c6e'
-  for(let g = 0; g <= 4; g++) {
-    const gv = g*25
-    const gy = pad.t + plotH*(1 - gv/100)
-    ctx.beginPath(); ctx.moveTo(pad.l, gy); ctx.lineTo(W-pad.r, gy); ctx.stroke()
-    ctx.fillText(gv+'%', 4, gy+3)
+
+  const draw = function(hoverIdx) {
+    ctx.clearRect(0,0,W,H)
+    // y axis grid
+    ctx.strokeStyle = 'rgba(255,255,255,.05)'; ctx.font = '10px "SF Mono", monospace'; ctx.fillStyle = '#555c6e'
+    for(let g = 0; g <= 4; g++) {
+      const gv = g*25
+      const gy = pad.t + plotH*(1 - gv/100)
+      ctx.beginPath(); ctx.moveTo(pad.l, gy); ctx.lineTo(W-pad.r, gy); ctx.stroke()
+      ctx.fillText(gv+'%', 4, gy+3)
+    }
+    // bars
+    allocs.forEach((a, i) => {
+      const col = a >= 70 ? '#00d68f' : a >= 40 ? '#f0c040' : a > 0 ? '#ff8c42' : '#ff4560'
+      const bh = plotH * (a/100)
+      const bx = pad.l + i*barW + 0.5
+      const by = pad.t + plotH - bh
+      ctx.fillStyle = col
+      ctx.globalAlpha = (hoverIdx != null && hoverIdx !== i) ? 0.35 : 1
+      ctx.fillRect(bx, by, Math.max(1, barW-1), bh)
+    })
+    ctx.globalAlpha = 1
+    // first/last labels
+    ctx.fillStyle = '#555c6e'
+    if(recent[0]) ctx.fillText(recent[0]['RunDate']||'', pad.l, H-6)
+    if(recent[recent.length-1]) {
+      const lbl = recent[recent.length-1]['RunDate']||''
+      const m = ctx.measureText(lbl)
+      ctx.fillText(lbl, W-pad.r-m.width, H-6)
+    }
   }
-  // bars
-  allocs.forEach((a, i) => {
-    const col = a >= 80 ? '#00d68f' : a >= 40 ? '#f0c040' : a > 0 ? '#ff8c42' : '#ff4560'
-    const bh = plotH * (a/100)
-    const bx = pad.l + i*barW + 0.5
-    const by = pad.t + plotH - bh
-    ctx.fillStyle = col
-    ctx.fillRect(bx, by, Math.max(1, barW-1), bh)
-  })
-  // first/last labels
-  ctx.fillStyle = '#555c6e'
-  if(recent[0]) ctx.fillText(recent[0]['RunDate']||'', pad.l, H-6)
-  if(recent[recent.length-1]) {
-    const lbl = recent[recent.length-1]['RunDate']||''
-    const m = ctx.measureText(lbl)
-    ctx.fillText(lbl, W-pad.r-m.width, H-6)
+  draw(null)
+
+  // Hover tooltip: reuse/create absolutely-positioned div inside the canvas's
+  // parent card-body. Computes week date / vol / allocation / regime.
+  const parent = canvas.parentElement
+  if(parent && !parent._allocTip) {
+    parent.style.position = parent.style.position || 'relative'
+    const tip = document.createElement('div')
+    tip.style.cssText = 'position:absolute;pointer-events:none;display:none;background:#111318;border:1px solid rgba(255,255,255,.12);border-radius:6px;padding:8px 10px;font-size:11px;color:#e8eaf0;font-family:\'SF Mono\',monospace;box-shadow:0 4px 14px rgba(0,0,0,.45);z-index:10;min-width:160px'
+    parent.appendChild(tip)
+    parent._allocTip = tip
+  }
+  const tip = parent && parent._allocTip
+  canvas.onmousemove = function(ev) {
+    const rect = canvas.getBoundingClientRect()
+    const x = ev.clientX - rect.left
+    const y = ev.clientY - rect.top
+    if(x < pad.l || x > W-pad.r || y < pad.t || y > pad.t+plotH) {
+      if(tip) tip.style.display = 'none'
+      draw(null)
+      return
+    }
+    const idx = Math.min(allocs.length-1, Math.max(0, Math.floor((x-pad.l)/barW)))
+    const r = recent[idx]
+    if(!r) return
+    const a = allocs[idx]
+    const regime = regimeFor(a/100)
+    const volPct = r['RealizedVol20d'] ? (+r['RealizedVol20d']*100).toFixed(1)+'%' : '--'
+    if(tip) {
+      tip.innerHTML =
+        '<div style="color:#8b91a0;font-size:10px;margin-bottom:4px">'+(r['RunDate']||'--')+'</div>' +
+        '<div style="display:flex;justify-content:space-between;gap:14px"><span style="color:#555c6e">Vol</span><span>'+volPct+'</span></div>' +
+        '<div style="display:flex;justify-content:space-between;gap:14px"><span style="color:#555c6e">Alloc</span><span style="color:'+regime.color+';font-weight:700">'+a+'%</span></div>' +
+        '<div style="display:flex;justify-content:space-between;gap:14px"><span style="color:#555c6e">Regime</span><span style="color:'+regime.color+'">'+regime.label+'</span></div>'
+      const tipW = 180
+      let tx = ev.clientX - rect.left + 12
+      if(tx + tipW > W) tx = ev.clientX - rect.left - tipW - 12
+      tip.style.left = tx+'px'
+      tip.style.top  = Math.max(4, y-10)+'px'
+      tip.style.display = 'block'
+    }
+    draw(idx)
+  }
+  canvas.onmouseleave = function() {
+    if(tip) tip.style.display = 'none'
+    draw(null)
   }
 }
 
@@ -5348,6 +5515,49 @@ function btSimulate(tqqqBars, qqqBars, spyBars, sgovBars, startDate) {
 function btRender(r) {
   const pct=(n,d=1)=>n==null?'--':(n>=0?'+':'')+( n*100).toFixed(d)+'%';
   const col=(n)=>n>0?'#00d68f':n<0?'#ff4560':'#e8eaf0'
+
+  // Expose the latest result so the Strategy summary header can re-render
+  // without re-running the backtest.
+  window.btLastResult = r
+
+  // ── §5 Summary header: Strategy vs Alternatives ──────────────────────
+  const sh = document.getElementById('bt-summary-header')
+  if(sh) {
+    const cagrRow = function(label, m, highlight) {
+      const c = col(m.cagr)
+      const fw = highlight ? '700' : '500'
+      const lc = highlight ? '#f0c040' : '#8b91a0'
+      return '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px">'
+        + '<span style="color:'+lc+';font-weight:'+fw+'">'+label+'</span>'
+        + '<span style="font-family:\'SF Mono\',monospace;color:'+c+';font-weight:'+fw+'">'+pct(m.cagr)+'</span>'
+        + '</div>'
+    }
+    const ddRow = function(label, m, highlight) {
+      const c = m.maxDD < -0.3 ? '#ff4560' : '#ff8c42'
+      const fw = highlight ? '700' : '500'
+      const lc = highlight ? '#f0c040' : '#8b91a0'
+      return '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px">'
+        + '<span style="color:'+lc+';font-weight:'+fw+'">'+label+'</span>'
+        + '<span style="font-family:\'SF Mono\',monospace;color:'+c+';font-weight:'+fw+'">'+pct(m.maxDD)+'</span>'
+        + '</div>'
+    }
+    sh.innerHTML =
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">' +
+        '<div>' +
+          '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#f0c040;margin-bottom:8px">CAGR</div>' +
+          cagrRow('TQQQ Vol Strategy', r.stratM, true) +
+          cagrRow('QQQ', r.qqqM, false) +
+          cagrRow('SPY', r.spyM, false) +
+        '</div>' +
+        '<div>' +
+          '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#f0c040;margin-bottom:8px">Max Drawdown</div>' +
+          ddRow('TQQQ Vol Strategy', r.stratM, true) +
+          ddRow('TQQQ B&H', r.tqqqM, false) +
+          ddRow('QQQ B&H', r.qqqM, false) +
+        '</div>' +
+      '</div>'
+    sh.style.display = 'block'
+  }
 
   // Metrics
   const sm=r.stratM, tm=r.tqqqM
