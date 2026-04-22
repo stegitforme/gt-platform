@@ -5713,6 +5713,13 @@ function selectCandidateForSizing(c, row) {
   // Scroll the Quick Size card into view
   const qsAnchor = document.getElementById('qs-body') || document.querySelector('#sizer .card:last-child')
   if(qsAnchor && qsAnchor.scrollIntoView) qsAnchor.scrollIntoView({ behavior:'smooth', block:'center' })
+  // Async: fetch the live option chain and refresh strike + optcost to the
+  // contract whose delta is closest to the selected target delta. Runs on
+  // next tick so the initial calc() above paints first, then the async
+  // refresh updates with live chain values when Polygon returns.
+  if(typeof autoFillOptionFromChain === 'function') {
+    setTimeout(autoFillOptionFromChain, 0)
+  }
 }
 // Delegated click handler on the candidate tbody. Attach once — survives
 // the innerHTML-rewrite in renderCandidateTable because it's on the
@@ -5732,6 +5739,97 @@ function selectCandidateForSizing(c, row) {
     selectCandidateForSizing(c, tr)
   })
 })()
+// ── QUICK SIZE: AUTO-FILL STRIKE + COST FROM CHAIN (DELTA-BASED) ────────────
+// Pull the live option chain for (sym, expiry, call|put), pick the contract
+// whose |delta| is closest to the target delta, and fill the Quick Size
+// strike + option-cost inputs from it. Runs after candidate selection and
+// when the user changes delta or expiry.
+async function fetchOptionChain(sym, expiryStr, contractType) {
+  const expISO = (typeof parseTradeExpiryISO === 'function')
+    ? (parseTradeExpiryISO(expiryStr) || expiryStr)
+    : expiryStr
+  if(!sym || !expISO || !/^\d{4}-\d{2}-\d{2}$/.test(expISO)) return []
+  const cp = (contractType || 'call').toLowerCase() === 'put' ? 'put' : 'call'
+  const path = '/v3/snapshot/options/' + String(sym).toUpperCase().replace(/[^A-Z]/g,'')
+             + '?expiration_date=' + expISO
+             + '&contract_type=' + cp
+             + '&limit=250'
+  try {
+    const res = await apiGet(path, /*skipCache*/ false, /*silent*/ true)
+    if(!res || !Array.isArray(res.results)) return []
+    return res.results.map(r => {
+      const pick = (typeof pickLiveOptionPrice === 'function') ? pickLiveOptionPrice(r) : { px: null, source: null }
+      return {
+        ticker: r?.details?.ticker,
+        strike: r?.details?.strike_price,
+        type:   r?.details?.contract_type,
+        delta:  r?.greeks?.delta,
+        price:  pick.px,
+        priceSource: pick.source,
+      }
+    }).filter(x => typeof x.strike === 'number' && typeof x.delta === 'number' && x.price != null && x.price > 0)
+  } catch(e) {
+    console.warn('[QS-AUTO-OPTION] chain fetch error', { sym, expiry: expiryStr, err: e && e.message })
+    return []
+  }
+}
+
+// Most-recent-wins token — prevents a slow earlier fetch from clobbering
+// fields after the user has moved on to a different delta/expiry.
+let _qsAutoFillToken = 0
+async function autoFillOptionFromChain() {
+  const sym         = (document.getElementById('tkr')?.value || '').trim()
+  const expiry      = (document.getElementById('expiry')?.value || '').trim()
+  const targetDelta = Math.abs(parseFloat(document.getElementById('delta')?.value || '0.80'))
+  if(!sym || !expiry) return
+  if(!isFinite(targetDelta) || targetDelta <= 0 || targetDelta > 1) return
+  const token = ++_qsAutoFillToken
+  try {
+    const chain = await fetchOptionChain(sym, expiry, 'call')
+    if(token !== _qsAutoFillToken) return   // superseded by a later invocation
+    if(!chain.length) {
+      console.info('[QS-AUTO-OPTION]', { sym, expiry, targetDelta, note: 'empty chain (no key? wrong expiry? plan-restricted?)' })
+      return
+    }
+    let best = null, bestDiff = Infinity
+    for(const opt of chain) {
+      const d = Math.abs(Math.abs(opt.delta) - targetDelta)
+      if(d < bestDiff) { bestDiff = d; best = opt }
+    }
+    if(!best) return
+    _setQsVal('strike',  best.strike)
+    _setQsVal('optcost', +best.price.toFixed(2))
+    if(typeof calc === 'function') { try { calc() } catch(e) {} }
+    console.info('[QS-AUTO-OPTION]', {
+      sym, expiry, targetDelta,
+      chainSize: chain.length,
+      chosen: { strike: best.strike, delta: best.delta, price: best.price, priceSource: best.priceSource, ticker: best.ticker },
+      bestDeltaDiff: +bestDiff.toFixed(4),
+    })
+  } catch(e) {
+    console.warn('[QS-AUTO-OPTION-ERROR]', e && e.message)
+  }
+}
+
+// 300ms debounce so scrubbing delta or retyping expiry doesn't spam the
+// API. Shared by delta/expiry/tkr change listeners.
+let _qsAutoFillDebounce = null
+function _scheduleAutoFillFromChain() {
+  clearTimeout(_qsAutoFillDebounce)
+  _qsAutoFillDebounce = setTimeout(autoFillOptionFromChain, 300)
+}
+
+// Wire change handlers once. Delta/expiry use 'change' (fires on blur or
+// commit), not 'input' — spinners/typing would otherwise fire per keystroke.
+;(function wireAutoFillOptionInputs() {
+  ;['delta','expiry','tkr'].forEach(id => {
+    const el = document.getElementById(id)
+    if(!el || el._autoFillWired) return
+    el._autoFillWired = true
+    el.addEventListener('change', _scheduleAutoFillFromChain)
+  })
+})()
+
 // Scoped CSS for the active-row highlight + hover affordance.
 ;(function injectCandRowCss() {
   if(document.getElementById('cand-row-css')) return
