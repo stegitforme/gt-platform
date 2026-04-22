@@ -391,7 +391,6 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
   <button onclick="show('tenx',this)">10-Bagger</button>
   <button onclick="show('backtest',this)">TQQQ 35% Vol Strategy</button>
   <button onclick="show('analytics',this)">Analytics</button>
-  <button onclick="show('portfolio',this)">Portfolio</button>
 </div>
 
 <!-- &#9552;&#9552;&#9552; MARKET &#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552; -->
@@ -1067,10 +1066,45 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
     </div>
   </div>
 
-  <!-- §2 VOLATILITY CHART -->
+  <!-- §2 MULTI-ACCOUNT REBALANCER (relocated from Portfolio tab) -->
+  <div class="card" style="margin-bottom:14px" id="rebalancer-card">
+    <div class="card-head">
+      <span class="card-title">② Multi-Account Rebalancer</span>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span style="font-size:11px;color:#555c6e">Target:</span>
+        <input type="number" id="reb-tqqq-pct" value="100" min="0" max="100" step="5"
+          style="width:52px;background:#0a0c0f;border:1px solid rgba(255,255,255,.12);border-radius:4px;padding:3px 7px;font-size:12px;color:#00d68f;font-family:'SF Mono',monospace;text-align:center;outline:none"
+          oninput="rebCalc()">
+        <span style="font-size:12px;color:#00d68f;font-weight:600">% TQQQ</span>
+        <span style="font-size:11px;color:#555c6e">/</span>
+        <span id="reb-sgov-pct" style="font-size:12px;color:#4da6ff;font-weight:600">0</span>
+        <span style="font-size:12px;color:#4da6ff;font-weight:600">% SGOV</span>
+        <span style="color:rgba(255,255,255,.1);margin:0 2px">|</span>
+        <span id="reb-prices" style="font-size:10px;color:#555c6e;font-family:'SF Mono',monospace"></span>
+        <button onclick="rebFetchPrices()" style="padding:2px 9px;background:transparent;border:1px solid rgba(255,255,255,.12);border-radius:4px;color:#555c6e;font-size:10px;cursor:pointer;font-family:inherit" title="Fetch live TQQQ + SGOV prices">⟳ Prices</button>
+      </div>
+    </div>
+    <div class="card-body" style="padding:0">
+      <table style="width:100%;border-collapse:collapse" id="reb-table">
+        <thead>
+          <tr style="border-bottom:1px solid rgba(255,255,255,.08)">
+            <th style="padding:7px 12px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e;width:140px">Account</th>
+            <th style="padding:7px 8px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#00d68f">TQQQ ($)</th>
+            <th style="padding:7px 8px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#4da6ff">SGOV ($)</th>
+            <th style="padding:7px 8px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e">Total</th>
+            <th style="padding:7px 12px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#f0c040">Action to Rebalance</th>
+          </tr>
+        </thead>
+        <tbody id="reb-body"></tbody>
+        <tfoot id="reb-foot"></tfoot>
+      </table>
+    </div>
+  </div>
+
+  <!-- §3 VOLATILITY CHART -->
   <div class="card" style="margin-bottom:14px">
     <div class="card-head">
-      <span class="card-title">② Realized Volatility (20-day)</span>
+      <span class="card-title">③ Realized Volatility (20-day)</span>
       <span id="strat-vol-meta" style="font-size:10px;color:#555c6e"></span>
     </div>
     <div class="card-body" style="padding:12px 14px">
@@ -1083,10 +1117,10 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
     </div>
   </div>
 
-  <!-- §3 VOL ACCELERATION GUARD (simplified) -->
+  <!-- §4 VOL ACCELERATION GUARD (simplified) -->
   <div class="card" style="margin-bottom:14px">
     <div class="card-head">
-      <span class="card-title">③ Vol Acceleration Guard</span>
+      <span class="card-title">④ Vol Acceleration Guard</span>
       <span id="strat-guard-badge" style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:4px;background:rgba(139,145,160,.08);color:#8b91a0;border:1px solid rgba(139,145,160,.22);letter-spacing:.05em">INACTIVE</span>
     </div>
     <div class="card-body" style="padding:14px 18px">
@@ -1107,10 +1141,10 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
     </div>
   </div>
 
-  <!-- §4 ALLOCATION HISTORY -->
+  <!-- §5 ALLOCATION HISTORY -->
   <div class="card" style="margin-bottom:14px">
     <div class="card-head">
-      <span class="card-title">④ Allocation History (weekly)</span>
+      <span class="card-title">⑤ Allocation History (weekly)</span>
       <span id="strat-alloc-meta" style="font-size:10px;color:#555c6e"></span>
     </div>
     <div class="card-body" style="padding:12px 14px">
@@ -1118,10 +1152,10 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
     </div>
   </div>
 
-  <!-- §5 BACKTEST RESULTS -->
+  <!-- §6 BACKTEST RESULTS -->
   <div class="card" style="margin-bottom:14px">
     <div class="card-head">
-      <span class="card-title">⑤ Backtest Results</span>
+      <span class="card-title">⑥ Backtest Results</span>
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
         <div style="display:flex;gap:3px">
           <button class="btn btn-ghost" style="font-size:11px;padding:4px 11px" data-btperiod="1" onclick="btSetPeriod(1)">1Y</button>
@@ -1172,9 +1206,9 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
     </div>
   </div>
 
-  <!-- §6 METHODOLOGY -->
+  <!-- §7 METHODOLOGY -->
   <div class="card" style="margin-bottom:14px">
-    <div class="card-head"><span class="card-title">⑥ Methodology</span></div>
+    <div class="card-head"><span class="card-title">⑦ Methodology</span></div>
     <div class="card-body" style="padding:14px 20px">
       <ul style="margin:0;padding-left:18px;font-size:13px;color:#c2c7d2;line-height:1.85">
         <li>Weekly rebalance (Friday close)</li>
@@ -1186,10 +1220,10 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
     </div>
   </div>
 
-  <!-- §7 WEEKLY SIGNAL LOG -->
+  <!-- §8 WEEKLY SIGNAL LOG -->
   <div class="card" style="margin-bottom:14px">
     <div class="card-head">
-      <span class="card-title">⑦ Weekly Signal Log</span>
+      <span class="card-title">⑧ Weekly Signal Log</span>
       <span id="strat-log-meta" style="font-size:10px;color:#555c6e"></span>
     </div>
     <div class="card-body" style="padding:0">
@@ -1246,113 +1280,6 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
   </div>
 </div>
 
-<!-- ════════════════ PORTFOLIO ═══════════════════════════════════════════════ -->
-<div id="portfolio" class="page">
-  <!-- SUMMARY METRICS -->
-  <div class="grid4" style="margin-bottom:14px">
-    <div class="metric"><div class="metric-label">Total Deployed</div><div id="pm-total" class="metric-value b">--</div></div>
-    <div class="metric"><div class="metric-label">Today P/L</div><div id="pm-today" class="metric-value">--</div><div id="pm-today-pct" class="metric-sub"></div></div>
-    <div class="metric"><div class="metric-label">Total P/L</div><div id="pm-total-pnl" class="metric-value">--</div><div id="pm-total-pct" class="metric-sub"></div></div>
-    <div class="metric"><div class="metric-label">Positions</div><div id="pm-count" class="metric-value">--</div><div id="pm-imported" class="metric-sub"></div></div>
-  </div>
-
-  <!-- IMPORT CARD -->
-  <div class="card" style="margin-bottom:14px" id="port-import-card">
-    <div class="card-head">
-      <span class="card-title">Import Fidelity Positions</span>
-      <span id="port-last-import" style="font-size:10px;color:#555c6e"></span>
-    </div>
-    <div class="card-body">
-      <div style="display:grid;grid-template-columns:1fr auto;gap:12px;align-items:start">
-        <div>
-          <div style="font-size:12px;color:#8b91a0;margin-bottom:8px;line-height:1.6">
-            <b style="color:#e8eaf0">How to export:</b> Fidelity.com -> Accounts &amp; Trade -> Account Positions -> click the <b style="color:#f0c040">Download</b> button (top right of positions page) -> select the downloaded CSV file below.
-          </div>
-          <div style="font-size:11px;color:#555c6e">Supports Fidelity Positions CSV. Options and equities parsed automatically. Data stays local in your browser.</div>
-        </div>
-        <div style="display:flex;flex-direction:column;gap:8px;min-width:160px">
-          <label style="cursor:pointer">
-            <input type="file" id="port-file-input" accept=".csv" style="display:none" onchange="importCSV(this)">
-            <div class="btn btn-gold" style="text-align:center;width:100%;box-sizing:border-box">Upload CSV</div>
-          </label>
-          <button class="btn btn-ghost" style="font-size:11px" onclick="clearPortfolio()">Clear data</button>
-        </div>
-      </div>
-      <!-- DROP ZONE -->
-      <div id="port-drop" style="margin-top:10px;border:2px dashed rgba(255,255,255,.1);border-radius:8px;padding:16px;text-align:center;color:#555c6e;font-size:12px;transition:border-color .2s"
-        ondragover="event.preventDefault();this.style.borderColor='#f0c040'"
-        ondragleave="this.style.borderColor='rgba(255,255,255,.1)'"
-        ondrop="event.preventDefault();this.style.borderColor='rgba(255,255,255,.1)';importCSV({files:event.dataTransfer.files})">
-        or drag &amp; drop CSV file here
-      </div>
-      <div id="port-import-status" style="margin-top:8px;font-size:12px;min-height:16px"></div>
-      <button id="port-sync-trades-btn" onclick="syncOptionsToTrades()" style="display:none;margin-top:8px;padding:6px 14px;background:rgba(77,166,255,.15);color:#4da6ff;border:1px solid rgba(77,166,255,.3);border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">→ Sync options to Trade Manager</button>
-    </div>
-  </div>
-
-  <!-- POSITIONS TABLE -->
-    <!-- TQQQ MULTI-ACCOUNT REBALANCER -->
-  <div class="card" style="margin-top:14px" id="rebalancer-card">
-    <div class="card-head">
-      <span class="card-title">Multi-Account Rebalancer</span>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <span style="font-size:11px;color:#555c6e">Target:</span>
-        <input type="number" id="reb-tqqq-pct" value="100" min="0" max="100" step="5"
-          style="width:52px;background:#0a0c0f;border:1px solid rgba(255,255,255,.12);border-radius:4px;padding:3px 7px;font-size:12px;color:#00d68f;font-family:'SF Mono',monospace;text-align:center;outline:none"
-          oninput="rebCalc()">
-        <span style="font-size:12px;color:#00d68f;font-weight:600">% TQQQ</span>
-        <span style="font-size:11px;color:#555c6e">/</span>
-        <span id="reb-sgov-pct" style="font-size:12px;color:#4da6ff;font-weight:600">0</span>
-        <span style="font-size:12px;color:#4da6ff;font-weight:600">% SGOV</span>
-        <span style="color:rgba(255,255,255,.1);margin:0 2px">|</span>
-        <span id="reb-prices" style="font-size:10px;color:#555c6e;font-family:'SF Mono',monospace"></span>
-        <button onclick="rebFetchPrices()" style="padding:2px 9px;background:transparent;border:1px solid rgba(255,255,255,.12);border-radius:4px;color:#555c6e;font-size:10px;cursor:pointer;font-family:inherit" title="Fetch live TQQQ + SGOV prices">⟳ Prices</button>
-      </div>
-    </div>
-    <div class="card-body" style="padding:0">
-      <table style="width:100%;border-collapse:collapse" id="reb-table">
-        <thead>
-          <tr style="border-bottom:1px solid rgba(255,255,255,.08)">
-            <th style="padding:7px 12px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e;width:140px">Account</th>
-            <th style="padding:7px 8px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#00d68f">TQQQ ($)</th>
-            <th style="padding:7px 8px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#4da6ff">SGOV ($)</th>
-            <th style="padding:7px 8px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e">Total</th>
-            <th style="padding:7px 12px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#f0c040">Action to Rebalance</th>
-          </tr>
-        </thead>
-        <tbody id="reb-body"></tbody>
-        <tfoot id="reb-foot"></tfoot>
-      </table>
-    </div>
-  </div>
-
-<div class="card">
-    <div class="card-head">
-      <span class="card-title">Open Positions</span>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <button onclick="refreshPortfolioPrices()" id="port-refresh-btn"
-          style="padding:4px 12px;background:rgba(77,166,255,.1);border:1px solid rgba(77,166,255,.25);border-radius:4px;color:#4da6ff;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">
-          ⟳ Refresh Prices
-        </button>
-        <span id="port-refresh-status" style="font-size:10px;color:#555c6e"></span>
-        <!-- View toggle -->
-        <div style="display:flex;border:1px solid rgba(255,255,255,.1);border-radius:6px;overflow:hidden">
-          <button id="view-all" onclick="setPortView('all')" style="padding:3px 10px;font-size:11px;background:#1e2330;color:#f0c040;border:none;cursor:pointer;font-family:inherit">All</button>
-          <button id="view-gt" onclick="setPortView('gt')" style="padding:3px 10px;font-size:11px;background:transparent;color:#555c6e;border:none;cursor:pointer;font-family:inherit">GT Only</button>
-          <button id="view-lt" onclick="setPortView('lt')" style="padding:3px 10px;font-size:11px;background:transparent;color:#555c6e;border:none;cursor:pointer;font-family:inherit">Long-Term</button>
-        </div>
-        <input type="text" id="port-search" placeholder="Filter..." style="background:#0a0c0f;border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:3px 8px;font-size:11px;color:#e8eaf0;width:90px;outline:none" oninput="renderPortfolio()">
-        <select id="port-sort" style="background:#0a0c0f;border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:3px 6px;font-size:11px;color:#8b91a0;outline:none" onchange="renderPortfolio()">
-          <option value="pnl">Sort: P/L $</option>
-          <option value="pct">Sort: P/L %</option>
-          <option value="val">Sort: Value</option>
-          <option value="sym">Sort: Symbol</option>
-        </select>
-      </div>
-    </div>
-    <div id="port-body"></div>
-  </div>
-</div>
 
   <script>
 
@@ -1398,12 +1325,10 @@ async function saveApiKey() {
   } catch(e) { console.warn('[POLYGON-KEY] push to Firebase failed:', e.message) }
   if(typeof setPolygonKeyStatus === 'function') setPolygonKeyStatus('loaded', 'saved · synced to Firebase')
   document.getElementById('setup-overlay').style.display = 'none'
-  loadPortfolioData()
   loadOVData()
   loadRiskSettings()
   loadMarketData()
   runFilter()
-  renderPortfolio()
   renderTrades()
 }
 
@@ -1892,232 +1817,13 @@ async function loadMarketData() {
   try { fetchSectorData() } catch(e) { console.warn('[MARKET-INIT] fetchSectorData', e) }
 }
 
-// DEPRECATED — do NOT call for allocation. The single source of truth is
-// window.signal.current, populated by fetchOfficialSignal() from the weekly
-// history.csv. This function is retained only for its underlying vol-series
-// computations (which are not currently wired into any UI — the Strategy tab's
-// §2 vol chart does its own independent QQQ fetch via renderStrategyVolChart).
-async function fetchTQQQSignal() {
-  const btn = document.querySelector('[onclick="fetchTQQQSignal()"]')
-  if(btn) { btn.textContent = 'Loading...'; btn.disabled = true }
-  const body = document.getElementById('tqqq-body')
-  if(body) body.innerHTML = '<div style="font-size:12px;color:#555c6e;text-align:center;padding:8px">Fetching QQQ data...\x3C/div>'
+// REMOVED — the intraday TQQQ "Live Estimate" calculator is gone.
+// Allocation is driven exclusively by the weekly Official Signal
+// (window.signal.current). The Strategy tab's §2 vol chart fetches its
+// own QQQ bars directly via renderStrategyVolChart(). Stub retained only
+// to satisfy any legacy click handler still present in cached HTML.
+async function fetchTQQQSignal() { return }
 
-  try {
-    // Need 200+ trading days for 200MA -- fetch 300 calendar days
-    const to   = new Date().toISOString().split('T')[0]
-    const from = new Date(Date.now()-400*864e5).toISOString().split('T')[0]
-    let d = await apiGet('/v2/aggs/ticker/QQQ/range/1/day/'+from+'/'+to+'?adjusted=true&sort=asc&limit=220')
-    if(!d || !d.results || !d.results.length) {
-      if(body) body.innerHTML = '<div style="font-size:12px;color:#ff8c42;text-align:center;padding:8px">Rate limited -- retrying in 15s...\x3C/div>'
-      await new Promise(function(r){setTimeout(r,15000)})
-      d = await apiGet('/v2/aggs/ticker/QQQ/range/1/day/'+from+'/'+to+'?adjusted=true&sort=asc&limit=220')
-    }
-    if(!d || !d.results || d.results.length < 5) throw new Error('Need more QQQ history')
-
-    const bars   = d.results
-    const closes = bars.map(b => b.c)
-    const last   = closes[closes.length-1]
-    const n      = closes.length
-
-    // 200-day MA (use all available if < 200)
-    const ma200window = Math.min(200, n)
-    const ma200 = closes.slice(n - ma200window).reduce((a,b) => a+b, 0) / ma200window
-    const aboveMa = last > ma200
-
-    // 20-day realized volatility (annualized)
-    const vol20window = Math.min(20, n-1)
-    const returns = []
-    for(let i = n-vol20window; i < n; i++) returns.push(Math.log(closes[i]/closes[i-1]))
-    const mean = returns.reduce((a,b) => a+b, 0) / returns.length
-    const variance = returns.reduce((a,b) => a + Math.pow(b-mean,2), 0) / (returns.length-1)
-    const dailyVol = Math.sqrt(variance)
-    const annualVol = +(dailyVol * Math.sqrt(252) * 100).toFixed(1)
-
-    // Vol 5 trading days ago (for Vol Acceleration Guard)
-    const vol5dAgoWindow = Math.min(20, n-6)
-    const returns5d = []
-    for(let i = n-5-vol5dAgoWindow; i < n-5; i++) {
-      if(i > 0) returns5d.push(Math.log(closes[i]/closes[i-1]))
-    }
-    let annualVol5dAgo = annualVol  // fallback = current
-    if(returns5d.length >= 3) {
-      const mean5d = returns5d.reduce((a,b) => a+b, 0) / returns5d.length
-      const var5d  = returns5d.reduce((a,b) => a + Math.pow(b-mean5d,2), 0) / (returns5d.length-1)
-      annualVol5dAgo = +(Math.sqrt(var5d) * Math.sqrt(252) * 100).toFixed(1)
-    }
-
-    // Vol Acceleration Guard
-    // Fires if: vol rose 30%+ vs 5 days ago AND current vol already > 45%
-    const VOL_ACCEL_THRESHOLD = 1.30
-    const VOL_ACCEL_FLOOR     = 45   // percent
-    const VOL_ACCEL_CAP       = 50   // percent — cap allocation here when guard fires
-    const volAccelGuard = (
-      annualVol5dAgo > 0 &&
-      annualVol > annualVol5dAgo * VOL_ACCEL_THRESHOLD &&
-      annualVol > VOL_ACCEL_FLOOR
-    )
-
-
-    // -- TURBO MODE STATE MACHINE ---------------------------
-    // Need weekly data: sample last 52 weeks of closes (one per ~5 bars)
-    // Approximate weeks from daily bars
-    // Count consecutive weeks below 200MA using actual bar indices
-    // Sample one close per week (every 5 bars) going back from most recent
-    const weekStep = 5
-    let weeksBelow = 0
-    for(let w = 0; w < 20; w++) {  // check up to 20 weeks back
-      const barIdx = n - 1 - (w * weekStep)
-      if(barIdx < 200) break  // need 200 bars for MA
-      const price = closes[barIdx]
-      const maWindow = closes.slice(barIdx - 200, barIdx)
-      const maThen = maWindow.reduce((a,b) => a+b, 0) / 200
-      if(price < maThen) weeksBelow++
-      else break  // stop at first week above MA (must be consecutive)
-    }
-
-    // Load saved turbo state
-    let turboState = 'normal' // normal | arming | armed | active
-    let turboWeek = 0         // week # in active countdown (1-12)
-    let turboStartBar = 0     // bar index when turbo activated
-    try {
-      const saved = JSON.parse(localStorage.getItem('gt_turbo_state')||'{}')
-      turboState = saved.state || 'normal'
-      turboWeek  = saved.week  || 0
-      turboStartBar = saved.startBar || 0
-    } catch(e) {}
-
-    // State machine transitions
-    if(aboveMa) {
-      if(turboState === 'armed') {
-        // Just reclaimed after 8+ weeks below -- ACTIVATE TURBO
-        turboState = 'active'
-        turboWeek  = 1
-        turboStartBar = n
-      } else if(turboState === 'active') {
-        // Count weeks since activation
-        const weeksSinceStart = Math.round((n - turboStartBar) / weekStep)
-        turboWeek = Math.min(12, weeksSinceStart + 1)
-        if(turboWeek >= 12) { turboState = 'normal'; turboWeek = 0; turboStartBar = 0 }
-      } else if(turboState === 'arming') {
-        // Reclaimed before 8 weeks -- reset
-        turboState = 'normal'; turboWeek = 0
-      }
-    } else {
-      // Below 200MA
-      if(turboState === 'active') {
-        // Dropped back below -- cancel turbo
-        turboState = 'normal'; turboWeek = 0; turboStartBar = 0
-      } else if(turboState === 'normal' || turboState === 'arming') {
-        turboState = weeksBelow >= 8 ? 'armed' : 'arming'
-      }
-    }
-
-    // Save state
-    localStorage.setItem('gt_turbo_state', JSON.stringify({state:turboState, week:turboWeek, startBar:turboStartBar}))
-
-    // Build turbo label for subject line / display
-    let turboLabel = '';
-    let turboBadge = '';
-    let turboBadgeColor = '#555c6e';
-    if(turboState === 'arming') {
-      turboLabel = '| Arming '+weeksBelow+'/8wks'
-      turboBadge = 'Arming '+weeksBelow+'/8wks'
-      turboBadgeColor = '#ff8c42'
-    } else if(turboState === 'armed') {
-      turboLabel = '| TURBO ARMED'
-      turboBadge = 'TURBO ARMED'
-      turboBadgeColor = '#f0c040'
-    } else if(turboState === 'active') {
-      turboLabel = '| TURBO Wk'+turboWeek+'/12'
-      turboBadge = 'TURBO Wk'+turboWeek+'/12'
-      turboBadgeColor = '#00d68f'
-    }
-    // ---------------------------------------------------------
-
-    // Vol(35%) + 200MA signal + Vol Acceleration Guard
-    const VOL_TARGET = 35
-    let tqqqPct = 0, sgov = 100, signal = '', signalColor = '#ff4560';
-    let guardFired = false, tqqqPctBase = 0
-
-    if(!aboveMa) {
-      tqqqPct = 0; sgov = 100
-      signal = 'BELOW 200MA -- 100% SGOV'
-      signalColor = '#ff4560'
-    } else if(annualVol <= VOL_TARGET) {
-      tqqqPctBase = 100
-      signal = 'ABOVE 200MA + LOW VOL -- 100% TQQQ'
-      signalColor = '#00d68f'
-    } else {
-      tqqqPctBase = Math.min(100, Math.round(VOL_TARGET / annualVol * 100))
-      tqqqPctBase = Math.round(tqqqPctBase / 10) * 10
-      signal = 'ABOVE 200MA + HIGH VOL -- SCALED'
-      signalColor = '#ff8c42'
-    }
-
-    // Apply Vol Acceleration Guard if QQQ is above 200MA
-    if(aboveMa) {
-      if(volAccelGuard && tqqqPctBase > VOL_ACCEL_CAP) {
-        guardFired = true
-        tqqqPct = VOL_ACCEL_CAP
-        signal += ' ⚡ GUARD'
-        signalColor = '#f0c040'
-      } else {
-        tqqqPct = tqqqPctBase
-      }
-      sgov = 100 - tqqqPct
-    }
-
-    const ma200str = ma200.toFixed(2)
-    const pctFromMa = ((last - ma200) / ma200 * 100).toFixed(1)
-    const needsRebalance = Math.abs(tqqqPct - 50) > 5  // example: current is 50/50
-
-    // ── Compact signal card ─────────────────────────────────────────────
-    // Decision-oriented summary: TQQQ target %, SGOV target %, Vol Accel
-    // Guard status. Last-updated time lives in #tqqq-updated (card head,
-    // set below). All signal math above is untouched — this block only
-    // changes how the result is presented. The previous detailed layout
-    // (QQQ/MA/Vol metric strip, allocation bar, turbo mode, vol/guard
-    // reference tables) is removed from the main card per the Market
-    // simplification spec. Logic still drives the rebalancer, setApi
-    // status, and Firebase sync via existing calls below.
-    const tqqqCol  = tqqqPct >= 80 ? '#00d68f' : tqqqPct >= 50 ? '#f0c040' : tqqqPct > 0 ? '#ff8c42' : '#ff4560'
-    const sgovCol  = sgov    >= 50 ? '#4da6ff' : '#8b91a0'
-    const guardLabel = guardFired ? '⚡ FIRED — capped at ' + VOL_ACCEL_CAP + '%' : 'standby'
-    const guardBg    = guardFired ? 'rgba(240,192,64,.15)' : 'rgba(139,145,160,.08)'
-    const guardFg    = guardFired ? '#f0c040' : '#8b91a0'
-    const guardBd    = guardFired ? 'rgba(240,192,64,.45)' : 'rgba(139,145,160,.25)'
-    const html =
-      '<div style="padding:18px 20px">' +
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
-          '<div style="padding:16px 18px;background:rgba(0,214,143,.06);border:1px solid rgba(0,214,143,.22);border-radius:8px;text-align:center">' +
-            '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#555c6e;margin-bottom:6px">TQQQ Target\x3C/div>' +
-            '<div style="font-size:40px;font-weight:700;color:'+tqqqCol+';line-height:1;font-family:\'SF Mono\',monospace">'+tqqqPct+'%\x3C/div>' +
-          '\x3C/div>' +
-          '<div style="padding:16px 18px;background:rgba(77,166,255,.06);border:1px solid rgba(77,166,255,.22);border-radius:8px;text-align:center">' +
-            '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#555c6e;margin-bottom:6px">SGOV Target\x3C/div>' +
-            '<div style="font-size:40px;font-weight:700;color:'+sgovCol+';line-height:1;font-family:\'SF Mono\',monospace">'+sgov+'%\x3C/div>' +
-          '\x3C/div>' +
-        '\x3C/div>' +
-        '<div style="margin-top:14px;display:flex;justify-content:center;align-items:center;gap:10px">' +
-          '<span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#555c6e">Vol Accel Guard\x3C/span>' +
-          '<span title="Fires when vol rises 30%+ in 5 days AND vol >45%. Caps TQQQ at '+VOL_ACCEL_CAP+'%." style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:4px;background:'+guardBg+';color:'+guardFg+';border:1px solid '+guardBd+';letter-spacing:.05em">'+guardLabel+'\x3C/span>' +
-        '\x3C/div>' +
-      '\x3C/div>'
-
-    if(body) body.innerHTML = html
-    renderRebalancer(tqqqPct, sgov)
-    const upd = document.getElementById('tqqq-updated')
-    if(upd) upd.textContent = 'Updated ' + new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})
-    setApi('TQQQ Signal: '+tqqqPct+'% TQQQ / '+sgov+'% SGOV . Vol '+annualVol+'% . QQQ '+(aboveMa?'above':'below')+' 200MA' + (turboLabel?' '+turboLabel:''), 'ok')
-
-  } catch(e) {
-    if(body) body.innerHTML = '<div style="font-size:12px;color:#ff4560;text-align:center;padding:8px">Error: '+e.message+'\x3C/div>'
-    console.error('TQQQ signal error:', e)
-  }
-
-  if(btn) { btn.textContent = 'Calculate'; btn.disabled = false }
-}
 
 
 // ── TQQQ MULTI-ACCOUNT REBALANCER ────────────────────────────────────────
@@ -2250,10 +1956,12 @@ function goToRebalancer() {
     const el = document.getElementById('reb-tqqq-pct')
     if(el) { el.value = target; try { rebCalc() } catch(e) {} }
   }
-  // Switch to Portfolio tab (rebalancer card lives there)
+  // Switch to Strategy tab (rebalancer card lives there as §2)
   const navBtns = document.querySelectorAll('.nav button')
-  const portBtn = navBtns[navBtns.length-1]  // Portfolio is the last tab
-  try { show('portfolio', portBtn) } catch(e) {}
+  // Find the button that targets #backtest (Strategy tab)
+  let stratBtn = null
+  navBtns.forEach(function(b){ if(/show\('backtest'/.test(b.getAttribute('onclick')||'')) stratBtn = b })
+  try { show('backtest', stratBtn) } catch(e) {}
   // Scroll the rebalancer card into view + flash border
   setTimeout(function(){
     const card = document.getElementById('rebalancer-card')
@@ -9365,494 +9073,6 @@ async function refreshAllPnL() {
   }
 }
 
-// -- PORTFOLIO ========================================
-// Load from localStorage or fall back to hardcoded seed data
-const SEED_POSITIONS = [
-  {t:'VRT 230C', e:'Jan-27',c:1, val:12083, pnl:3391,  pct:44.15, today:124,  todayPct:1.04, type:'option'},
-  {t:'TSM 290C', e:'Jan-27',c:1, val:11487, pnl:2587,  pct:29.07, today:89,   todayPct:0.78, type:'option'},
-  {t:'TSM 340C', e:'May-26',c:1, val:4727,  pnl:847,   pct:21.82, today:44,   todayPct:0.94, type:'option'},
-  {t:'CLS 300C', e:'Jan-27',c:1, val:14609, pnl:109,   pct:0.75,  today:-201, todayPct:-1.36,type:'option'},
-  {t:'NVDA 180C',e:'May-26',c:14,pnl:1152,  pct:4.50,  val:23940, today:1190, todayPct:5.23, type:'option'},
-  {t:'AMD 230C', e:'May-26',c:1, pnl:72,    pct:2.26,  val:3272,  today:18,   todayPct:0.55, type:'option'},
-  {t:'GOOG 295C',e:'May-26',c:3, pnl:39,    pct:0.11,  val:35739, today:312,  todayPct:0.88, type:'option'},
-  {t:'GOOG 300C',e:'May-26',c:4, pnl:21,    pct:0.03,  val:35760, today:416,  todayPct:1.17, type:'option'},
-  {t:'UBS 40C',  e:'May-26',c:37,pnl:1775,  pct:17.01, val:12211, today:148,  todayPct:1.23, type:'option'},
-  {t:'LUNR 20C', e:'May-26',c:28,pnl:-1990, pct:-12.45,val:13990, today:-560, todayPct:-3.85,type:'option'},
-  {t:'NEM 110C', e:'May-26',c:3, pnl:-276,  pct:-12.22,val:1986,  today:-84,  todayPct:-4.06,type:'option'},
-  {t:'GLW 150C', e:'May-26',c:1, pnl:-104,  pct:-12.18,val:748,   today:-32,  todayPct:-4.11,type:'option'},
-  {t:'IAG 17C',  e:'May-26',c:6, pnl:-72,   pct:-4.05, val:1704,  today:-18,  todayPct:-1.04,type:'option'},
-]
-
-let POSITIONS = []
-
-let PORT_VIEW = 'all'  // 'all' | 'gt' | 'lt'
-
-function setPortView(v) {
-  PORT_VIEW = v
-  // Update button styles
-  const btns = {all:'view-all', gt:'view-gt', lt:'view-lt'}
-  Object.entries(btns).forEach(([key, id]) => {
-    const el = document.getElementById(id)
-    if(!el) return
-    if(key === v) {
-      el.style.background = '#1e2330'
-      el.style.color = '#f0c040'
-    } else {
-      el.style.background = 'transparent'
-      el.style.color = '#555c6e'
-    }
-  })
-  renderPortfolio()
-}
-
-function loadPortfolioData() {
-  try {
-    const saved = localStorage.getItem('gt_portfolio')
-    if(saved) {
-      const parsed = JSON.parse(saved)
-      if(parsed && parsed.positions && parsed.positions.length) {
-        POSITIONS = parsed.positions
-        return parsed
-      }
-    }
-  } catch(e) {}
-  POSITIONS = SEED_POSITIONS
-  return null
-}
-
-function savePortfolioData(positions, meta) {
-  const data = { positions, meta, savedAt: new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'}) }
-  localStorage.setItem('gt_portfolio', JSON.stringify(data))
-  return data
-}
-
-function tagPosition(raw, isGT) {
-  // isGT: true = GOGO, false = Long-term, toggle through undefined->gt->lt->undefined
-  const p = POSITIONS.find(x => x.raw === raw)
-  if(!p) return
-  if(isGT === true && p.gt !== true)       p.gt = true
-  else if(isGT === false && p.gt !== false) p.gt = false
-  else delete p.gt  // untag completely
-  // Persist updated tags
-  try {
-    const saved = JSON.parse(localStorage.getItem('gt_portfolio') || '{}')
-    saved.positions = POSITIONS
-    localStorage.setItem('gt_portfolio', JSON.stringify(saved))
-  } catch(e) {}
-  renderPortfolio()
-}
-
-function clearPortfolio() {
-  if(!confirm('Clear imported portfolio and restore sample data?')) return
-  localStorage.removeItem('gt_portfolio')
-  POSITIONS = SEED_POSITIONS
-  renderPortfolio()
-  document.getElementById('port-last-import').textContent = ''
-  document.getElementById('port-import-status').textContent = 'Cleared -- showing sample data'
-  document.getElementById('port-import-status').style.color = '#555c6e'
-}
-
-// -- FIDELITY CSV PARSER ============================
-function parseFidelityCSV(text) {
-  const lines = text.split('\n').map(l => l.trim()).filter(l => l)
-  
-  // Find the header row -- it starts with "Account Number" or "Symbol";
-  let headerIdx = -1
-  for(let i = 0; i < lines.length; i++) {
-    if(lines[i].includes('Symbol') && (lines[i].includes('Quantity') || lines[i].includes('Current Value'))) {
-      headerIdx = i
-      break
-    }
-  }
-  
-  if(headerIdx < 0) throw new Error('Could not find header row -- make sure this is a Fidelity Positions CSV')
-  
-  // Parse CSV line respecting quoted fields
-  function parseRow(line) {
-    const cols = []
-    let cur = '', inQ = false
-    for(const ch of line) {
-      if(ch === '"') { inQ = !inQ }
-      else if(ch === ',' && !inQ) { cols.push(cur.trim()); cur = '' }
-      else cur += ch
-    }
-    cols.push(cur.trim())
-    return cols
-  }
-  
-  const headers = parseRow(lines[headerIdx]).map(h => h.replace(/\$/g,'').trim().toLowerCase())
-  
-  // Map column names to indices
-  const col = (name) => {
-    const idx = headers.findIndex(h => h.includes(name.toLowerCase()))
-    return idx >= 0 ? idx : -1
-  }
-  
-  const iSym    = col('symbol')
-  const iDesc   = col('description')
-  const iQty    = col('quantity')
-  const iVal    = col('current value')
-  const iToday  = col("today's gain/loss dollar")
-  const iTodayP = col("today's gain/loss percent")
-  const iTotal  = col('total gain/loss dollar')
-  const iTotalP = col('total gain/loss percent')
-  const iCost   = col('cost basis total')
-  const iType   = col('type')
-
-  const positions = []
-  let totalVal = 0, totalPnl = 0, totalToday = 0
-  
-  for(let i = headerIdx + 1; i < lines.length; i++) {
-    const row = parseRow(lines[i])
-    if(row.length < 4) continue
-    
-    const sym = row[iSym] || '';
-    if(!sym || sym.startsWith('Account') || sym.startsWith('Brokerage') || sym === 'Symbol') continue
-    
-    // Clean numeric values
-    const clean = (s) => {
-      if(s === undefined || s === '' || s === '--' || s === 'n/a') return 0
-      return parseFloat(s.replace(/[$,%+]/g,'').replace(/,/g,'')) || 0
-    }
-    const cleanPct = (s) => {
-      if(!s || s === '--') return 0
-      return parseFloat(s.replace(/[%+]/g,'')) || 0
-    }
-    
-    const desc  = row[iDesc] || sym
-    const qty   = clean(row[iQty])
-    const val   = clean(row[iVal])
-    const today = clean(row[iToday])
-    const todayP= cleanPct(row[iTodayP])
-    const pnl   = clean(row[iTotal])
-    const pnlP  = cleanPct(row[iTotalP])
-    const cost  = clean(row[iCost])
-    // iCost is Cost Basis Total; avg cost per contract = Cost Basis Total / qty / 100
-    const avgCost = qty > 0 ? +(cost / qty / 100).toFixed(2) : 0
-    let strikeNum = 0
-    
-    // Detect options: symbol starts with - or contains option pattern
-    const isOption = sym.startsWith('-') || /[CP]\d{8}[CP]\d{8}/.test(sym) || /\d{6}[CP]\d{8}/.test(sym)
-    
-    // Parse option description: "NVDA MAY 15 26 $180 CALL" -> "NVDA 180C";
-    let display = sym.replace(/^-/,'')
-    let expiry = '';
-    let contracts = qty
-    
-    if(isOption) {
-      // Try to parse from description first
-      // Parse option description: handles both "NVDA MAY 15 26 $180 CALL" and "NVDA MAY 15 2026 $180 CALL";
-      const optMatch = desc.match(/^(\w+)\s+(\w+)\s+(\d+),?\s+(\d{2,4})\s+\$(\d+(?:\.\d+)?)\s+(CALL|PUT)/i)
-      if(optMatch) {
-        const [,ticker,mon,day,yr,strike,cptype] = optMatch
-        const t = cptype[0].toUpperCase() === 'C' ? 'C' : 'P';
-        const strikeFmt = parseFloat(strike) % 1 === 0 ? parseInt(strike) : parseFloat(strike)
-        strikeNum = strikeFmt
-        const yrShort = yr.length === 4 ? yr.substring(2) : yr
-        display = ticker + ''
- + strikeFmt + ' ' + cptype.charAt(0).toUpperCase() + cptype.slice(1).toLowerCase()
-        expiry = mon.substring(0,3) + '-' + day + '-20' + yrShort
-        contracts = qty
-      } else {
-        // Fall back: parse from OCC symbol e.g. NVDA260515C00180000
-        const occMatch = sym.replace(/^-/,'').match(/^([A-Z]+)(\d{2})(\d{2})(\d{2})([CP])(\d{8})/)
-        if(occMatch) {
-          const [,ticker,yr,mo,dy,type,strikeRaw] = occMatch
-          const months = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-          const strike = parseInt(strikeRaw) / 1000
-          const strikeFmt = strike % 1 === 0 ? parseInt(strike) : strike
-          display = ticker + ' ' + strikeFmt + type
-          expiry = months[parseInt(mo)] + '-' + yr
-          contracts = qty
-        }
-      }
-    }
-    
-    totalVal   += val
-    totalPnl   += pnl
-    totalToday += today
-    
-    positions.push({
-      t:       display,
-      e:       expiry || '',
-      c:       contracts,
-      val:     Math.round(val),
-      pnl:     Math.round(pnl),
-      pct:     +pnlP.toFixed(2),
-      today:   Math.round(today),
-      todayPct:+todayP.toFixed(2),
-      cost:    +avgCost.toFixed(2),  // avg cost basis = original premium per contract
-      strike:  strikeNum || 0,       // parsed strike price
-      type:    isOption ? 'option' : 'stock',
-      gt:      isOption ? true : false,
-      raw:     sym,
-      desc:    desc
-    })
-  }
-  
-  if(!positions.length) throw new Error('No positions found -- check the CSV format')
-  
-  return { positions, totalVal, totalPnl, totalToday, count: positions.length }
-}
-
-// ── STAGE 1: CSV → TRADES adapter (dormant) ──────────────────────────────────
-// Maps one parseFidelityCSV() position row to a TRADES-shaped row.
-// NOT YET CALLED. Stage 2 will wire this into importCSV for dual-write.
-// Field names match the existing TRADES schema (occ/ticker/cts/cost/totalGL/…)
-// so no reader needs modification. Two new fields are introduced for later
-// stages:
-//   portfolioTag: 'gt' | 'lt' | null  — carries POSITIONS's `gt` flag
-//   isCash + type:'Cash'              — money-market / cash-equivalent rows
-// Firebase round-trip safe: unknown fields are preserved verbatim by the
-// {...t} spread in loadFromFirebase (verified 2026-04-19).
-function _portfolioPositionToTrade(p) {
-  const symRaw = (p.raw || '').replace(/\*+$/,'').toUpperCase()
-  const isCash = /^(SPAXX|FDLXX|FCASH|FZDXX|FZFXX|SPRXX|FDRXX|FGTXX)$/.test(symRaw)
-              || /money\s*market|(^|\s)cash(\s|$)/i.test(p.desc || '')
-  const isOption = p.type === 'option'
-  const isStock  = !isOption && !isCash
-  const optType  = isOption ? (/P$/.test(p.t || '') ? 'Put' : 'Call') : null
-  const type     = isCash ? 'Cash' : isOption ? optType : 'Stock'
-  const tag      = p.gt === true ? 'gt' : p.gt === false ? 'lt' : null
-  return {
-    id:        Date.now() + Math.floor(Math.random()*1000),
-    occ:       p.raw || '',
-    ticker:    p.t || '',
-    strike:    p.strike || 0,
-    type:      type,
-    isStock:   isStock,
-    isCash:    isCash,
-    desc:      isOption ? (p.e || '') : '',
-    cts:       p.c || 0,
-    cost:      p.cost || 0,
-    costTotal: (isOption && p.cost && p.c) ? p.cost * p.c * 100
-             : (isStock  && p.cost && p.c) ? p.cost * p.c
-             : 0,
-    entry:     isStock ? (p.cost || 0) : 0,
-    atr:       0,   // Stage 2 will fill via batchFetchATRs on dual-write
-    date:      new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}).replace(',',''),
-    notes:     'From Portfolio CSV',
-    status:    'open',
-    rolls:     [],
-    curVal:    p.val || 0,
-    todayGL:   p.today || 0,
-    todayPct:  p.todayPct || 0,
-    totalGL:   p.pnl || 0,
-    totalPct:  p.pct || 0,
-    lastPx:    0,
-    portfolioTag: tag
-  }
-}
-
-// Sync options positions from portfolio into Trade Manager
-function syncOptionsToTrades() {
-  const options = POSITIONS.filter(p => p.type === 'option')
-  if(!options.length) return
-  
-  let added = 0, skipped = 0
-  
-  options.forEach(p => {
-    // Check if already in trades (match by ticker display + expiry)
-    const exists = TRADES.find(t => 
-      t.ticker === p.t && t.desc === p.e && t.status === 'open'
-    )
-    if(exists) { skipped++; return }
-    
-    // Build trade from portfolio position
-    const trade = {
-      id:     Date.now() + added,
-      ticker: p.t,
-      underlying: String(p.t || '').split(' ')[0].trim().toUpperCase(),
-      desc:   p.e || '',
-      cts:    p.c || 1,
-      cost:   p.cost || 0,       // avg cost basis = original premium
-      strike: p.strike || 0,
-      entry:  0,                  // stock entry price unknown from CSV
-      atr:    0,                  // ATR unknown from CSV -- user can fill in
-      date:   new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}).replace(',',''),
-      notes:  'Imported from Fidelity CSV',
-      status: 'open',
-      rolls:  [],
-      // Live data from portfolio
-      currentVal: p.val,
-      pnl:    p.pnl,
-      pct:    p.pct
-    }
-    // Canonical-parts dedup (underlying+expiry+strike+type) in addition
-    // to the earlier ticker-match check above.
-    const dupSync = typeof findDuplicateOpenTrade === 'function' ? findDuplicateOpenTrade(trade) : null
-    if(dupSync) { skipped++; return }
-    TRADES.push(trade)
-    added++
-  })
-  
-  saveTrades()
-  renderPortfolioRisk()
-  
-  const btn = document.getElementById('port-sync-trades-btn')
-  if(btn) {
-    btn.textContent = '✓ Synced ' + added + ' trades' + (skipped ? ' (' + skipped + ' already existed)' : '')
-    btn.style.color = '#00d68f'
-    btn.style.borderColor = 'rgba(0,214,143,.3)'
-    btn.style.background = 'rgba(0,214,143,.1)'
-    setTimeout(() => { btn.style.display = 'none' }, 5000)
-  }
-  
-  setApi('Synced ' + added + ' options to Trade Manager ✓', 'ok')
-  fbAutoSave(1000)
-}
-
-
-function importCSV(input) {
-  const file = input.files && input.files[0]
-  if(!file) return
-  const status = document.getElementById('port-import-status')
-  status.textContent = 'Reading file...'
-  status.style.color = '#8b91a0'
-  
-  const reader = new FileReader()
-  reader.onload = (e) => {
-    try {
-      const result = parseFidelityCSV(e.target.result)
-      POSITIONS = result.positions
-      const meta = { 
-        totalVal: result.totalVal, 
-        totalPnl: result.totalPnl, 
-        totalToday: result.totalToday,
-        count: result.count,
-        filename: file.name
-      }
-      const saved = savePortfolioData(POSITIONS, meta)
-      
-      // Update last import label
-      document.getElementById('port-last-import').textContent = 'Last import: ' + saved.savedAt
-      
-      // Count options positions
-      const optionsCount = result.positions.filter(p => p.type === 'option').length
-      const syncMsg = optionsCount > 0 ? ` — ${optionsCount} options found. ` : ''
-      
-      status.textContent = 'Imported ' + result.count + ' positions' + syncMsg
-      status.style.color = '#00d68f'
-      
-      // If there are options, show sync-to-trades button
-      if(optionsCount > 0) {
-        const syncBtn = document.getElementById('port-sync-trades-btn')
-        if(syncBtn) {
-          syncBtn.style.display = 'inline-block'
-          syncBtn.textContent = '→ Sync ' + optionsCount + ' options to Trade Manager'
-        }
-      }
-      
-      renderPortfolio()
-      
-      // Reset file input so same file can be re-imported
-      document.getElementById('port-file-input').value = ''
-      
-    } catch(err) {
-      status.textContent = 'Error: ' + err.message
-      status.style.color = '#ff4560'
-      console.error('CSV import error:', err)
-    }
-  }
-  reader.readAsText(file)
-}
-
-function renderPortfolio() {
-  const search = (document.getElementById('port-search')?.value || '').toLowerCase()
-  const sortBy = document.getElementById('port-sort')?.value || 'pnl'
-
-  // Apply view filter
-  let positions = POSITIONS.filter(p => {
-    // Search filter
-    if(search && !p.t.toLowerCase().includes(search) && !(p.desc||'').toLowerCase().includes(search)) return false
-    // View filter
-    if(PORT_VIEW === 'gt')  return p.gt === true  || p.type === 'option';
-    if(PORT_VIEW === 'lt')  return p.gt === false && p.type !== 'option';
-    return true  // 'all'
-  })
-  
-  // Sort
-  positions = positions.sort((a,b) => {
-    if(sortBy === 'pnl') return b.pnl - a.pnl
-    if(sortBy === 'pct') return b.pct - a.pct
-    if(sortBy === 'val') return (b.val||0) - (a.val||0)
-    if(sortBy === 'sym') return a.t.localeCompare(b.t)
-    return 0
-  })
-
-  // Update summary metrics
-  const totalVal   = POSITIONS.reduce((s,p) => s + (p.val||0), 0)
-  const totalPnl   = POSITIONS.reduce((s,p) => s + (p.pnl||0), 0)
-  const totalToday = POSITIONS.reduce((s,p) => s + (p.today||0), 0)
-  const todayPct   = totalVal > 0 ? (totalToday / (totalVal - totalToday) * 100) : 0
-  const totalPct   = (totalVal - totalPnl) > 0 ? (totalPnl / (totalVal - totalPnl) * 100) : 0
-  const atRisk     = POSITIONS.filter(p => p.pct < -8).length
-
-  const setEl = (id, val, cls) => {
-    const el = document.getElementById(id)
-    if(!el) return
-    el.textContent = val
-    if(cls) el.className = 'metric-value ' + cls
-  }
-
-  setEl('pm-total',     totalVal > 0 ? ''
- + Math.round(totalVal).toLocaleString() : '--', 'b')
-  setEl('pm-today',     totalToday >= 0 ? '+'
- + Math.round(totalToday).toLocaleString() : '-'
- + Math.abs(Math.round(totalToday)).toLocaleString(), totalToday >= 0 ? 'g' : 'r')
-  document.getElementById('pm-today-pct') && (document.getElementById('pm-today-pct').textContent = (todayPct >= 0 ? '+' : '') + todayPct.toFixed(2) + '%')
-  setEl('pm-total-pnl', (totalPnl >= 0 ? '+'
- : '-'
-) + Math.abs(Math.round(totalPnl)).toLocaleString(), totalPnl >= 0 ? 'g' : 'r')
-  document.getElementById('pm-total-pct') && (document.getElementById('pm-total-pct').textContent = (totalPct >= 0 ? '+' : '') + totalPct.toFixed(2) + '%')
-  setEl('pm-count',     POSITIONS.length, atRisk > 0 ? 'o' : 'g')
-  document.getElementById('pm-imported') && (document.getElementById('pm-imported').textContent = atRisk > 0 ? atRisk + ' near stop' : 'all positions')
-
-  // Load saved import date
-  try {
-    const saved = JSON.parse(localStorage.getItem('gt_portfolio') || '{}')
-    if(saved.savedAt) document.getElementById('port-last-import').textContent = 'Last import: ' + saved.savedAt
-  } catch(e) {}
-
-  if(!positions.length) {
-    document.getElementById('port-body').innerHTML = '<div style="padding:20px;text-align:center;color:#555c6e;font-size:12px">No positions' + (search ? ' matching "' + search + '"' : '') + '\x3C/div>';
-    return
-  }
-
-  document.getElementById('port-body').innerHTML = positions.map(p => {
-    const pc  = p.pnl >= 0 ? '#00d68f' : '#ff4560';
-    const tc  = (p.today||0) >= 0 ? '#00d68f' : '#ff4560';
-    const ps  = (p.pnl >= 0 ? '+'
- : '-'
-) + Math.abs(p.pnl).toLocaleString()
-    const pcs = (p.pct >= 0 ? '+' : '') + p.pct.toFixed(2) + '%';
-    const ts  = ((p.today||0) >= 0 ? '+'
- : '-'
-) + Math.abs(p.today||0).toLocaleString()
-    const val = p.val ? ''
- + p.val.toLocaleString() : ''
-    // Status dot
-    const dot = p.pct >= 30 ? '#f0c040' : p.pct >= 0 ? '#00d68f' : p.pct >= -8 ? '#ff8c42' : '#ff4560';
-    const typeTag = p.type === 'option' ? '<span style="font-size:9px;background:rgba(77,166,255,.15);color:#4da6ff;padding:1px 4px;border-radius:3px;margin-left:4px">OPT\x3C/span>' : '<span style="font-size:9px;background:rgba(0,214,143,.1);color:#00d68f;padding:1px 4px;border-radius:3px;margin-left:4px">EQ\x3C/span>';
-    if(!p || !p.raw) return '';
-    if(!p || !p.raw) return '';
-    if(!p || !p.raw) return '';
-    return '<div class="pos-row" onclick="goSize(\'' + p.raw.replace(/^-/,'').split(/[0-9]/)[0] + '\')">' +
-      '<div style="width:6px;height:6px;border-radius:50%;background:' + dot + ';flex-shrink:0;margin-right:4px">\x3C/div>' +
-      (p.gt === false ? '<div title="Long-term hold (click to mark as GT)" onclick="event.stopPropagation();tagPosition(\'' + p.raw + '\',true)" style="width:14px;height:14px;border-radius:3px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);cursor:pointer;flex-shrink:0;margin-right:4px;display:flex;align-items:center;justify-content:center"><span style="font-size:7px;color:#555c6e">LT\x3C/span>\x3C/div>' :
-       p.gt === true  ? '<div title="GOGO position (click to mark as Long-term)" onclick="event.stopPropagation();tagPosition(\'' + p.raw + '\',false)" style="width:14px;height:14px;border-radius:3px;background:rgba(240,192,64,.15);border:1px solid rgba(240,192,64,.3);cursor:pointer;flex-shrink:0;margin-right:4px;display:flex;align-items:center;justify-content:center"><span style="font-size:7px;color:#f0c040">GT\x3C/span>\x3C/div>' :
-       '<div title="Click to tag as GT or Long-term" onclick="event.stopPropagation();tagPosition(\'' + p.raw + '\',true)" style="width:14px;height:14px;border-radius:3px;background:rgba(255,255,255,.03);border:1px dashed rgba(255,255,255,.08);cursor:pointer;flex-shrink:0;margin-right:4px">\x3C/div>') +
-      '<div style="font-family:\'SF Mono\',monospace;font-weight:600;width:110px;flex-shrink:0">' + p.t + typeTag + (p.e ? '<div style="font-size:10px;color:#555c6e;font-weight:400">' + p.e + (p.c > 1 ? ' | ' + p.c + 'ct' : '') + '\x3C/div>' : '') + '\x3C/div>' +
-      (val ? '<div style="font-family:\'SF Mono\',monospace;font-size:11px;color:#555c6e;width:70px;flex-shrink:0">' + val + (p.underlyingPx?'<div style="font-size:9px;color:#333a4a">'
-+p.underlyingPx+(p.underlyingChg>=0?' +':'')+p.underlyingChg?.toFixed(1)+'%\x3C/div>':'')+'\x3C/div>' : '<div style="width:70px;flex-shrink:0">\x3C/div>') +
-      '<div style="font-family:\'SF Mono\',monospace;font-size:12px;font-weight:500;flex:1;color:' + pc + '">' + ps + ' <span style="font-size:10px;opacity:.8">' + pcs + '\x3C/span>\x3C/div>' +
-      '<div style="font-size:11px;color:' + tc + ';width:80px;text-align:right">' + ts + ' today\x3C/div>' +
-      '<div><button class="btn btn-ghost" style="font-size:10px;padding:2px 6px;margin-left:8px" onclick="event.stopPropagation();goSize(\\\'\' + p.raw.replace(/^-/,\'\').split(/[0-9]/)[0] + \'\\\')">Size ->\x3C/button>\x3C/div>' +
-    '\x3C/div>'
-  }).join('')
-}
-
-
 // -- INIT ========================================
 function initPlatform() {
   console.log('[INIT-BOOT] initPlatform entry. readyState=', document.readyState, 'KEY=', !!KEY)
@@ -9891,9 +9111,6 @@ function initPlatform() {
       const overlay = document.getElementById('setup-overlay')
       if(overlay) overlay.style.display = 'flex';
     }
-    console.log('[INIT-BOOT] before loadPortfolioData')
-    loadPortfolioData()
-    console.log('[INIT-BOOT] after loadPortfolioData')
     console.log('[INIT-BOOT] before loadOVData')
     loadOVData()
     console.log('[INIT-BOOT] after loadOVData')
@@ -9909,9 +9126,6 @@ function initPlatform() {
     console.log('[INIT-BOOT] before loadRiskSettings')
     loadRiskSettings()
     console.log('[INIT-BOOT] after loadRiskSettings')
-    console.log('[INIT-BOOT] before renderPortfolio')
-    renderPortfolio()
-    console.log('[INIT-BOOT] after renderPortfolio')
     console.log('[INIT-BOOT] before renderTrades')
     renderTrades()
     console.log('[INIT-BOOT] after renderTrades')
@@ -10420,100 +9634,6 @@ function renderAnalytics() {
     }).join('') + '\x3C/tbody>'
 }
 
-// ── PORTFOLIO LIVE PRICE REFRESH ─────────────────────────────────────────────
-async function refreshPortfolioPrices() {
-  const btn = document.getElementById('port-refresh-btn')
-  const status = document.getElementById('port-refresh-status')
-  if(btn) { btn.textContent = '⟳ Refreshing...'; btn.disabled = true }
-
-  const to   = new Date().toISOString().split('T')[0]
-  const from = new Date(Date.now()-4*864e5).toISOString().split('T')[0]
-
-  // Get unique underlying tickers from positions
-  const tickerSet = new Set()
-  POSITIONS.forEach(p => {
-    const base = p.raw ? p.raw.replace(/^-/,'').match(/^([A-Z]+)/)?.[1] : p.t?.split(' ')[0]
-    if(base) tickerSet.add(base)
-  })
-  const tickers = [...tickerSet]
-  const prices = {}
-  let fetched = 0
-
-  if(status) status.textContent = 'fetching '+tickers.length+' tickers...'
-
-  for(const t of tickers) {
-    try {
-      const d = await apiGet('/v2/aggs/ticker/'+t+'/range/1/day/'+from+'/'+to+'?adjusted=true&sort=desc&limit=2')
-      if(d?.results?.[0]) {
-        const bar  = d.results[0]
-        const prev = d.results[1]?.c || bar.o
-        prices[t] = { close: bar.c, chg: (bar.c-prev)/prev*100 }
-        fetched++
-      }
-    } catch(e) {}
-    if(status) status.textContent = fetched+'/'+tickers.length+' done'
-  }
-
-  // Update POSITIONS with refreshed prices
-  let updated = 0
-  for(const p of POSITIONS) {
-    const base = p.raw ? p.raw.replace(/^-/,'').match(/^([A-Z]+)/)?.[1] : p.t?.split(' ')[0]
-    if(!base || !prices[base]) return
-    const px = prices[base]
-    if(p.type === 'stock') {
-      const costPerShare = p.cost || 0
-      const shares = p.c || 0
-      p.curPx    = +px.close.toFixed(2)
-      p.val      = Math.round(px.close * shares)
-      p.pnl      = Math.round((px.close - costPerShare) * shares)
-      p.pct      = costPerShare > 0 ? +((px.close-costPerShare)/costPerShare*100).toFixed(2) : 0
-      p.today    = Math.round(px.chg/100 * p.val)
-      p.todayPct = +px.chg.toFixed(2)
-      updated++
-    } else {
-      // Options: update underlying + try live option snapshot via OCC
-      p.underlyingPx  = +px.close.toFixed(2)
-      p.underlyingChg = +px.chg.toFixed(2)
-      const rawOcc = p.raw ? p.raw.replace(/^-/,'') : '';
-      if(rawOcc && /^[A-Z]+\d{6}[CP]/.test(rawOcc)) {
-        try {
-          // Single-contract snapshot endpoint — results is an OBJECT for
-          // that exact contract, not an array. The list endpoint with
-          // ?ticker= can silently ignore the filter and return a
-          // deepest-ITM contract priced near the underlying.
-          const optSnap = await apiGet('/v3/snapshot/options/'+base+'/O:'+rawOcc, false, true)
-          const r = (optSnap && optSnap.results && typeof optSnap.results === 'object' && !Array.isArray(optSnap.results))
-            ? optSnap.results : (optSnap?.results?.[0] || null)
-          if(r && r.details && String(r.details.ticker||'').replace(/^O:/,'').toUpperCase() === rawOcc.toUpperCase()) {
-            // Mid preferred; last trade next; day close last (can be stale)
-            const bid = (typeof r.last_quote?.bid === 'number' && r.last_quote.bid > 0) ? r.last_quote.bid : null
-            const ask = (typeof r.last_quote?.ask === 'number' && r.last_quote.ask > 0) ? r.last_quote.ask : null
-            let optPx = (bid !== null && ask !== null && ask >= bid) ? (bid + ask) / 2 : null
-            if(optPx == null && typeof r.last_trade?.price === 'number' && r.last_trade.price > 0) optPx = r.last_trade.price
-            if(optPx == null && typeof r.day?.close === 'number' && r.day.close > 0) optPx = r.day.close
-            if(optPx > 0) {
-              const cts = p.c || 1
-              p.val   = Math.round(optPx * 100 * cts)
-              p.today = r.day?.change ? Math.round(r.day.change * 100 * cts) : p.today
-              p.pnl   = p.costTotal ? Math.round(p.val - p.costTotal) : p.pnl
-              p.pct   = p.costTotal ? +((p.val-p.costTotal)/p.costTotal*100).toFixed(2) : p.pct
-            }
-          }
-        } catch(e) {}
-      }
-      updated++
-    }
-  }
-
-  // Save refreshed data + re-render
-  savePortfolioData(POSITIONS, {refreshedAt: new Date().toLocaleTimeString()})
-  renderPortfolio()
-
-  const ts = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})
-  if(status) status.textContent = 'Updated '+ts+' ('+updated+' positions)';
-  if(btn) { btn.textContent = '⟳ Refresh Prices'; btn.disabled = false }
-  setApi('Portfolio refreshed: '+fetched+' prices updated', 'ok')
-}
 
 // Wait for DOM to be fully ready
 if(document.readyState === 'loading') {
