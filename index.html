@@ -660,12 +660,15 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
     </div>
   </div>
   <div class="card-body" style="padding:0">
-    <div style="padding:10px 12px;border-bottom:1px solid #1e2d3d;display:flex;gap:10px;align-items:stretch">
+    <div id="pl-add-ticker-row" style="padding:10px 12px;border-bottom:1px solid #1e2d3d;display:flex;gap:10px;align-items:stretch;position:relative;z-index:1"
+      onclick="(function(e){if(e.target.tagName!=='BUTTON'&&e.target.tagName!=='INPUT'){var i=document.getElementById('pl-add-ticker');if(i){i.focus();console.info('[PL-ADD] toolbar click → input.focus()')}}})(event)">
       <input type="text" id="pl-add-ticker" placeholder="Add ticker (e.g. AAPL)"
-        style="flex:1 1 auto;min-width:0;font-size:14px;padding:9px 12px;text-transform:uppercase;background:#0a0c0f;border:1px solid rgba(255,255,255,.12);border-radius:5px;color:#e8eaf0;outline:none;font-family:inherit;box-sizing:border-box"
+        autocomplete="off" spellcheck="false" autocapitalize="characters" tabindex="0"
+        style="flex:1 1 auto;min-width:0;font-size:14px;padding:9px 12px;text-transform:uppercase;background:#0a0c0f;border:1px solid rgba(255,255,255,.12);border-radius:5px;color:#e8eaf0;outline:none;font-family:inherit;box-sizing:border-box;pointer-events:auto;user-select:text;-webkit-user-select:text;position:relative;z-index:2"
         oninput="this.value=this.value.toUpperCase()"
         onkeydown="if(event.key==='Enter')addCandidate(this.value)"
-        onfocus="this.style.borderColor='#f0c040'" onblur="this.style.borderColor='rgba(255,255,255,.12)'">
+        onfocus="this.style.borderColor='#f0c040';console.info('[PL-ADD] focus',{activeBefore:document.activeElement&&document.activeElement.id})"
+        onblur="this.style.borderColor='rgba(255,255,255,.12)';console.info('[PL-ADD] blur',{to:document.activeElement&&document.activeElement.tagName,id:document.activeElement&&document.activeElement.id})">
       <button onclick="addCandidate(document.getElementById('pl-add-ticker').value)" class="btn btn-gold"
         style="font-size:13px;padding:0 18px;white-space:nowrap;flex:0 0 auto;font-weight:600">+ Add</button>
     </div>
@@ -5994,8 +5997,12 @@ function selectCandidateForSizing(c, row) {
   wrap._wheelFixWired = true
   wrap.addEventListener('wheel', function(e) {
     const t = e.target
-    if(t && t.tagName === 'INPUT' && (t.type === 'number' || t.type === 'text')) {
-      // Unfocus so the browser stops routing wheel to the input
+    // Only number inputs have the browser-native wheel-to-spin behavior
+    // that steals scroll events. Text inputs (and the Add-ticker box
+    // outside this wrap) must NOT be blurred — that would stop typing
+    // mid-word if the handler somehow reaches them. Per user spec, this
+    // is now number-only.
+    if(t && t.tagName === 'INPUT' && t.type === 'number') {
       if(document.activeElement === t) t.blur()
     }
   }, { passive: true, capture: true })
