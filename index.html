@@ -110,10 +110,37 @@ input:-webkit-autofill,input:-webkit-autofill:hover,input:-webkit-autofill:focus
   -webkit-background-clip:padding-box!important;
   -webkit-appearance:none!important;
   appearance:none!important;
+  /* Text-layout guards: pin every property that could push glyphs
+     out of their visible row or render them at 0-width / 0-height.
+     Prior diagnostic run confirmed color/fill/caret/opacity/bg were
+     correct, so if text still looks invisible these are the
+     remaining render-path suspects. */
+  line-height:1.2!important;
+  text-indent:0!important;
+  letter-spacing:normal!important;
+  word-spacing:normal!important;
+  /* Isolation + paint-layer separation (unchanged) */
   isolation:isolate;
   transform:translateZ(0);
   position:relative;
   z-index:2;
+}
+/* Explicit selection colors for this input. The browser's default
+   ::selection on a #0a0c0f background made selected text blend
+   into the highlight — which is exactly what was happening when
+   the prior diagnostic auto-injected "TEST" and .select()ed it.
+   With the TEST behavior removed this mostly doesn't trigger in
+   normal typing, but setting explicit colors ensures that if the
+   user ever selects text inside the field (triple-click, Cmd-A,
+   drag) it remains legible. */
+#pl-add-ticker::selection{
+  background:rgba(240,192,64,0.35)!important;
+  color:#ffffff!important;
+  -webkit-text-fill-color:#ffffff!important;
+}
+#pl-add-ticker::-moz-selection{
+  background:rgba(240,192,64,0.35)!important;
+  color:#ffffff!important;
 }
 #pl-add-ticker::placeholder{
   color:rgba(255,255,255,0.45)!important;
@@ -713,7 +740,7 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
       onclick="(function(e){if(e.target.tagName!=='BUTTON'&&e.target.tagName!=='INPUT'){var i=document.getElementById('pl-add-ticker');if(i){i.focus();console.info('[PL-ADD] toolbar click → input.focus()')}}})(event)">
       <input type="text" id="pl-add-ticker" placeholder="Add ticker (e.g. AAPL)"
         autocomplete="off" spellcheck="false" autocapitalize="characters" tabindex="0"
-        style="flex:1 1 auto;min-width:0;font-size:14px;padding:9px 12px;text-transform:uppercase;background:#0a0c0f;border:1px solid rgba(255,255,255,0.12);border-radius:5px;outline:none;font-family:inherit;box-sizing:border-box;pointer-events:auto;user-select:text;-webkit-user-select:text;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;caret-color:#ffffff!important;opacity:1!important;text-shadow:none!important;mix-blend-mode:normal!important;filter:none!important;background-clip:padding-box!important;-webkit-background-clip:padding-box!important;-webkit-appearance:none!important;appearance:none!important;isolation:isolate;transform:translateZ(0);position:relative;z-index:2"
+        style="flex:1 1 auto;min-width:0;font-size:14px;padding:9px 12px;text-transform:uppercase;background:#0a0c0f;border:1px solid rgba(255,255,255,0.12);border-radius:5px;outline:none;font-family:inherit;box-sizing:border-box;pointer-events:auto;user-select:text;-webkit-user-select:text;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;caret-color:#ffffff!important;opacity:1!important;text-shadow:none!important;mix-blend-mode:normal!important;filter:none!important;background-clip:padding-box!important;-webkit-background-clip:padding-box!important;-webkit-appearance:none!important;appearance:none!important;line-height:1.2!important;text-indent:0!important;letter-spacing:normal!important;word-spacing:normal!important;isolation:isolate;transform:translateZ(0);position:relative;z-index:2"
         oninput="this.value=this.value.toUpperCase()"
         onkeydown="if(event.key==='Enter')addCandidate(this.value)"
         onfocus="plAddTickerDiagOnFocus(this)"
@@ -5391,45 +5418,36 @@ async function initPlanner() {
 // (< 5 min) to avoid redundant API hits; if everything is fresh, just
 // rerenders. After a real fetch, re-renders the Candidates table so
 // the new stop columns paint and Trade buttons re-enable.
-// Temporary diagnostic: runs on every focus of #pl-add-ticker. Dumps
-// the computed style of every property that could plausibly hide
-// typed text, and if the input is empty, injects 'TEST' so we can
-// visually confirm whether characters render at all. If 'TEST' is
-// visible but user-typed characters are not, the problem is in the
-// input pipeline (IME / extension) not the render pipeline. If
-// neither is visible, the computed-style dump will disclose which
-// property is wrong.
+// Focus diagnostic for #pl-add-ticker. Logs computed styles that
+// could affect typed-text visibility. Does NOT mutate the input's
+// value or selection — the prior TEST-inject + el.select() was
+// itself producing the "invisible" symptom (the injected string
+// got auto-selected and the browser's default ::selection colors
+// against a dark background made the selected glyphs look blank
+// until the next keystroke cleared the selection).
 function plAddTickerDiagOnFocus(el) {
   try {
     const cs = getComputedStyle(el)
     console.info('[PL-ADD-DIAG] computed style on focus', {
+      // Core rendering (already confirmed correct in prior run)
       color:                cs.color,
       webkitTextFillColor:  cs.webkitTextFillColor,
       caretColor:           cs.caretColor,
       opacity:              cs.opacity,
       backgroundColor:      cs.backgroundColor,
-      backgroundImage:      cs.backgroundImage,
-      mixBlendMode:         cs.mixBlendMode,
-      filter:               cs.filter,
-      textShadow:           cs.textShadow,
-      visibility:           cs.visibility,
-      fontFamily:           cs.fontFamily,
+      // Text-layout properties — new targets for the next round
+      // (any non-"normal"/non-zero value here can push glyphs out of
+      // their visible row or distort them into unreadability).
       fontSize:             cs.fontSize,
-      textTransform:        cs.textTransform,
-      isolation:            cs.isolation,
-      transform:            cs.transform,
-      zIndex:               cs.zIndex,
-      // Size / position to confirm the input is where we think
-      clientRect:           JSON.parse(JSON.stringify(el.getBoundingClientRect())),
+      lineHeight:           cs.lineHeight,
+      textIndent:           cs.textIndent,
+      letterSpacing:        cs.letterSpacing,
+      textShadow:           cs.textShadow,
+      filter:               cs.filter,
+      mixBlendMode:         cs.mixBlendMode,
+      // Form-control styling on/off
+      appearance:           cs.appearance || cs.webkitAppearance,
     })
-    // Inject a known value so text rendering can be visually verified
-    // even if keystrokes are being swallowed somewhere.
-    if(!el.value) {
-      el.value = 'TEST'
-      console.info('[PL-ADD-DIAG] injected el.value = "TEST" (clear to type your own)')
-      // Select it so the first keystroke replaces the test string
-      try { el.select() } catch(e) {}
-    }
   } catch(e) {
     console.warn('[PL-ADD-DIAG] threw', e && e.message)
   }
