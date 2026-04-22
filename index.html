@@ -671,20 +671,21 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
     </div>
     <div id="pl-cand-table" style="overflow:auto">
       <table style="width:100%;border-collapse:collapse;font-size:12px">
-        <thead><tr style="color:#555c6e;font-size:10px;text-transform:uppercase;border-bottom:1px solid #1e2d3d">
-          <th style="padding:6px 10px;text-align:left">Ticker</th>
-          <th style="padding:6px 4px;text-align:left">Sector</th>
+        <thead id="pl-cand-head" onclick="(function(e){var th=e.target.closest('th[data-sort-key]');if(th)plSort(th.getAttribute('data-sort-key'))})(event)">
+          <tr style="color:#555c6e;font-size:10px;text-transform:uppercase;border-bottom:1px solid #1e2d3d">
+          <th data-sort-key="ticker" style="padding:6px 10px;text-align:left;cursor:pointer;user-select:none">Ticker<span class="pl-sort-ind" style="margin-left:4px;color:#333a4a"></span></th>
+          <th data-sort-key="sector" style="padding:6px 4px;text-align:left;cursor:pointer;user-select:none">Sector<span class="pl-sort-ind" style="margin-left:4px;color:#333a4a"></span></th>
           <th style="padding:6px 4px;text-align:right">ATR</th>
-          <th style="padding:6px 4px;text-align:right" title="GT Score — 0–10 scale (same as Screener). Weighted: trend 30% + momentum 25% + RS 20% + structure 15% + volume 10%. Color: ≥8 green, ≥6 amber, ≥4 orange, <4 red.">GT</th>
-          <th style="padding:6px 4px;text-align:right" title="Stock stop at entry − 0.5 · ATR (based on current stock price)">-.5 ATR</th>
-          <th style="padding:6px 4px;text-align:right" title="Stock stop at entry − 1.0 · ATR (based on current stock price)">-1 ATR</th>
+          <th data-sort-key="gt" title="GT Score — 0–10 scale (same as Screener). Weighted: trend 30% + momentum 25% + RS 20% + structure 15% + volume 10%. Color: ≥8 green, ≥6 amber, ≥4 orange, <4 red." style="padding:6px 4px;text-align:right;cursor:pointer;user-select:none">GT<span class="pl-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
+          <th data-sort-key="stop05" title="Stock stop at entry − 0.5 · ATR (based on current stock price)" style="padding:6px 4px;text-align:right;cursor:pointer;user-select:none">-.5 ATR<span class="pl-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
+          <th data-sort-key="stop10" title="Stock stop at entry − 1.0 · ATR (based on current stock price)" style="padding:6px 4px;text-align:right;cursor:pointer;user-select:none">-1 ATR<span class="pl-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
           <th style="padding:6px 4px;text-align:right">Delta</th>
           <th style="padding:6px 4px;text-align:right">RPC</th>
           <th style="padding:6px 4px;text-align:right">Risk $</th>
           <th style="padding:6px 4px;text-align:right">Cts</th>
-          <th style="padding:6px 4px;text-align:right">Capital</th>
-          <th style="padding:6px 4px;text-align:right">Signal%</th>
-          <th style="padding:6px 4px;text-align:right">F&G</th>
+          <th data-sort-key="capital" style="padding:6px 4px;text-align:right;cursor:pointer;user-select:none">Capital<span class="pl-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
+          <th data-sort-key="signal" style="padding:6px 4px;text-align:right;cursor:pointer;user-select:none">Signal%<span class="pl-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
+          <th data-sort-key="fg" style="padding:6px 4px;text-align:right;cursor:pointer;user-select:none">F&G<span class="pl-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
           <th style="padding:6px 4px;text-align:center">Status</th>
           <th style="padding:6px 4px"></th>
         </tr></thead>
@@ -5217,6 +5218,80 @@ function checkCanTakeTrade(perTrade) {
 var PLANNER_CANDIDATES = JSON.parse(localStorage.getItem("gt_planner_candidates") || "[]")
 var PLANNER_ATR_CACHE = {}
 var PLANNER_SECTOR_VIEW = false
+// ── CANDIDATES SORT STATE ───────────────────────────────────────────────────
+// Persisted to localStorage so the user's sort preference survives reload.
+// key = one of: 'ticker' | 'sector' | 'gt' | 'stop05' | 'stop10' | 'capital'
+//              | 'signal' | 'fg' | null (== original order)
+// dir = 1 (ascending) | -1 (descending)
+var PL_SORT = (function(){
+  try { const s = JSON.parse(localStorage.getItem('gt_pl_sort')||'null')
+        if(s && typeof s.key !== 'undefined' && (s.dir === 1 || s.dir === -1)) return s } catch(e) {}
+  return { key: null, dir: 1 }
+})()
+// 8 sortable columns. Type drives first-click direction per user spec:
+//   text columns → asc on first click
+//   numeric columns → desc on first click
+// Each entry's `getVal(c, ctx)` returns the comparable value (or null if
+// missing — null values always sort to the bottom regardless of direction).
+var PL_SORT_SPEC = {
+  ticker:  { type:'text',    getVal: c => (c.sym || '').toUpperCase() },
+  sector:  { type:'text',    getVal: (c, ctx) => (ctx.getSector ? ctx.getSector(c.sym) : '') || '' },
+  gt:      { type:'numeric', getVal: c => (typeof GT_SCORES !== 'undefined' && GT_SCORES[c.sym] && typeof GT_SCORES[c.sym].score === 'number') ? GT_SCORES[c.sym].score : null },
+  stop05:  { type:'numeric', getVal: c => {
+    const px = (typeof LIVE_PRICES !== 'undefined' && LIVE_PRICES[c.sym] && LIVE_PRICES[c.sym].price) || c.price || 0
+    return (px > 0 && c.atr > 0) ? (px - 0.5 * c.atr) : null
+  }},
+  stop10:  { type:'numeric', getVal: c => {
+    const px = (typeof LIVE_PRICES !== 'undefined' && LIVE_PRICES[c.sym] && LIVE_PRICES[c.sym].price) || c.price || 0
+    return (px > 0 && c.atr > 0) ? (px - 1.0 * c.atr) : null
+  }},
+  capital: { type:'numeric', getVal: (c, ctx) => {
+    const risk  = c.riskOverride || ctx.defaultRisk || 0
+    const delta = c.delta || ctx.defaultDelta || 0
+    const atr   = c.atr || 0
+    const rpc   = atr * delta * 100
+    const cts   = rpc > 0 ? Math.floor(risk / rpc) : 0
+    const cap   = cts * (c.optcost || 0) * 100
+    return cap > 0 ? cap : null
+  }},
+  signal:  { type:'numeric', getVal: c => (typeof OV !== 'undefined' && OV[c.sym] && typeof OV[c.sym].r === 'number') ? OV[c.sym].r : null },
+  fg:      { type:'numeric', getVal: c => (typeof OV !== 'undefined' && OV[c.sym] && typeof OV[c.sym].fg === 'number') ? OV[c.sym].fg : null },
+}
+
+// Click handler — wired from the thead's data-sort-key attributes.
+function plSort(key) {
+  if(!PL_SORT_SPEC[key]) return
+  if(PL_SORT.key === key) {
+    PL_SORT.dir = PL_SORT.dir === 1 ? -1 : 1          // toggle direction
+  } else {
+    PL_SORT.key = key
+    // text: first click ascending; numeric: first click descending
+    PL_SORT.dir = PL_SORT_SPEC[key].type === 'text' ? 1 : -1
+  }
+  try { localStorage.setItem('gt_pl_sort', JSON.stringify(PL_SORT)) } catch(e) {}
+  if(typeof renderCandidateTable === 'function') renderCandidateTable()
+}
+
+// Returns a shallow-sorted copy of PLANNER_CANDIDATES per PL_SORT.
+// Missing values are always placed at the bottom, independent of dir.
+function applyCandSort(list, ctx) {
+  if(!PL_SORT.key || !PL_SORT_SPEC[PL_SORT.key]) return list.slice()
+  const spec = PL_SORT_SPEC[PL_SORT.key]
+  const dir  = PL_SORT.dir
+  const isNumeric = spec.type === 'numeric'
+  const indexed = list.map((c, i) => ({ c, i, v: spec.getVal(c, ctx) }))
+  indexed.sort((a, b) => {
+    // Null/undefined/empty strings → bottom (stable).
+    const aMissing = a.v == null || (typeof a.v === 'string' && a.v === '') || (typeof a.v === 'number' && !isFinite(a.v))
+    const bMissing = b.v == null || (typeof b.v === 'string' && b.v === '') || (typeof b.v === 'number' && !isFinite(b.v))
+    if(aMissing && bMissing) return a.i - b.i
+    if(aMissing) return 1
+    if(bMissing) return -1
+    const cmp = isNumeric ? (a.v - b.v) : String(a.v).localeCompare(String(b.v))
+    return cmp !== 0 ? dir * cmp : a.i - b.i            // stable on tie
+  })
+  return indexed.map(x => x.c)
+}
 
 function rootTicker(raw) {
   return (raw || "").split(" ")[0].replace(/[$]/g,"").toUpperCase()
@@ -5347,7 +5422,8 @@ function renderCandidateTable() {
   var tbody = document.getElementById("pl-cand-body")
   if(!tbody) return
   if(!PLANNER_CANDIDATES.length){
-    tbody.innerHTML="<tr><td colspan='10' style='padding:12px;text-align:center;color:#555c6e'>Star stocks in Screener or add a ticker above\x3C/td>\x3C/tr>";
+    tbody.innerHTML="<tr><td colspan='15' style='padding:12px;text-align:center;color:#555c6e'>Star stocks in Screener or add a ticker above\x3C/td>\x3C/tr>";
+    if(typeof updatePlSortIndicators === 'function') updatePlSortIndicators()
     return
   }
   var defaultRisk = +document.getElementById("pl-default-risk")?.value || 5500
@@ -5356,7 +5432,16 @@ function renderCandidateTable() {
   var budget = +localStorage.getItem("gt_risk_budget") || +document.getElementById("risk-budget")?.value || 21000
   var available = Math.max(0, budget - deployed)
   var cumulative = 0
-  var rows = PLANNER_CANDIDATES.map(function(c, idx) {
+  // Apply per-column sort (click-to-sort on 8 Candidates headers). Returns
+  // a shallow copy so the underlying PLANNER_CANDIDATES order is never
+  // mutated — click-ordering is a display-only concern. data-cand-idx
+  // in each row references the ORIGINAL index in PLANNER_CANDIDATES so
+  // every existing action (updateCandidateDelta / updateCandidateRisk /
+  // removeCandidate / convertCandidateToTrade) keeps working unchanged.
+  var _sortCtx = { defaultRisk: defaultRisk, defaultDelta: defaultDelta, getSector: getSector }
+  var sortedList = (typeof applyCandSort === 'function') ? applyCandSort(PLANNER_CANDIDATES, _sortCtx) : PLANNER_CANDIDATES.slice()
+  var rows = sortedList.map(function(c) {
+    var idx = PLANNER_CANDIDATES.indexOf(c)
     var sym = c.sym
     var sector = getSector(sym)
     var atr = c.atr || 0
@@ -5456,6 +5541,28 @@ function renderCandidateTable() {
   var el1=document.getElementById("pl-cand-risk-total");if(el1)el1.textContent=totalRisk>0?"-$"+Math.round(totalRisk).toLocaleString():"--";
   var el2=document.getElementById("pl-cand-cap-total");if(el2)el2.textContent=totalCap>0?"$"+Math.round(totalCap).toLocaleString():"--"
   document.getElementById("pl-cand-count").textContent = PLANNER_CANDIDATES.length
+  // Refresh column header arrows to match current PL_SORT state.
+  if(typeof updatePlSortIndicators === 'function') updatePlSortIndicators()
+}
+
+// Update the sort-arrow indicator on each sortable <th>. Called from
+// renderCandidateTable after the rows are painted so direction / active-
+// column visuals always match PL_SORT. Active column: gold arrow, bold
+// text. Inactive columns: dim dot so the column is visibly clickable.
+function updatePlSortIndicators() {
+  const head = document.getElementById('pl-cand-head')
+  if(!head) return
+  head.querySelectorAll('th[data-sort-key]').forEach(th => {
+    const key = th.getAttribute('data-sort-key')
+    const ind = th.querySelector('.pl-sort-ind')
+    const active = key === PL_SORT.key
+    if(ind) {
+      ind.textContent = active ? (PL_SORT.dir === 1 ? '▲' : '▼') : '⇅'
+      ind.style.color = active ? '#f0c040' : '#333a4a'
+      ind.style.fontSize = active ? '10px' : '9px'
+    }
+    th.style.color = active ? '#f0c040' : ''
+  })
 }
 
 // ── CANDIDATE ACTIONS ────────────────────────────────────────────────────────
