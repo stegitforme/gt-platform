@@ -710,6 +710,16 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
                after autoFillOptionFromChain resolves. Empty by default
                so the area collapses until a chain contract is selected. -->
           <div id="qs-quality" style="margin-top:10px"></div>
+          <!-- Add Trade: canonicalizes Quick Size inputs and pushes into
+               TRADES using the same saveTrade path the New Trade form uses
+               (findDuplicateOpenTrade, buildOCCFromParts, fbAutoSave, etc). -->
+          <div id="qs-add-trade-wrap" style="margin-top:10px">
+            <button id="qs-add-trade-btn" type="button" onclick="addQuickSizeTradeToManager()"
+              style="width:100%;padding:10px 14px;border-radius:8px;border:1px solid rgba(240,192,64,.35);background:#f0c040;color:#111;font-weight:700;cursor:pointer;font-family:inherit">
+              + Add Trade to Manager
+            </button>
+            <div id="qs-add-trade-msg" style="margin-top:6px;font-size:11px;min-height:15px;color:#8b91a0"></div>
+          </div>
           <div id="lvl-body" style="margin-top:10px"></div>
         </div>
       </div>
@@ -5906,6 +5916,129 @@ function _scheduleAutoFillFromChain() {
     el.addEventListener('change', _scheduleAutoFillFromChain)
   })
 })()
+
+// ── QUICK SIZE → ADD TRADE ──────────────────────────────────────────────────
+// Build a canonical trade from the currently-filled Quick Size inputs and
+// push it into TRADES using the same persistence path saveTrade() uses
+// (findDuplicateOpenTrade → TRADES.push → saveTrades → renderTrades →
+// renderPortfolioRisk → fbAutoSave → refreshAllPnL). Trade is tagged with
+// source='planner-auto' so it's distinguishable from manual New Trade /
+// Fidelity import / Planner candidate conversions.
+function _qsNum(id) {
+  const el = document.getElementById(id); if(!el) return 0
+  const v = parseFloat(String(el.value || '').replace(/[^0-9.\-]/g,''))
+  return Number.isFinite(v) ? v : 0
+}
+function _qsTxt(id) {
+  const el = document.getElementById(id)
+  return el ? String(el.value || '').trim() : ''
+}
+function _qsAddTradeMsg(txt, kind) {
+  const el = document.getElementById('qs-add-trade-msg')
+  if(!el) return
+  el.textContent = txt || ''
+  el.style.color = kind === 'ok' ? '#00d68f' : kind === 'err' ? '#ff4560' : '#8b91a0'
+}
+
+function addQuickSizeTradeToManager() {
+  try {
+    _qsAddTradeMsg('')
+    const sym      = _qsTxt('tkr').toUpperCase()
+    const entry    = _qsNum('entry')       // underlying price
+    const atr      = _qsNum('atr')
+    const delta    = _qsNum('delta') || 0.80
+    const strike   = _qsNum('strike')
+    const expiryRaw= _qsTxt('expiry')
+    const optcost  = _qsNum('optcost')
+
+    if(!sym)       { _qsAddTradeMsg('Missing ticker',       'err'); return }
+    if(!entry)     { _qsAddTradeMsg('Missing entry price',  'err'); return }
+    if(!atr)       { _qsAddTradeMsg('Missing ATR',          'err'); return }
+    if(!strike)    { _qsAddTradeMsg('Missing strike',       'err'); return }
+    if(!expiryRaw) { _qsAddTradeMsg('Missing expiry',       'err'); return }
+    if(!optcost)   { _qsAddTradeMsg('Missing option cost',  'err'); return }
+
+    // Recompute contracts the same way calc() does so the trade matches
+    // what the scenarios table was showing. Preferred source for per-trade
+    // risk is the Planner (same helper Quick Size's calc() uses now).
+    const perTrade = (typeof getPlannerPerTradeRisk === 'function')
+      ? getPlannerPerTradeRisk()
+      : ((+localStorage.getItem('gt_risk_budget') || 21000) / 10)
+    const rpc = atr * delta * 100
+    const cts = rpc > 0 ? Math.max(1, Math.floor(perTrade / rpc)) : 1
+
+    // Expiry ISO via the unified parser (handles "May-26", "May-15-2026",
+    // "2026-05-15", etc.).
+    const expiryISO = (typeof parseTradeExpiryISO === 'function')
+      ? parseTradeExpiryISO(expiryRaw)
+      : ''
+
+    // Build the canonical trade — same field set saveTrade() produces so
+    // every existing renderer/refresher picks it up with zero changes.
+    const type = 'Call'  // Quick Size is call-focused; buildOCCFromParts handles the rest
+    const underlying = sym.split(' ')[0].trim().toUpperCase()
+    const occ = (typeof buildOCCFromParts === 'function')
+      ? buildOCCFromParts(underlying, expiryISO, strike, type)
+      : ''
+
+    const costTotal = optcost * 100 * cts
+
+    const t = {
+      id:         Date.now() + Math.floor(Math.random() * 1000),
+      ticker:     underlying + ' ' + strike + (type === 'Call' ? 'C' : 'P'),
+      underlying: underlying,
+      type:       type,
+      desc:       expiryRaw,
+      expiryISO:  expiryISO || undefined,
+      occ:        occ || undefined,
+      strike:     strike,
+      cts:        cts,
+      cost:       optcost,         // per-contract premium
+      costTotal:  +costTotal.toFixed(2),
+      entry:      entry,           // underlying reference for ATR logic
+      stockPrice: entry,
+      atr:        atr,
+      date:       new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}).replace(',',''),
+      notes:      'From Planner Quick Size',
+      source:     'planner-auto',
+      status:     'open',
+      rolls:      [],
+      createdAt:  Date.now(),
+    }
+
+    // Dedup via the existing canonical helper
+    if(typeof findDuplicateOpenTrade === 'function') {
+      const dup = findDuplicateOpenTrade(t)
+      if(dup) {
+        _qsAddTradeMsg('Duplicate open trade already exists (id ' + dup.id + ')', 'err')
+        console.warn('[QS-ADD-TRADE] duplicate rejected', { candidate: t, existing: dup })
+        return
+      }
+    }
+
+    // Persist via the same path saveTrade() uses
+    if(!Array.isArray(window.TRADES)) window.TRADES = []
+    TRADES.push(t)
+    if(typeof saveTrades === 'function') saveTrades()
+    if(typeof renderTrades === 'function') renderTrades()
+    if(typeof renderPortfolioRisk === 'function') renderPortfolioRisk()
+    if(typeof fbAutoSave === 'function') fbAutoSave(1000)
+    // Kick live refresh so the new trade's curVal/totalGL tiles populate
+    // without waiting for the next manual Refresh P&L click (same pattern
+    // as saveTrade()).
+    if(typeof refreshAllPnL === 'function') setTimeout(refreshAllPnL, 150)
+
+    _qsAddTradeMsg('Added ' + underlying + ' ' + strike + (type==='Call'?'C':'P') + ' · ' + cts + ' ct' + (cts===1?'':'s') + ' · ' + expiryRaw, 'ok')
+    console.info('[QS-ADD-TRADE] built', {
+      id: t.id, ticker: t.ticker, occ: t.occ || '(none)', expiryISO: t.expiryISO || '(unparsed)',
+      strike: t.strike, cts: t.cts, cost: t.cost, costTotal: t.costTotal,
+      entry: t.entry, atr: t.atr, source: t.source,
+    })
+  } catch(e) {
+    console.warn('[QS-ADD-TRADE-ERROR]', e && e.message)
+    _qsAddTradeMsg(e.message || 'Could not add trade', 'err')
+  }
+}
 
 // Scoped CSS for the active-row highlight + hover affordance.
 ;(function injectCandRowCss() {
