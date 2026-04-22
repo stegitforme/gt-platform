@@ -389,7 +389,7 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 <button onclick="show('sizer',this);initPlanner()">Planner</button>
   <button onclick="show('trades',this)">Trade Manager</button>
   <button onclick="show('tenx',this)">10-Bagger</button>
-  <button onclick="show('backtest',this)">Backtest</button>
+  <button onclick="show('backtest',this)">TQQQ 35% Vol Strategy</button>
   <button onclick="show('analytics',this)">Analytics</button>
   <button onclick="show('portfolio',this)">Portfolio</button>
 </div>
@@ -468,20 +468,6 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
     </div>
   </div>
 
-  <!-- TQQQ VOL-TARGETING SIGNAL -->
-  <div class="card" style="margin-top:14px">
-    <div class="card-head">
-      <span class="card-title">TQQQ Live Estimate</span><span style="font-size:10px;color:#ff8c42;background:rgba(255,140,66,.1);border:1px solid rgba(255,140,66,.25);padding:2px 8px;border-radius:4px;margin-left:4px">⚠ Intraday estimate — not the official signal</span>
-      <div style="display:flex;gap:6px;align-items:center">
-        <span id="tqqq-updated" style="font-size:10px;color:#555c6e"></span>
-        <button class="btn btn-ghost" style="font-size:11px;padding:3px 9px" onclick="fetchTQQQSignal()">Calculate</button>
-      </div>
-    </div>
-    <div class="card-body" id="tqqq-body">
-      <div style="font-size:12px;color:#555c6e;text-align:center;padding:8px">Click Calculate to run the Vol(35%)+200MA weekly signal</div>
-    </div>
-  </div>
-
   <!-- LEAPS ENTRY TRACKER -->
   <div class="card" style="margin-top:14px;border-color:rgba(179,126,255,.2)">
     <div class="card-head" style="border-color:rgba(179,126,255,.15)">
@@ -496,17 +482,18 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
     </div>
   </div>
 
-  <!-- OFFICIAL SIGNAL BOX -->
-  <div class="card" style="margin-top:8px;border-color:rgba(77,166,255,.25)">
-    <div class="card-head" style="border-color:rgba(77,166,255,.15)">
-      <span class="card-title" style="color:#4da6ff">✅ Official Weekly Signal</span>
-      <div style="display:flex;gap:6px;align-items:center">
+  <!-- TQQQ WEEKLY SIGNAL (canonical Home card — single source of truth) -->
+  <div class="card" style="margin-top:14px;border-color:rgba(77,166,255,.28)">
+    <div class="card-head" style="border-color:rgba(77,166,255,.18)">
+      <span class="card-title" style="color:#4da6ff">TQQQ Weekly Signal</span>
+      <div style="display:flex;gap:8px;align-items:center">
         <span id="official-signal-date" style="font-size:10px;color:#555c6e"></span>
-        <a href="https://stegitforme.github.io/tqqq-vol-target/weekly_report.html" target="_blank" style="font-size:11px;color:#4da6ff;text-decoration:none;padding:3px 9px;border:1px solid rgba(77,166,255,.3);border-radius:4px">Full Report →</a>
+        <button class="btn btn-ghost" style="font-size:11px;padding:3px 9px;color:#4da6ff;border-color:rgba(77,166,255,.3)" onclick="show('backtest', document.querySelectorAll('.nav button')[5])">Strategy →</button>
+        <a href="https://stegitforme.github.io/tqqq-vol-target/weekly_report.html" target="_blank" style="font-size:11px;color:#4da6ff;text-decoration:none;padding:3px 9px;border:1px solid rgba(77,166,255,.3);border-radius:4px">Full Report</a>
       </div>
     </div>
-    <div class="card-body" id="official-signal-body" style="padding:12px 16px">
-      <div style="font-size:12px;color:#555c6e">Loading from weekly_report.py history...</div>
+    <div class="card-body" id="official-signal-body" style="padding:14px 18px">
+      <div style="font-size:12px;color:#555c6e;text-align:center;padding:10px">Loading weekly signal...</div>
     </div>
   </div>
 
@@ -1063,55 +1050,183 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 
 <!-- ═══ BACKTEST ═══════════════════════════════════════════════════════════════ -->
 <div id="backtest" class="page">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
-    <div>
-      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#555c6e;margin-bottom:3px">TQQQ Vol-Targeting Backtest</div>
-      <div style="font-size:11px;color:#555c6e">Vol(35%)+200MA weekly signal · TQQQ vs QQQ vs SPY benchmarks</div>
+  <!-- PAGE HEADER -->
+  <div style="margin-bottom:18px">
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#555c6e;margin-bottom:4px">TQQQ 35% Vol Strategy</div>
+    <div style="font-size:12px;color:#8b91a0">Weekly rules-based allocation between TQQQ and SGOV — vol-targeted at 35% annualized with a 200-day MA gate and Vol Acceleration Guard.</div>
+  </div>
+
+  <!-- §1 CURRENT SIGNAL -->
+  <div class="card" style="margin-bottom:14px;border-color:rgba(77,166,255,.28)">
+    <div class="card-head" style="border-color:rgba(77,166,255,.18)">
+      <span class="card-title" style="color:#4da6ff">① Current Signal</span>
+      <span id="strat-sig-date" style="font-size:10px;color:#555c6e"></span>
     </div>
-    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-      <div style="display:flex;gap:3px">
-        <button class="btn btn-ghost" style="font-size:11px;padding:4px 11px" data-btperiod="1" onclick="btSetPeriod(1)">1Y</button>
-        <button class="btn btn-ghost" style="font-size:11px;padding:4px 11px" data-btperiod="3" onclick="btSetPeriod(3)">3Y</button>
-        <button class="btn btn-gold" style="font-size:11px;padding:4px 11px" data-btperiod="5" onclick="btSetPeriod(5)">5Y</button>
-        <button class="btn btn-ghost" style="font-size:11px;padding:4px 11px" data-btperiod="10" onclick="btSetPeriod(10)">10Y</button>
-        <button class="btn btn-ghost" style="font-size:11px;padding:4px 11px" data-btperiod="12" onclick="btSetPeriod(12)">Since 2014</button>
-        <button class="btn btn-ghost" style="font-size:11px;padding:4px 11px" data-btperiod="9" onclick="btSetPeriod(9)">Since 2017</button>
-        <button class="btn btn-ghost" style="font-size:11px;padding:4px 11px" data-btperiod="13" onclick="btSetPeriod(13)">Since 2011</button>
+    <div class="card-body" id="strat-sig-body" style="padding:14px 18px">
+      <div style="font-size:12px;color:#555c6e;text-align:center;padding:8px">Loading weekly signal...</div>
+    </div>
+  </div>
+
+  <!-- §2 VOLATILITY CHART -->
+  <div class="card" style="margin-bottom:14px">
+    <div class="card-head">
+      <span class="card-title">② Realized Volatility (20-day)</span>
+      <span id="strat-vol-meta" style="font-size:10px;color:#555c6e"></span>
+    </div>
+    <div class="card-body" style="padding:12px 14px">
+      <canvas id="strat-vol-canvas" style="width:100%;height:200px;display:block"></canvas>
+      <div style="margin-top:6px;font-size:10px;color:#555c6e;display:flex;gap:14px;flex-wrap:wrap">
+        <span><span style="display:inline-block;width:10px;height:2px;background:#4da6ff;vertical-align:middle;margin-right:4px"></span>20-day realized vol</span>
+        <span><span style="display:inline-block;width:10px;height:2px;background:#f0c040;vertical-align:middle;margin-right:4px;border-top:1px dashed #f0c040"></span>35% vol target</span>
+        <span><span style="display:inline-block;width:10px;height:2px;background:#ff4560;vertical-align:middle;margin-right:4px;border-top:1px dashed #ff4560"></span>45% guard floor</span>
       </div>
-      <button class="btn btn-gold" id="bt-run-btn" onclick="btRun()" style="padding:6px 16px">&#9654; Run</button>
-      <span id="bt-status" style="font-size:11px;color:#555c6e;min-width:180px"></span>
     </div>
   </div>
-  <div id="bt-metrics" style="display:none;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:10px;margin-bottom:16px"></div>
-  <div id="bt-chart-wrap" style="display:none;background:#111318;border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:14px;margin-bottom:16px">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#555c6e">Equity Curve &mdash; $10,000 invested</div>
-      <div id="bt-legend" style="display:flex;gap:14px;font-size:10px;color:#555c6e"></div>
+
+  <!-- §3 VOL GUARD LOGIC -->
+  <div class="card" style="margin-bottom:14px">
+    <div class="card-head">
+      <span class="card-title">③ Vol Acceleration Guard</span>
+      <span id="strat-guard-state" style="font-size:10px;color:#555c6e"></span>
     </div>
-    <canvas id="bt-canvas" style="width:100%;height:280px;display:block"></canvas>
-  </div>
-  <div id="bt-table-wrap" style="display:none;margin-bottom:16px">
-    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#555c6e;margin-bottom:8px">Performance Summary</div>
-    <div style="overflow-x:auto;background:#111318;border:1px solid rgba(255,255,255,.07);border-radius:8px">
-      <table id="bt-perf-table" style="width:100%;border-collapse:collapse;font-size:12px"></table>
+    <div class="card-body" style="padding:14px 18px">
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px">
+        <div style="background:#0a0c0f;border:1px solid rgba(255,255,255,.06);border-radius:6px;padding:10px 12px">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#555c6e;margin-bottom:4px">Trigger A</div>
+          <div style="font-size:12px;color:#e8eaf0">Vol rises <b style="color:#ff8c42">≥ 30%</b> vs 5 days ago</div>
+        </div>
+        <div style="background:#0a0c0f;border:1px solid rgba(255,255,255,.06);border-radius:6px;padding:10px 12px">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#555c6e;margin-bottom:4px">Trigger B</div>
+          <div style="font-size:12px;color:#e8eaf0">Current vol <b style="color:#ff8c42">&gt; 45%</b> annualized</div>
+        </div>
+        <div style="background:#0a0c0f;border:1px solid rgba(240,192,64,.2);border-radius:6px;padding:10px 12px">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#f0c040;margin-bottom:4px">Action</div>
+          <div style="font-size:12px;color:#e8eaf0">Cap TQQQ at <b style="color:#f0c040">50%</b> regardless of vol formula</div>
+        </div>
+      </div>
+      <div style="font-size:11px;color:#8b91a0;line-height:1.5">The guard protects against rapid vol spikes that vol-targeting alone reacts to too slowly. Both triggers must fire — chronically high vol alone does not fire the guard.</div>
     </div>
   </div>
-  <div id="bt-annual-wrap" style="display:none;margin-bottom:16px">
-    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#555c6e;margin-bottom:8px">Annual Returns</div>
-    <div style="overflow-x:auto;background:#111318;border:1px solid rgba(255,255,255,.07);border-radius:8px">
-      <table id="bt-annual-table" style="width:100%;border-collapse:collapse;font-size:12px"></table>
+
+  <!-- §4 ALLOCATION HISTORY -->
+  <div class="card" style="margin-bottom:14px">
+    <div class="card-head">
+      <span class="card-title">④ Allocation History (weekly)</span>
+      <span id="strat-alloc-meta" style="font-size:10px;color:#555c6e"></span>
+    </div>
+    <div class="card-body" style="padding:12px 14px">
+      <canvas id="strat-alloc-canvas" style="width:100%;height:160px;display:block"></canvas>
     </div>
   </div>
-  <div id="bt-signal-wrap" style="display:none;margin-bottom:16px">
-    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#555c6e;margin-bottom:8px">Recent Signal Changes</div>
-    <div style="overflow-x:auto;background:#111318;border:1px solid rgba(255,255,255,.07);border-radius:8px">
-      <table id="bt-signal-table" style="width:100%;border-collapse:collapse;font-size:11px"></table>
+
+  <!-- §5 BACKTEST RESULTS -->
+  <div class="card" style="margin-bottom:14px">
+    <div class="card-head">
+      <span class="card-title">⑤ Backtest Results</span>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <div style="display:flex;gap:3px">
+          <button class="btn btn-ghost" style="font-size:11px;padding:4px 11px" data-btperiod="1" onclick="btSetPeriod(1)">1Y</button>
+          <button class="btn btn-ghost" style="font-size:11px;padding:4px 11px" data-btperiod="3" onclick="btSetPeriod(3)">3Y</button>
+          <button class="btn btn-gold" style="font-size:11px;padding:4px 11px" data-btperiod="5" onclick="btSetPeriod(5)">5Y</button>
+          <button class="btn btn-ghost" style="font-size:11px;padding:4px 11px" data-btperiod="10" onclick="btSetPeriod(10)">10Y</button>
+          <button class="btn btn-ghost" style="font-size:11px;padding:4px 11px" data-btperiod="12" onclick="btSetPeriod(12)">Since 2014</button>
+          <button class="btn btn-ghost" style="font-size:11px;padding:4px 11px" data-btperiod="9" onclick="btSetPeriod(9)">Since 2017</button>
+          <button class="btn btn-ghost" style="font-size:11px;padding:4px 11px" data-btperiod="13" onclick="btSetPeriod(13)">Since 2011</button>
+        </div>
+        <button class="btn btn-gold" id="bt-run-btn" onclick="btRun()" style="padding:6px 16px">&#9654; Run</button>
+        <span id="bt-status" style="font-size:11px;color:#555c6e;min-width:180px"></span>
+      </div>
+    </div>
+    <div class="card-body" style="padding:14px">
+      <div id="bt-metrics" style="display:none;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:10px;margin-bottom:14px"></div>
+      <div id="bt-chart-wrap" style="display:none;background:#0a0c0f;border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:12px;margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#555c6e">Equity Curve &mdash; $10,000 invested</div>
+          <div id="bt-legend" style="display:flex;gap:14px;font-size:10px;color:#555c6e"></div>
+        </div>
+        <canvas id="bt-canvas" style="width:100%;height:280px;display:block"></canvas>
+      </div>
+      <div id="bt-table-wrap" style="display:none;margin-bottom:14px">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#555c6e;margin-bottom:8px">Performance Summary</div>
+        <div style="overflow-x:auto;background:#0a0c0f;border:1px solid rgba(255,255,255,.07);border-radius:8px">
+          <table id="bt-perf-table" style="width:100%;border-collapse:collapse;font-size:12px"></table>
+        </div>
+      </div>
+      <div id="bt-annual-wrap" style="display:none;margin-bottom:14px">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#555c6e;margin-bottom:8px">Annual Returns</div>
+        <div style="overflow-x:auto;background:#0a0c0f;border:1px solid rgba(255,255,255,.07);border-radius:8px">
+          <table id="bt-annual-table" style="width:100%;border-collapse:collapse;font-size:12px"></table>
+        </div>
+      </div>
+      <div id="bt-signal-wrap" style="display:none">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#555c6e;margin-bottom:8px">Recent Signal Changes</div>
+        <div style="overflow-x:auto;background:#0a0c0f;border:1px solid rgba(255,255,255,.07);border-radius:8px">
+          <table id="bt-signal-table" style="width:100%;border-collapse:collapse;font-size:11px"></table>
+        </div>
+      </div>
+      <div id="bt-empty" style="text-align:center;padding:40px 20px;color:#555c6e">
+        <div style="font-size:28px;margin-bottom:10px">&#128202;</div>
+        <div style="font-size:13px;color:#8b91a0;margin-bottom:4px">Select a period and click Run</div>
+        <div style="font-size:11px">Data fetched live via Cloudflare proxy &middot; Vol(35%)+200MA &middot; Weekly signal</div>
+      </div>
     </div>
   </div>
-  <div id="bt-empty" style="text-align:center;padding:60px 20px;color:#555c6e">
-    <div style="font-size:32px;margin-bottom:12px">&#128202;</div>
-    <div style="font-size:14px;color:#8b91a0;margin-bottom:6px">Select a period and click Run</div>
-    <div style="font-size:11px">Data fetched live via Cloudflare proxy &middot; Vol(35%)+200MA &middot; Weekly signal</div>
+
+  <!-- §6 METHODOLOGY -->
+  <div class="card" style="margin-bottom:14px">
+    <div class="card-head"><span class="card-title">⑥ Methodology</span></div>
+    <div class="card-body" style="padding:14px 18px;font-size:12px;color:#c2c7d2;line-height:1.65">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div>
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#4da6ff;margin-bottom:6px">Signal inputs</div>
+          <ul style="margin:0;padding-left:16px">
+            <li>QQQ daily closes (proxy for TQQQ exposure)</li>
+            <li>20-day realized volatility, annualized (√252)</li>
+            <li>200-day moving average gate</li>
+            <li>Vol acceleration: 5-day vol rate-of-change</li>
+          </ul>
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#4da6ff;margin-bottom:6px">Allocation rules</div>
+          <ul style="margin:0;padding-left:16px">
+            <li>Below 200MA → <b style="color:#ff4560">0% TQQQ / 100% SGOV</b></li>
+            <li>Above 200MA, vol ≤ 35% → <b style="color:#00d68f">100% TQQQ</b></li>
+            <li>Above 200MA, vol &gt; 35% → scaled to <b>35% ÷ realized vol</b>, rounded to nearest 10%</li>
+            <li>Vol Accel Guard fires → cap TQQQ at <b style="color:#f0c040">50%</b></li>
+          </ul>
+        </div>
+      </div>
+      <div style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,.06)">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#4da6ff;margin-bottom:6px">Execution</div>
+        <div>Signal evaluated <b>once per week</b> (Friday close). Rebalance trade executed the following Monday open. No intraday signals — intraday estimates are not used to drive allocation. All allocation changes flow from the single weekly signal published at <a href="https://stegitforme.github.io/tqqq-vol-target/" target="_blank" style="color:#4da6ff">stegitforme.github.io/tqqq-vol-target</a>.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- §7 WEEKLY SIGNAL LOG -->
+  <div class="card" style="margin-bottom:14px">
+    <div class="card-head">
+      <span class="card-title">⑦ Weekly Signal Log</span>
+      <span id="strat-log-meta" style="font-size:10px;color:#555c6e"></span>
+    </div>
+    <div class="card-body" style="padding:0">
+      <div style="max-height:360px;overflow-y:auto">
+        <table id="strat-log-table" style="width:100%;border-collapse:collapse;font-size:11px">
+          <thead style="position:sticky;top:0;background:#111318;z-index:1">
+            <tr style="border-bottom:1px solid rgba(255,255,255,.08)">
+              <th style="padding:8px 12px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e">Run Date</th>
+              <th style="padding:8px 8px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e">TQQQ %</th>
+              <th style="padding:8px 8px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e">20d Vol</th>
+              <th style="padding:8px 8px;text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e">200MA</th>
+              <th style="padding:8px 12px;text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e">Guard</th>
+            </tr>
+          </thead>
+          <tbody id="strat-log-body">
+            <tr><td colspan="5" style="padding:18px;text-align:center;color:#555c6e;font-size:12px">Loading history...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1335,6 +1450,7 @@ function show(id, btn) {
   if(id === 'analytics') renderAnalytics()
   if(id === 'sizer') setTimeout(rebSyncSignal, 200)
   if(id === 'market') { console.log('[MARKET-PATH] show(market) invoked'); initMarket('tab-switch') }
+  if(id === 'backtest') { try { initStrategyTab() } catch(e) { console.warn('[STRATEGY-INIT]', e) } }
 }
 
 // Canonical Market-page init. Runs from both initPlatform (fresh page load)
@@ -1351,23 +1467,20 @@ function initMarket(source) {
       'spy-v':                !!document.getElementById('spy-v'),
       'vix-v':                !!document.getElementById('vix-v'),
       'sector-body':          !!document.getElementById('sector-body'),
-      'tqqq-body':            !!document.getElementById('tqqq-body'),
       'official-signal-body': !!document.getElementById('official-signal-body'),
       'leaps-body':           !!document.getElementById('leaps-body')
     })
   // Guard against overlapping runs (tab switches hitting while boot is mid-flight).
   if(window._marketInitInFlight) { console.log('[MARKET-PATH] SKIP — in flight. source=', source); return }
   window._marketInitInFlight = true
-  // All four loaders are mutually independent — fire in parallel.
+  // All loaders are mutually independent — fire in parallel.
   console.log('[MARKET-PATH] calling loadMarketData. source=', source)
   try { loadMarketData() } catch(e) { console.warn('[MARKET-PATH] loadMarketData error. source=', source, e) }
-  console.log('[MARKET-PATH] calling fetchTQQQSignal. source=', source)
-  try {
-    const p = fetchTQQQSignal()
-    if(p && typeof p.then === 'function') p.then(function(){ setTimeout(rebSyncSignal, 200) }).catch(function(){})
-  } catch(e) { console.warn('[MARKET-PATH] fetchTQQQSignal error. source=', source, e) }
   console.log('[MARKET-PATH] calling fetchOfficialSignal. source=', source)
-  try { fetchOfficialSignal() } catch(e) { console.warn('[MARKET-PATH] fetchOfficialSignal error. source=', source, e) }
+  try {
+    const p = fetchOfficialSignal()
+    if(p && typeof p.then === 'function') p.then(function(){ setTimeout(rebSyncSignal, 200) }).catch(function(){})
+  } catch(e) { console.warn('[MARKET-PATH] fetchOfficialSignal error. source=', source, e) }
   console.log('[MARKET-PATH] calling fetchLeapsData. source=', source)
   try { fetchLeapsData() } catch(e) { console.warn('[MARKET-PATH] fetchLeapsData error. source=', source, e) }
   // Release the in-flight flag after a short window so tab re-entry works.
@@ -2041,64 +2154,320 @@ function saveRebAccounts() {
   fbAutoSave(3000)  // sync after 3s of inactivity
 }
 
+// Canonical weekly-signal loader. Single source of truth for TQQQ allocation
+// across the entire app (Home card, Strategy tab, rebalancer). Parses the
+// history.csv published by the weekly_report.py pipeline, stashes the latest
+// row on window._officialSignal, then renders wherever DOM targets exist.
 async function fetchOfficialSignal() {
-  const el = document.getElementById('official-signal-body')
-  if(!el) return
   try {
     const r = await fetch('https://raw.githubusercontent.com/stegitforme/tqqq-vol-target/main/logs/history.csv?v='+Date.now())
     const txt = await r.text()
     const lines = txt.trim().split('\n').filter(l=>l.trim())
     const headers = lines[0].split(',').map(h=>h.trim())
-    const last = lines[lines.length-1].split(',')
-    const row = {}
-    headers.forEach((h,i)=>row[h]=last[i])
-    const date    = row['RunDate']||'--';
-    const alloc   = row['AllocTQQQ'] ? Math.round(+row['AllocTQQQ']*100)+'%' : '--';
-    const vol     = row['RealizedVol20d'] ? (+row['RealizedVol20d']*100).toFixed(1)+'%' : '--';
-    const guard   = row['VolAccelGuard']||'--';
-    const aboveMa = row['MA200_Gate']
-    const allocColor = +row['AllocTQQQ']>=0.8?'#00d68f':+row['AllocTQQQ']>=0.4?'#f0c040':'#ff8c42';
-    const dateEl = document.getElementById('official-signal-date')
-    if(dateEl) dateEl.textContent = 'From: '+date
-    el.innerHTML =
-      '<div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">' +
-      '<div><span style="color:#555c6e">Run date: \x3C/span><span style="color:#e8eaf0;font-family:SF Mono,monospace">'+date+'\x3C/span>\x3C/div>' +
-      '<div><span style="color:#555c6e">20d Vol: \x3C/span><span style="color:#e8eaf0;font-family:SF Mono,monospace">'+vol+'\x3C/span>\x3C/div>' +
-      '<div><span style="color:#555c6e">Allocation: \x3C/span><span style="font-weight:700;font-size:14px;color:'+allocColor+';font-family:SF Mono,monospace">'+alloc+' TQQQ\x3C/span>\x3C/div>' +
-      '<div><span style="color:#555c6e">200MA: \x3C/span><span style="color:'+(aboveMa==='True'?'#00d68f':'#ff4560')+'">'+(aboveMa==='True'?'✓ Above':'✗ Below')+'\x3C/span>\x3C/div>' +
-      '<div><span style="color:#555c6e">Guard: \x3C/span><span style="color:'+(guard==='True'?'#f0c040':'#555c6e')+'">'+(guard==='True'?'⚡ FIRED':'standby')+'\x3C/span>\x3C/div>' +
-      '\x3C/div>'
+    const parseRow = function(ln) {
+      const cells = ln.split(',')
+      const obj = {}
+      headers.forEach(function(h, i) { obj[h] = cells[i] })
+      return obj
+    }
+    const rows = lines.slice(1).map(parseRow)
+    const row  = rows[rows.length-1]
+    const prev = rows.length >= 2 ? rows[rows.length-2] : null
+    window._officialSignal = { row: row, prev: prev, rows: rows }
+
+    renderOfficialSignalCards(row, prev, rows)
+
     // Auto-sync rebalancer to the OFFICIAL signal
-    const officialAlloc = +row['AllocTQQQ']*100
-    if(officialAlloc > 0) {
+    const officialAlloc = Math.round(+row['AllocTQQQ']*100)
+    if(officialAlloc >= 0) {
       const rebEl = document.getElementById('reb-tqqq-pct')
       if(rebEl) { rebEl.value = officialAlloc; rebCalc() }
     }
   } catch(e) {
-    if(el) el.innerHTML = '<span style="color:#555c6e">Could not load — <a href="https://stegitforme.github.io/tqqq-vol-target/" target="_blank" style="color:#4da6ff">view report directly\x3C/a>\x3C/span>'
+    const fallback = '<div style="font-size:12px;color:#555c6e;text-align:center;padding:10px">Could not load — <a href="https://stegitforme.github.io/tqqq-vol-target/" target="_blank" style="color:#4da6ff">view report directly</a></div>'
+    const home = document.getElementById('official-signal-body')
+    if(home) home.innerHTML = fallback
+    const strat = document.getElementById('strat-sig-body')
+    if(strat) strat.innerHTML = fallback
+  }
+}
+
+function regimeFor(allocFrac) {
+  if(allocFrac >= 0.80) return { label: 'Aggressive', color: '#00d68f', bg: 'rgba(0,214,143,.1)', bd: 'rgba(0,214,143,.35)' }
+  if(allocFrac >= 0.40) return { label: 'Normal',     color: '#f0c040', bg: 'rgba(240,192,64,.1)', bd: 'rgba(240,192,64,.35)' }
+  return                       { label: 'Defensive',  color: '#ff8c42', bg: 'rgba(255,140,66,.1)', bd: 'rgba(255,140,66,.35)' }
+}
+
+// Compute the next Friday close (16:00 ET) from "now" in a readable form.
+function nextSignalUpdateLabel() {
+  try {
+    const nowET = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }))
+    const day = nowET.getDay() // 0 Sun .. 6 Sat
+    let daysUntilFri = (5 - day + 7) % 7
+    // If it's Friday after 16:00 ET, point to next week
+    if(day === 5 && nowET.getHours() >= 16) daysUntilFri = 7
+    if(daysUntilFri === 0 && day !== 5) daysUntilFri = 7
+    if(daysUntilFri === 0) daysUntilFri = 0
+    const target = new Date(nowET.getTime() + daysUntilFri*86400000)
+    target.setHours(16,0,0,0)
+    const dStr = target.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' })
+    if(daysUntilFri === 0) return 'Today 4:00pm ET'
+    if(daysUntilFri === 1) return 'Tomorrow 4:00pm ET'
+    return dStr + ' 4:00pm ET'
+  } catch(e) { return 'Next Friday close' }
+}
+
+function renderOfficialSignalCards(row, prev, rows) {
+  const date    = row['RunDate'] || '--'
+  const allocF  = +row['AllocTQQQ'] || 0
+  const tqqqPct = Math.round(allocF*100)
+  const sgovPct = 100 - tqqqPct
+  const vol     = row['RealizedVol20d'] ? (+row['RealizedVol20d']*100).toFixed(1)+'%' : '--'
+  const guard   = row['VolAccelGuard'] === 'True'
+  const aboveMa = row['MA200_Gate'] === 'True'
+  const regime  = regimeFor(allocF)
+  const nextUpd = nextSignalUpdateLabel()
+
+  // Change vs last week
+  let deltaHtml = ''
+  if(prev) {
+    const prevPct = Math.round((+prev['AllocTQQQ']||0)*100)
+    const delta = tqqqPct - prevPct
+    if(delta === 0) {
+      deltaHtml = '<span style="color:#555c6e">unchanged vs ' + (prev['RunDate']||'last week') + '</span>'
+    } else {
+      const arrow = delta > 0 ? '▲' : '▼'
+      const col   = delta > 0 ? '#00d68f' : '#ff4560'
+      deltaHtml = '<span style="color:'+col+';font-weight:600">'+arrow+' '+Math.abs(delta)+'pp</span>' +
+                  '<span style="color:#555c6e"> vs '+(prev['RunDate']||'last week')+' ('+prevPct+'%)</span>'
+    }
+  }
+
+  const tqqqCol = allocF >= 0.80 ? '#00d68f' : allocF >= 0.50 ? '#f0c040' : allocF > 0 ? '#ff8c42' : '#ff4560'
+  const sgovCol = sgovPct >= 50 ? '#4da6ff' : '#8b91a0'
+  const guardBg = guard ? 'rgba(240,192,64,.15)' : 'rgba(139,145,160,.06)'
+  const guardFg = guard ? '#f0c040' : '#8b91a0'
+  const guardBd = guard ? 'rgba(240,192,64,.45)' : 'rgba(139,145,160,.2)'
+  const guardTx = guard ? '⚡ FIRED — TQQQ capped at 50%' : 'standby'
+  const maBg    = aboveMa ? 'rgba(0,214,143,.1)' : 'rgba(255,69,96,.1)'
+  const maFg    = aboveMa ? '#00d68f' : '#ff4560'
+  const maBd    = aboveMa ? 'rgba(0,214,143,.3)' : 'rgba(255,69,96,.3)'
+  const maTx    = aboveMa ? '✓ QQQ above 200MA' : '✗ QQQ below 200MA'
+
+  const html =
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">' +
+      '<div style="padding:16px 18px;background:rgba(0,214,143,.06);border:1px solid rgba(0,214,143,.22);border-radius:8px;text-align:center">' +
+        '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#555c6e;margin-bottom:6px">TQQQ Target</div>' +
+        '<div style="font-size:40px;font-weight:700;color:'+tqqqCol+';line-height:1;font-family:\'SF Mono\',monospace">'+tqqqPct+'%</div>' +
+      '</div>' +
+      '<div style="padding:16px 18px;background:rgba(77,166,255,.06);border:1px solid rgba(77,166,255,.22);border-radius:8px;text-align:center">' +
+        '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#555c6e;margin-bottom:6px">SGOV Target</div>' +
+        '<div style="font-size:40px;font-weight:700;color:'+sgovCol+';line-height:1;font-family:\'SF Mono\',monospace">'+sgovPct+'%</div>' +
+      '</div>' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px">' +
+      '<span style="font-size:11px;font-weight:700;padding:4px 10px;border-radius:4px;background:'+regime.bg+';color:'+regime.color+';border:1px solid '+regime.bd+';letter-spacing:.05em;text-transform:uppercase">'+regime.label+'</span>' +
+      '<span style="font-size:11px;padding:4px 10px;border-radius:4px;background:'+maBg+';color:'+maFg+';border:1px solid '+maBd+'">'+maTx+'</span>' +
+      '<span style="font-size:11px;padding:4px 10px;border-radius:4px;background:'+guardBg+';color:'+guardFg+';border:1px solid '+guardBd+'">'+guardTx+'</span>' +
+    '</div>' +
+    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;font-size:11px">' +
+      '<div style="padding:8px 10px;background:#0a0c0f;border:1px solid rgba(255,255,255,.05);border-radius:6px">' +
+        '<div style="color:#555c6e;font-size:10px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px">Realized Vol 20d</div>' +
+        '<div style="font-family:\'SF Mono\',monospace;color:#e8eaf0;font-size:13px;font-weight:600">'+vol+'</div>' +
+      '</div>' +
+      '<div style="padding:8px 10px;background:#0a0c0f;border:1px solid rgba(255,255,255,.05);border-radius:6px">' +
+        '<div style="color:#555c6e;font-size:10px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px">Next Update</div>' +
+        '<div style="color:#e8eaf0;font-size:12px;font-weight:600">'+nextUpd+'</div>' +
+      '</div>' +
+      '<div style="padding:8px 10px;background:#0a0c0f;border:1px solid rgba(255,255,255,.05);border-radius:6px">' +
+        '<div style="color:#555c6e;font-size:10px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px">Change</div>' +
+        '<div style="font-size:12px">'+(deltaHtml || '<span style="color:#555c6e">—</span>')+'</div>' +
+      '</div>' +
+    '</div>'
+
+  const dateLabel = 'From: '+date
+  const home = document.getElementById('official-signal-body')
+  if(home) home.innerHTML = html
+  const homeDate = document.getElementById('official-signal-date')
+  if(homeDate) homeDate.textContent = dateLabel
+
+  // Strategy tab §1 mirrors the same card
+  const strat = document.getElementById('strat-sig-body')
+  if(strat) strat.innerHTML = html
+  const stratDate = document.getElementById('strat-sig-date')
+  if(stratDate) stratDate.textContent = dateLabel
+
+  // Strategy tab meta spans
+  const guardState = document.getElementById('strat-guard-state')
+  if(guardState) guardState.textContent = guard ? 'FIRED — capped at 50%' : 'standby'
+  const volMeta = document.getElementById('strat-vol-meta')
+  if(volMeta) volMeta.textContent = 'current: '+vol
+  const allocMeta = document.getElementById('strat-alloc-meta')
+  if(allocMeta && rows) allocMeta.textContent = rows.length+' weekly observations'
+  const logMeta = document.getElementById('strat-log-meta')
+  if(logMeta && rows) logMeta.textContent = rows.length+' weeks since '+(rows[0]&&rows[0]['RunDate']||'inception')
+
+  // If strategy tab is visible, refresh its charts + log
+  if(document.getElementById('backtest')?.classList.contains('active')) {
+    try { renderStrategyAllocChart(rows) } catch(e) {}
+    try { renderStrategySignalLog(rows) } catch(e) {}
   }
 }
 
 function rebSyncSignal() {
-  // Auto-populate rebalancer target from live TQQQ signal if available
-  // Try global tqqqPct variable first (most reliable)
+  // Single source of truth: the parsed official signal row. Fallback to
+  // window.tqqqPct (set by the now-rarely-used intraday calculator) only if
+  // the official signal has not loaded yet.
+  const off = window._officialSignal && window._officialSignal.row
+  if(off) {
+    const alloc = Math.round((+off['AllocTQQQ']||0)*100)
+    const el = document.getElementById('reb-tqqq-pct')
+    if(el && +el.value !== alloc) { el.value = alloc; rebCalc() }
+    return
+  }
   if(typeof tqqqPct !== 'undefined' && tqqqPct > 0) {
     const el = document.getElementById('reb-tqqq-pct')
     if(el && +el.value !== tqqqPct) { el.value = tqqqPct; rebCalc() }
-    return
   }
-  const sigEl = document.getElementById('tqqq-body')
-  if(!sigEl) return
-  // Extract allocation from signal card if already calculated
-  const allocMatch = sigEl.innerHTML.match(/(\d+)%\s*TQQQ/)
-  if(allocMatch) {
-    const alloc = +allocMatch[1]
-    const el = document.getElementById('reb-tqqq-pct')
-    if(el && +el.value !== alloc) {
-      el.value = alloc
-      rebCalc()
+}
+
+// ── Strategy tab charts + log ─────────────────────────────────────────────
+function initStrategyTab() {
+  // Refresh the official signal (also fills §1 + meta labels)
+  try {
+    const p = fetchOfficialSignal()
+    if(p && p.then) p.then(function(){ setTimeout(rebSyncSignal, 200) })
+  } catch(e) {}
+  // Fire an intraday vol series calc for the vol chart (§2). This still uses
+  // fetchTQQQSignal's underlying QQQ bars — we just re-purpose it to populate
+  // the vol chart; it does not drive allocation.
+  try { renderStrategyVolChart() } catch(e) { console.warn('[STRATEGY] vol chart', e) }
+  // If the official signal is already cached, draw §4 + §7 now too.
+  const sig = window._officialSignal
+  if(sig && sig.rows) {
+    try { renderStrategyAllocChart(sig.rows) } catch(e) {}
+    try { renderStrategySignalLog(sig.rows) } catch(e) {}
+  }
+}
+
+async function renderStrategyVolChart() {
+  const canvas = document.getElementById('strat-vol-canvas')
+  if(!canvas) return
+  try {
+    const to   = new Date().toISOString().split('T')[0]
+    const from = new Date(Date.now()-400*864e5).toISOString().split('T')[0]
+    const d = await apiGet('/v2/aggs/ticker/QQQ/range/1/day/'+from+'/'+to+'?adjusted=true&sort=asc&limit=260')
+    if(!d || !d.results || d.results.length < 25) return
+    const closes = d.results.map(b => b.c)
+    const vols = []
+    for(let i = 20; i < closes.length; i++) {
+      const rets = []
+      for(let j = i-19; j <= i; j++) rets.push(Math.log(closes[j]/closes[j-1]))
+      const m = rets.reduce((a,b)=>a+b,0)/rets.length
+      const v = rets.reduce((a,b)=>a+Math.pow(b-m,2),0)/(rets.length-1)
+      vols.push(Math.sqrt(v)*Math.sqrt(252)*100)
     }
+    drawVolSparkline(canvas, vols)
+  } catch(e) { console.warn('[STRATEGY] vol data', e) }
+}
+
+function drawVolSparkline(canvas, series) {
+  const ctx = canvas.getContext('2d')
+  const dpr = window.devicePixelRatio || 1
+  const W = canvas.clientWidth, H = canvas.clientHeight
+  canvas.width = W*dpr; canvas.height = H*dpr
+  ctx.scale(dpr, dpr)
+  ctx.clearRect(0,0,W,H)
+  if(!series.length) return
+  const pad = {l: 32, r: 8, t: 10, b: 18}
+  const plotW = W-pad.l-pad.r, plotH = H-pad.t-pad.b
+  const mn = Math.max(0, Math.min.apply(null, series)-5)
+  const mx = Math.max(60, Math.max.apply(null, series)+5)
+  const y = v => pad.t + plotH*(1 - (v-mn)/(mx-mn))
+  const x = i => pad.l + plotW*(i/(series.length-1))
+  // grid
+  ctx.strokeStyle = 'rgba(255,255,255,.05)'; ctx.lineWidth = 1
+  ctx.font = '10px "SF Mono", monospace'; ctx.fillStyle = '#555c6e'
+  for(let g = 0; g <= 4; g++) {
+    const gv = mn + (mx-mn)*g/4
+    const gy = y(gv)
+    ctx.beginPath(); ctx.moveTo(pad.l, gy); ctx.lineTo(W-pad.r, gy); ctx.stroke()
+    ctx.fillText(gv.toFixed(0)+'%', 4, gy+3)
   }
+  // 35% target
+  ctx.strokeStyle = '#f0c040'; ctx.setLineDash([4,3])
+  ctx.beginPath(); ctx.moveTo(pad.l, y(35)); ctx.lineTo(W-pad.r, y(35)); ctx.stroke()
+  // 45% guard floor
+  ctx.strokeStyle = '#ff4560'
+  ctx.beginPath(); ctx.moveTo(pad.l, y(45)); ctx.lineTo(W-pad.r, y(45)); ctx.stroke()
+  ctx.setLineDash([])
+  // vol series
+  ctx.strokeStyle = '#4da6ff'; ctx.lineWidth = 2
+  ctx.beginPath()
+  series.forEach((v, i) => { const px = x(i), py = y(v); if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py) })
+  ctx.stroke()
+}
+
+function renderStrategyAllocChart(rows) {
+  const canvas = document.getElementById('strat-alloc-canvas')
+  if(!canvas || !rows || !rows.length) return
+  const recent = rows.slice(-52) // last year of weekly observations
+  const allocs = recent.map(r => Math.round((+r['AllocTQQQ']||0)*100))
+  const ctx = canvas.getContext('2d')
+  const dpr = window.devicePixelRatio || 1
+  const W = canvas.clientWidth, H = canvas.clientHeight
+  canvas.width = W*dpr; canvas.height = H*dpr
+  ctx.scale(dpr,dpr)
+  ctx.clearRect(0,0,W,H)
+  const pad = {l: 32, r: 8, t: 10, b: 22}
+  const plotW = W-pad.l-pad.r, plotH = H-pad.t-pad.b
+  const barW = plotW / allocs.length
+  // y axis grid
+  ctx.strokeStyle = 'rgba(255,255,255,.05)'; ctx.font = '10px "SF Mono", monospace'; ctx.fillStyle = '#555c6e'
+  for(let g = 0; g <= 4; g++) {
+    const gv = g*25
+    const gy = pad.t + plotH*(1 - gv/100)
+    ctx.beginPath(); ctx.moveTo(pad.l, gy); ctx.lineTo(W-pad.r, gy); ctx.stroke()
+    ctx.fillText(gv+'%', 4, gy+3)
+  }
+  // bars
+  allocs.forEach((a, i) => {
+    const col = a >= 80 ? '#00d68f' : a >= 40 ? '#f0c040' : a > 0 ? '#ff8c42' : '#ff4560'
+    const bh = plotH * (a/100)
+    const bx = pad.l + i*barW + 0.5
+    const by = pad.t + plotH - bh
+    ctx.fillStyle = col
+    ctx.fillRect(bx, by, Math.max(1, barW-1), bh)
+  })
+  // first/last labels
+  ctx.fillStyle = '#555c6e'
+  if(recent[0]) ctx.fillText(recent[0]['RunDate']||'', pad.l, H-6)
+  if(recent[recent.length-1]) {
+    const lbl = recent[recent.length-1]['RunDate']||''
+    const m = ctx.measureText(lbl)
+    ctx.fillText(lbl, W-pad.r-m.width, H-6)
+  }
+}
+
+function renderStrategySignalLog(rows) {
+  const body = document.getElementById('strat-log-body')
+  if(!body || !rows) return
+  const recent = rows.slice().reverse().slice(0, 52) // newest first, last year
+  const html = recent.map(r => {
+    const alloc = Math.round((+r['AllocTQQQ']||0)*100)
+    const col = alloc >= 80 ? '#00d68f' : alloc >= 40 ? '#f0c040' : alloc > 0 ? '#ff8c42' : '#ff4560'
+    const vol = r['RealizedVol20d'] ? (+r['RealizedVol20d']*100).toFixed(1)+'%' : '--'
+    const ma  = r['MA200_Gate'] === 'True' ? '<span style="color:#00d68f">✓</span>' : '<span style="color:#ff4560">✗</span>'
+    const g   = r['VolAccelGuard'] === 'True' ? '<span style="color:#f0c040">⚡</span>' : '<span style="color:#555c6e">·</span>'
+    return '<tr style="border-bottom:1px solid rgba(255,255,255,.04)">'
+      + '<td style="padding:6px 12px;color:#e8eaf0;font-family:\'SF Mono\',monospace">'+(r['RunDate']||'--')+'</td>'
+      + '<td style="padding:6px 8px;text-align:right;color:'+col+';font-weight:600;font-family:\'SF Mono\',monospace">'+alloc+'%</td>'
+      + '<td style="padding:6px 8px;text-align:right;color:#8b91a0;font-family:\'SF Mono\',monospace">'+vol+'</td>'
+      + '<td style="padding:6px 8px;text-align:center">'+ma+'</td>'
+      + '<td style="padding:6px 12px;text-align:center">'+g+'</td>'
+      + '</tr>'
+  }).join('')
+  body.innerHTML = html || '<tr><td colspan="5" style="padding:18px;text-align:center;color:#555c6e;font-size:12px">No history rows</td></tr>'
 }
 
 function rebCalc() {
