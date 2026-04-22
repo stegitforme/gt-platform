@@ -694,11 +694,11 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
       onclick="(function(e){if(e.target.tagName!=='BUTTON'&&e.target.tagName!=='INPUT'){var i=document.getElementById('pl-add-ticker');if(i){i.focus();console.info('[PL-ADD] toolbar click → input.focus()')}}})(event)">
       <input type="text" id="pl-add-ticker" placeholder="Add ticker (e.g. AAPL)"
         autocomplete="off" spellcheck="false" autocapitalize="characters" tabindex="0"
-        style="flex:1 1 auto;min-width:0;font-size:14px;padding:9px 12px;text-transform:uppercase;background:#0a0c0f;border:1px solid rgba(255,255,255,.12);border-radius:5px;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;caret-color:#ffffff!important;outline:none;font-family:inherit;box-sizing:border-box;pointer-events:auto;user-select:text;-webkit-user-select:text;position:relative;z-index:2"
+        style="flex:1 1 auto;min-width:0;font-size:14px;padding:9px 12px;text-transform:uppercase;background:#0a0c0f;border:1px solid rgba(255,255,255,0.12);border-radius:5px;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;caret-color:#ffffff!important;outline:none;font-family:inherit;box-sizing:border-box;pointer-events:auto;user-select:text;-webkit-user-select:text;position:relative;z-index:2"
         oninput="this.value=this.value.toUpperCase()"
         onkeydown="if(event.key==='Enter')addCandidate(this.value)"
-        onfocus="this.style.borderColor='#f0c040';console.info('[PL-ADD] focus',{activeBefore:document.activeElement&&document.activeElement.id})"
-        onblur="this.style.borderColor='rgba(255,255,255,.12)';console.info('[PL-ADD] blur',{to:document.activeElement&&document.activeElement.tagName,id:document.activeElement&&document.activeElement.id})">
+        onfocus="this.style.borderColor='#f0c040'"
+        onblur="this.style.borderColor='rgba(255,255,255,0.12)'">
       <button onclick="addCandidate(document.getElementById('pl-add-ticker').value)" class="btn btn-gold"
         style="font-size:13px;padding:0 18px;white-space:nowrap;flex:0 0 auto;font-weight:600">+ Add</button>
     </div>
