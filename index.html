@@ -27,7 +27,21 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#0a0c0f;color:#e8
 .sizer-page .sizer-left .card{margin-bottom:0}
 .sizer-page .sizer-right .card{margin-bottom:0}
 .sizer-page .sizer-left{position:sticky;top:0}
-@media(max-width:900px){.sizer-page.active{grid-template-columns:1fr;padding:0 10px}.sizer-page .sizer-left{position:static}}
+/* Candidates table scroll region: cap the table's height so lots of rows
+   scroll INSIDE the card instead of pushing Quick Size off the bottom of
+   the rail. min-height keeps short lists from collapsing; max-height uses
+   whichever is smaller of 60vh or (viewport - ~280px for header+toolbar
+   +Quick Size head) so Quick Size stays visible below. */
+.sizer-page #pl-cand-table{overflow:auto;min-height:180px;max-height:min(60vh,calc(100vh - 280px))}
+/* Sticky thead so column labels stay put while scrolling candidate rows.
+   Applied to th (not tr) — position:sticky only works on the cells, not
+   the row. z-index above the rows; matching background so rows don't
+   bleed through. */
+.sizer-page #pl-cand-table thead th{position:sticky;top:0;background:#111318;z-index:2}
+/* Sticky tfoot so "TOTAL NEW RISK" is always visible at the bottom of
+   the scroll area. */
+.sizer-page #pl-cand-table tfoot td{position:sticky;bottom:0;background:#111318;z-index:2;border-top:1px solid #1e2d3d}
+@media(max-width:900px){.sizer-page.active{grid-template-columns:1fr;padding:0 10px}.sizer-page .sizer-left{position:static}.sizer-page #pl-cand-table{max-height:50vh}}
 .trades-page{display:none;padding:20px;min-height:calc(100vh - 105px);overflow-y:auto}
 .trades-page.active{display:block}
 .card{background:#111318;border:1px solid rgba(255,255,255,0.07);border-radius:10px;margin-bottom:14px;overflow:hidden}
@@ -642,7 +656,7 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
       <input type="text" id="pl-add-ticker" placeholder="Add ticker (e.g. AAPL)" style="flex:1;font-size:13px;padding:5px 8px;text-transform:uppercase" oninput="this.value=this.value.toUpperCase()" onkeydown="if(event.key==='Enter')addCandidate(this.value)">
       <button onclick="addCandidate(document.getElementById('pl-add-ticker').value)" class="btn btn-gold" style="font-size:12px;padding:5px 14px">+ Add</button>
     </div>
-    <div id="pl-cand-table" style="overflow-x:auto">
+    <div id="pl-cand-table" style="overflow:auto">
       <table style="width:100%;border-collapse:collapse;font-size:12px">
         <thead><tr style="color:#555c6e;font-size:10px;text-transform:uppercase;border-bottom:1px solid #1e2d3d">
           <th style="padding:6px 10px;text-align:left">Ticker</th>
