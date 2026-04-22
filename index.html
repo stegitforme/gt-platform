@@ -681,7 +681,10 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
         <div class="card-body" style="padding:12px">
           <div class="field"><label style="font-size:10px">TICKER</label><input type="text" id="tkr" placeholder="NVDA" oninput="this.value=this.value.toUpperCase()" onkeydown="if(event.key==='Enter')fetchTicker(this.value)"></div>
           <div style="display:flex;gap:6px">
-            <div class="field" style="flex:1;margin:0"><label style="font-size:10px">÷ N</label><input type="number" id="risk-n-trades" value="10" oninput="calc()"></div>
+            <!-- N input hidden: Quick Size now reads per-trade risk from
+                 the Planner's "Default risk $" (#pl-default-risk). Kept
+                 in the DOM so legacy references still resolve. -->
+            <div class="field" style="flex:1;margin:0;display:none"><label style="font-size:10px">÷ N</label><input type="number" id="risk-n-trades" value="10" oninput="calc()"></div>
             <div class="field" style="flex:1;margin:0"><label style="font-size:10px">DELTA</label><input type="number" id="delta" value="0.80" step="0.01" oninput="calc()"></div>
           </div>
           <div class="field"><label style="font-size:10px">ENTRY $</label><input type="number" id="entry" placeholder="0.00" step="0.01" oninput="calc()"></div>
@@ -6120,6 +6123,25 @@ function loadInternalResults(data) {
 }
 // ── END INTERNAL SCREENER ══════════════════════════════════════════════════════
 
+// Read the Planner's per-trade risk (Default risk $) with graceful
+// fallbacks. Returns a dollar amount. Preferred source chain:
+//   1. #pl-default-risk  — canonical Planner "Default risk $" input
+//   2. #pl-after         — budget AFTER candidates (last-resort UI proxy)
+//   3. #pl-risk-per-trade — reserved for future use / custom override
+//   4. localStorage['gt_risk_budget'] / 10 — legacy budget-÷-N fallback
+function getPlannerPerTradeRisk() {
+  const readNum = el => {
+    if(!el) return 0
+    const txt = (el.value !== undefined && el.value !== '') ? el.value : (el.textContent || '')
+    const num = parseFloat(String(txt).replace(/[^0-9.\-]/g,''))
+    return isFinite(num) && num > 0 ? num : 0
+  }
+  return readNum(document.getElementById('pl-default-risk'))
+      || readNum(document.getElementById('pl-risk-per-trade'))
+      || readNum(document.getElementById('pl-after'))
+      || ((+localStorage.getItem('gt_risk_budget') || 21000) / 10)
+}
+
 function calc() {
   saveRiskSettings()
   const rb      = +document.getElementById('risk-budget')?.value || +localStorage.getItem('gt_risk_budget') || 21000
@@ -6129,7 +6151,11 @@ function calc() {
   const atr     = +document.getElementById('atr').value
   const optcost = +document.getElementById('optcost').value
   const ticker  = document.getElementById('tkr').value || '';
-  const perTrade = rb / nTrades
+  // Per-trade risk comes from the Planner now — NOT from budget ÷ N.
+  // N input kept in the DOM (hidden) so any legacy refs don't break.
+  const plannerPerTrade = getPlannerPerTradeRisk()
+  const perTrade = plannerPerTrade > 0 ? plannerPerTrade : (rb / nTrades)
+  const perTradeSource = plannerPerTrade > 0 ? 'planner' : 'budget÷N'
   document.getElementById('sz-ticker').textContent = ticker
   if(!entry || !atr) return
   const rpc   = atr * delta * 100
@@ -6160,8 +6186,10 @@ function calc() {
 +optcost+' x '+cts+' x 100':'enter option cost'
   document.getElementById('m-risk').textContent  = ''
 +Math.round(perTrade).toLocaleString()
-  document.getElementById('m-risk-s').textContent= ''
-+Math.round(rb).toLocaleString()+' ÷ '+nTrades+' trades'
+  document.getElementById('m-risk-s').textContent =
+    perTradeSource === 'planner'
+      ? 'Planner per-trade risk'
+      : (Math.round(rb).toLocaleString() + ' ÷ ' + nTrades + ' trades (Planner not set)')
   document.getElementById('m-hl').textContent    = '-'
 +Math.round(perTrade*0.5).toLocaleString()
   document.getElementById('m-fl').textContent    = '-'
