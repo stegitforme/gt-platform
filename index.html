@@ -5754,9 +5754,16 @@ function selectCandidateForSizing(c, row) {
   // Highlight the selected row
   document.querySelectorAll('#pl-cand-body .cand-row').forEach(r => r.classList.remove('active'))
   if(row && row.classList) row.classList.add('active')
-  // Scroll the Quick Size card into view
-  const qsAnchor = document.getElementById('qs-body') || document.querySelector('#sizer .card:last-child')
-  if(qsAnchor && qsAnchor.scrollIntoView) qsAnchor.scrollIntoView({ behavior:'smooth', block:'center' })
+  // Scroll the Quick Size card into view using the correct scroll container.
+  // The Planner layout makes .sizer-right the actual vertically-scrolling
+  // element (overflow-y:auto on the rail; .sizer-page has overflow:hidden
+  // + fixed viewport height). Using scrollIntoView with block:'center'
+  // centered qs-body in that rail — but because qs-body can be taller than
+  // the rail's visible height, its TOP ended up above the rail's top edge,
+  // clipping the sidebar inputs. Scroll-to-top (with 8px breathing room)
+  // on the real scroll ancestor fixes it; one RAF tick lets the qs-body
+  // expand layout settle before we measure.
+  _qsScrollBodyIntoView()
   // Async: fetch the live option chain and refresh strike + optcost to the
   // contract whose delta is closest to the selected target delta. Runs on
   // next tick so the initial calc() above paints first, then the async
@@ -5783,6 +5790,43 @@ function selectCandidateForSizing(c, row) {
     selectCandidateForSizing(c, tr)
   })
 })()
+// Scroll the Quick Size card into view WITHIN its real scroll container.
+// The Planner's .sizer-right rail is the element with overflow-y:auto;
+// window.scroll* won't move it. Walks ancestors to find the first
+// vertically-scrollable element, then aligns qs-body's top with the
+// container's top (8px breathing room). One RAF tick waits for the
+// qs-body display toggle to commit so getBoundingClientRect returns
+// post-expand values.
+function _qsScrollBodyIntoView() {
+  const qs = document.getElementById('qs-body')
+  if(!qs) return
+  // Find the nearest vertically-scrollable ancestor
+  let scroller = qs.parentElement
+  while(scroller && scroller !== document.documentElement && scroller !== document.body) {
+    const cs = window.getComputedStyle(scroller)
+    const scrolls = /auto|scroll/.test(cs.overflowY) && scroller.scrollHeight > scroller.clientHeight
+    if(scrolls) break
+    scroller = scroller.parentElement
+  }
+  requestAnimationFrame(() => {
+    const qsRect = qs.getBoundingClientRect()
+    if(scroller && scroller !== document.documentElement && scroller !== document.body) {
+      const scRect = scroller.getBoundingClientRect()
+      // qsRect.top relative to viewport, scRect.top relative to viewport,
+      // so the delta is how far the rail must scroll to put qs-body's
+      // top at the rail's top. 8px offset so the card header isn't flush
+      // against the rail's top edge.
+      const delta = qsRect.top - scRect.top - 8
+      scroller.scrollTo({ top: scroller.scrollTop + delta, behavior: 'smooth' })
+    } else {
+      // Page-level fallback (Planner with no internal-scroll rail, or
+      // other callers): window.scrollTo with a header offset.
+      const absoluteTop = qsRect.top + window.scrollY
+      window.scrollTo({ top: absoluteTop - 80, behavior: 'smooth' })
+    }
+  })
+}
+
 // ── QUICK SIZE: AUTO-FILL STRIKE + COST FROM CHAIN (DELTA-BASED) ────────────
 // Pull the live option chain for (sym, expiry, call|put), pick the contract
 // whose |delta| is closest to the target delta, and fill the Quick Size
