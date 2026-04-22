@@ -41,7 +41,20 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#0a0c0f;color:#e8
 /* Sticky tfoot so "TOTAL NEW RISK" is always visible at the bottom of
    the scroll area. */
 .sizer-page #pl-cand-table tfoot td{position:sticky;bottom:0;background:#111318;z-index:2;border-top:1px solid #1e2d3d}
-@media(max-width:900px){.sizer-page.active{grid-template-columns:1fr;padding:0 10px}.sizer-page .sizer-left{position:static}.sizer-page #pl-cand-table{max-height:50vh}}
+/* Let rail children shrink below their content height when space is
+   tight — required so Quick Size's max-height + internal scroll plus
+   the Candidates internal scroll actually coexist rather than both
+   pushing the rail past its max-height. */
+.sizer-page .sizer-right > .card{min-height:0}
+/* Quick Size expanded body: capped height with its own internal scroll.
+   Before: #qs-body grew to fit all content (scenarios + metrics + quality
+   + add trade + levels + fields) which pushed the Candidates card far
+   enough up that lower rows were only reachable by scrolling the rail
+   and losing Quick Size visibility. Now Quick Size scrolls inside
+   itself, Candidates keeps its own scroll area, and the rail's
+   overflow-y:auto remains a last-resort fallback. */
+.sizer-page #qs-body{max-height:min(55vh,600px);overflow-y:auto;overflow-anchor:none}
+@media(max-width:900px){.sizer-page.active{grid-template-columns:1fr;padding:0 10px}.sizer-page .sizer-left{position:static}.sizer-page #pl-cand-table{max-height:50vh}.sizer-page #qs-body{max-height:70vh}}
 .trades-page{display:none;padding:20px;min-height:calc(100vh - 105px);overflow-y:auto}
 .trades-page.active{display:block}
 .card{background:#111318;border:1px solid rgba(255,255,255,0.07);border-radius:10px;margin-bottom:14px;overflow:hidden}
