@@ -91,10 +91,29 @@ input:-webkit-autofill,input:-webkit-autofill:hover,input:-webkit-autofill:focus
    !important on both color AND -webkit-text-fill-color (they are
    separately cascaded in WebKit/Blink; text-fill-color wins over
    color when both are set). */
+/* Fully-isolated render for the Planner Add-ticker input. Every
+   property that could plausibly hide typed text is pinned with
+   !important. isolation:isolate + transform:translateZ(0) create
+   their own stacking/paint layer so no ancestor filter/blend can
+   reach this element. appearance:none strips UA form-control
+   styling that some browsers render with -webkit-text-fill-color
+   set to a system dark value. */
 #pl-add-ticker{
   color:#ffffff!important;
   -webkit-text-fill-color:#ffffff!important;
   caret-color:#ffffff!important;
+  opacity:1!important;
+  text-shadow:none!important;
+  mix-blend-mode:normal!important;
+  filter:none!important;
+  background-clip:padding-box!important;
+  -webkit-background-clip:padding-box!important;
+  -webkit-appearance:none!important;
+  appearance:none!important;
+  isolation:isolate;
+  transform:translateZ(0);
+  position:relative;
+  z-index:2;
 }
 #pl-add-ticker::placeholder{
   color:rgba(255,255,255,0.45)!important;
@@ -694,10 +713,10 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
       onclick="(function(e){if(e.target.tagName!=='BUTTON'&&e.target.tagName!=='INPUT'){var i=document.getElementById('pl-add-ticker');if(i){i.focus();console.info('[PL-ADD] toolbar click → input.focus()')}}})(event)">
       <input type="text" id="pl-add-ticker" placeholder="Add ticker (e.g. AAPL)"
         autocomplete="off" spellcheck="false" autocapitalize="characters" tabindex="0"
-        style="flex:1 1 auto;min-width:0;font-size:14px;padding:9px 12px;text-transform:uppercase;background:#0a0c0f;border:1px solid rgba(255,255,255,0.12);border-radius:5px;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;caret-color:#ffffff!important;outline:none;font-family:inherit;box-sizing:border-box;pointer-events:auto;user-select:text;-webkit-user-select:text;position:relative;z-index:2"
+        style="flex:1 1 auto;min-width:0;font-size:14px;padding:9px 12px;text-transform:uppercase;background:#0a0c0f;border:1px solid rgba(255,255,255,0.12);border-radius:5px;outline:none;font-family:inherit;box-sizing:border-box;pointer-events:auto;user-select:text;-webkit-user-select:text;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;caret-color:#ffffff!important;opacity:1!important;text-shadow:none!important;mix-blend-mode:normal!important;filter:none!important;background-clip:padding-box!important;-webkit-background-clip:padding-box!important;-webkit-appearance:none!important;appearance:none!important;isolation:isolate;transform:translateZ(0);position:relative;z-index:2"
         oninput="this.value=this.value.toUpperCase()"
         onkeydown="if(event.key==='Enter')addCandidate(this.value)"
-        onfocus="this.style.borderColor='#f0c040'"
+        onfocus="plAddTickerDiagOnFocus(this)"
         onblur="this.style.borderColor='rgba(255,255,255,0.12)'">
       <button onclick="addCandidate(document.getElementById('pl-add-ticker').value)" class="btn btn-gold"
         style="font-size:13px;padding:0 18px;white-space:nowrap;flex:0 0 auto;font-weight:600">+ Add</button>
@@ -5372,6 +5391,51 @@ async function initPlanner() {
 // (< 5 min) to avoid redundant API hits; if everything is fresh, just
 // rerenders. After a real fetch, re-renders the Candidates table so
 // the new stop columns paint and Trade buttons re-enable.
+// Temporary diagnostic: runs on every focus of #pl-add-ticker. Dumps
+// the computed style of every property that could plausibly hide
+// typed text, and if the input is empty, injects 'TEST' so we can
+// visually confirm whether characters render at all. If 'TEST' is
+// visible but user-typed characters are not, the problem is in the
+// input pipeline (IME / extension) not the render pipeline. If
+// neither is visible, the computed-style dump will disclose which
+// property is wrong.
+function plAddTickerDiagOnFocus(el) {
+  try {
+    const cs = getComputedStyle(el)
+    console.info('[PL-ADD-DIAG] computed style on focus', {
+      color:                cs.color,
+      webkitTextFillColor:  cs.webkitTextFillColor,
+      caretColor:           cs.caretColor,
+      opacity:              cs.opacity,
+      backgroundColor:      cs.backgroundColor,
+      backgroundImage:      cs.backgroundImage,
+      mixBlendMode:         cs.mixBlendMode,
+      filter:               cs.filter,
+      textShadow:           cs.textShadow,
+      visibility:           cs.visibility,
+      fontFamily:           cs.fontFamily,
+      fontSize:             cs.fontSize,
+      textTransform:        cs.textTransform,
+      isolation:            cs.isolation,
+      transform:            cs.transform,
+      zIndex:               cs.zIndex,
+      // Size / position to confirm the input is where we think
+      clientRect:           JSON.parse(JSON.stringify(el.getBoundingClientRect())),
+    })
+    // Inject a known value so text rendering can be visually verified
+    // even if keystrokes are being swallowed somewhere.
+    if(!el.value) {
+      el.value = 'TEST'
+      console.info('[PL-ADD-DIAG] injected el.value = "TEST" (clear to type your own)')
+      // Select it so the first keystroke replaces the test string
+      try { el.select() } catch(e) {}
+    }
+  } catch(e) {
+    console.warn('[PL-ADD-DIAG] threw', e && e.message)
+  }
+  el.style.borderColor = '#f0c040'
+}
+
 async function fetchPlannerPrices() {
   if(!Array.isArray(PLANNER_CANDIDATES) || !PLANNER_CANDIDATES.length) return
   const syms = Array.from(new Set(
