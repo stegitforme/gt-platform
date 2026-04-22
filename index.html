@@ -706,6 +706,10 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
             <div class="metric"><div class="metric-label">+50% Target</div><div id="m-g30" class="metric-value g">--</div><div class="metric-sub">on cost basis</div></div>
           </div>
           <div style="display:none"><span id="m-cts">--</span><span id="m-cts-s"></span><span id="m-hl">--</span><span id="m-fl">--</span></div>
+          <!-- Option quality readout — populated by renderOptionQuality()
+               after autoFillOptionFromChain resolves. Empty by default
+               so the area collapses until a chain contract is selected. -->
+          <div id="qs-quality" style="margin-top:10px"></div>
           <div id="lvl-body" style="margin-top:10px"></div>
         </div>
       </div>
@@ -5758,7 +5762,7 @@ async function fetchOptionChain(sym, expiryStr, contractType) {
     const res = await apiGet(path, /*skipCache*/ false, /*silent*/ true)
     if(!res || !Array.isArray(res.results)) return []
     return res.results.map(r => {
-      const pick = (typeof pickLiveOptionPrice === 'function') ? pickLiveOptionPrice(r) : { px: null, source: null }
+      const pick = (typeof pickLiveOptionPrice === 'function') ? pickLiveOptionPrice(r) : { px: null, source: null, bid: null, ask: null, mid: null, lastTrade: null, dayClose: null }
       return {
         ticker: r?.details?.ticker,
         strike: r?.details?.strike_price,
@@ -5766,6 +5770,14 @@ async function fetchOptionChain(sym, expiryStr, contractType) {
         delta:  r?.greeks?.delta,
         price:  pick.px,
         priceSource: pick.source,
+        // Quality fields — consumed by evaluateOptionQuality() below
+        bid:       pick.bid,
+        ask:       pick.ask,
+        mid:       pick.mid,
+        lastTrade: pick.lastTrade,
+        dayClose:  pick.dayClose,
+        openInterest: typeof r?.open_interest === 'number' ? r.open_interest : null,
+        volume:       typeof r?.day?.volume  === 'number' ? r.day.volume  : null,
       }
     }).filter(x => typeof x.strike === 'number' && typeof x.delta === 'number' && x.price != null && x.price > 0)
   } catch(e) {
@@ -5789,6 +5801,7 @@ async function autoFillOptionFromChain() {
     if(token !== _qsAutoFillToken) return   // superseded by a later invocation
     if(!chain.length) {
       console.info('[QS-AUTO-OPTION]', { sym, expiry, targetDelta, note: 'empty chain (no key? wrong expiry? plan-restricted?)' })
+      if(typeof renderOptionQuality === 'function') renderOptionQuality(null)  // clear stale quality panel
       return
     }
     let best = null, bestDiff = Infinity
@@ -5800,15 +5813,79 @@ async function autoFillOptionFromChain() {
     _setQsVal('strike',  best.strike)
     _setQsVal('optcost', +best.price.toFixed(2))
     if(typeof calc === 'function') { try { calc() } catch(e) {} }
+    // Evaluate + render option quality (liquidity, spread, price source)
+    const quality = (typeof evaluateOptionQuality === 'function') ? evaluateOptionQuality(best) : null
+    if(typeof renderOptionQuality === 'function') {
+      renderOptionQuality(quality, { strike: best.strike, delta: best.delta })
+    }
     console.info('[QS-AUTO-OPTION]', {
       sym, expiry, targetDelta,
       chainSize: chain.length,
       chosen: { strike: best.strike, delta: best.delta, price: best.price, priceSource: best.priceSource, ticker: best.ticker },
       bestDeltaDiff: +bestDiff.toFixed(4),
+      quality,
     })
   } catch(e) {
     console.warn('[QS-AUTO-OPTION-ERROR]', e && e.message)
   }
+}
+
+// ── OPTION QUALITY CHECK ────────────────────────────────────────────────────
+// Evaluate how "clean" a chosen option is to trade: tight vs wide spread,
+// real liquidity vs thin, and whether we're pricing off mid-quote or last.
+function evaluateOptionQuality(opt) {
+  if(!opt) return null
+  const num = v => (typeof v === 'number' && isFinite(v) && v > 0) ? v : 0
+  const bid  = num(opt.bid)
+  const ask  = num(opt.ask)
+  const last = num(opt.lastTrade ?? opt.last ?? opt.lastPrice)
+  const oi   = num(opt.openInterest)
+  const vol  = num(opt.volume)
+  const mid  = (bid && ask && ask >= bid) ? (bid + ask) / 2 : null
+  const spreadPct = (bid && ask && mid) ? ((ask - bid) / mid) * 100 : null
+  let liquidity = 'unknown'
+  if(oi > 100 && vol > 10)      liquidity = 'good'
+  else if(oi > 20)              liquidity = 'ok'
+  else if(oi > 0 || vol > 0)    liquidity = 'weak'
+  let spreadQuality = 'unknown'
+  if(spreadPct != null) {
+    if(spreadPct < 2)      spreadQuality = 'tight'
+    else if(spreadPct < 4) spreadQuality = 'ok'
+    else                   spreadQuality = 'wide'
+  }
+  const priceSource = (bid && ask) ? 'mid' : (last ? 'last' : 'close')
+  return { liquidity, spreadPct, spreadQuality, priceSource, bid, ask, mid, last, oi, vol }
+}
+function _qsQualityFmt(val) {
+  if(val === 'good' || val === 'tight') return '<span style="color:#00d68f">✔ ' + val + '</span>'
+  if(val === 'ok')                       return '<span style="color:#f0c040">⚠ ' + val + '</span>'
+  if(val === 'wide' || val === 'weak')   return '<span style="color:#ff4560">✖ ' + val + '</span>'
+  return '<span style="color:#8b91a0">' + val + '</span>'
+}
+function renderOptionQuality(q, meta) {
+  const el = document.getElementById('qs-quality')
+  if(!el) return
+  if(!q) { el.innerHTML = ''; return }
+  const spreadTxt = (q.spreadPct != null) ? q.spreadPct.toFixed(1) + '%' : '—'
+  const priceSrcTxt = q.priceSource === 'mid' ? 'Midpoint (bid/ask)'
+                    : q.priceSource === 'last' ? 'Last trade'
+                    : 'Day close'
+  const bidAsk = (q.bid && q.ask) ? q.bid.toFixed(2) + ' / ' + q.ask.toFixed(2) : '—'
+  const subRight = meta ? '<span style="color:#555c6e;font-size:10px">' + (meta.strike ? 'K=' + meta.strike : '') + (meta.delta ? ' · Δ=' + (+meta.delta).toFixed(2) : '') + '</span>' : ''
+  el.innerHTML =
+    '<div style="padding:8px 11px;background:#171b22;border-radius:6px;font-size:11px;line-height:1.55">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">' +
+    '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#555c6e">Option Quality</div>' +
+    subRight +
+    '</div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 12px">' +
+    '<div><span style="color:#8b91a0">Liquidity:</span> ' + _qsQualityFmt(q.liquidity) + '</div>' +
+    '<div><span style="color:#8b91a0">Spread:</span> ' + _qsQualityFmt(q.spreadQuality) + ' <span style="color:#555c6e">(' + spreadTxt + ')</span></div>' +
+    '<div><span style="color:#8b91a0">Pricing:</span> <span style="color:#e8eaf0">' + priceSrcTxt + '</span></div>' +
+    '<div><span style="color:#8b91a0">Bid/Ask:</span> <span style="font-family:\'SF Mono\',monospace;color:#e8eaf0">' + bidAsk + '</span></div>' +
+    '<div><span style="color:#8b91a0">OI:</span> <span style="color:#e8eaf0">' + (q.oi || '—') + '</span></div>' +
+    '<div><span style="color:#8b91a0">Vol:</span> <span style="color:#e8eaf0">' + (q.vol || '—') + '</span></div>' +
+    '</div></div>'
 }
 
 // 300ms debounce so scrubbing delta or retyping expiry doesn't spam the
