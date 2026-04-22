@@ -675,7 +675,7 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
           <th style="padding:6px 10px;text-align:left">Ticker</th>
           <th style="padding:6px 4px;text-align:left">Sector</th>
           <th style="padding:6px 4px;text-align:right">ATR</th>
-          <th style="padding:6px 4px;text-align:right" title="GT Score — 0–100 scoring across trend, momentum, RS, structure, volume">GT</th>
+          <th style="padding:6px 4px;text-align:right" title="GT Score — 0–10 scale (same as Screener). Weighted: trend 30% + momentum 25% + RS 20% + structure 15% + volume 10%. Color: ≥8 green, ≥6 amber, ≥4 orange, <4 red.">GT</th>
           <th style="padding:6px 4px;text-align:right" title="Stock stop at entry − 0.5 · ATR (based on current stock price)">-.5 ATR</th>
           <th style="padding:6px 4px;text-align:right" title="Stock stop at entry − 1.0 · ATR (based on current stock price)">-1 ATR</th>
           <th style="padding:6px 4px;text-align:right">Delta</th>
@@ -5397,8 +5397,17 @@ function renderCandidateTable() {
     var stockPx = (typeof LIVE_PRICES !== 'undefined' && LIVE_PRICES[sym] && LIVE_PRICES[sym].price) || c.price || 0
     var stop05 = (stockPx > 0 && atr > 0) ? (stockPx - 0.5 * atr) : 0
     var stop10 = (stockPx > 0 && atr > 0) ? (stockPx - 1.0 * atr) : 0
+    // GT_SCORES[sym].score is the raw 0-10 integer produced by
+    // calcGTScore (weighted sum: trend 30% + mom 25% + RS 20% + struct 15% +
+    // vol 10%, each sub-score 0-10). Displayed raw — same scale the
+    // Screener uses. Thresholds match the Screener's (8/6/4), NOT a
+    // 0-100 scale that GT never used.
     var gtScore = (typeof GT_SCORES !== 'undefined' && GT_SCORES[sym] && typeof GT_SCORES[sym].score === 'number') ? Math.round(GT_SCORES[sym].score) : null
-    var gtCol = gtScore == null ? '#333a4a' : gtScore >= 80 ? '#00d68f' : gtScore >= 60 ? '#f0c040' : gtScore >= 40 ? '#ff8c42' : '#ff4560'
+    var gtCol = gtScore == null ? '#333a4a'
+              : gtScore >= 8 ? '#00d68f'
+              : gtScore >= 6 ? '#f0c040'
+              : gtScore >= 4 ? '#ff8c42'
+              : '#ff4560'
     return "<tr class='cand-row"+(sym===window._SELECTED_CAND_SYM?' active':'')+"' data-cand-idx='"+idx+"' style='border-bottom:1px solid #0d1117;cursor:pointer'>"+
       "<td style='padding:5px 10px;font-weight:600'>"+sym+" <span style='font-size:10px;font-weight:400;color:"+eData.col+";margin-left:4px' title='"+eData.title+"'>"+eData.txt+"\x3C/span>\x3C/td>"+
       "<td style='padding:5px 4px;color:#8b91a0;font-size:11px'>"+sector+"\x3C/td>"+
