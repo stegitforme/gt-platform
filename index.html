@@ -5690,6 +5690,23 @@ function savePlannerCandidates() {
 // ── OPEN POSITIONS TABLE ─────────────────────────────────────────────────────
 function renderOpenTable() {
   var open = TRADES.filter(function(t){return t.status==="open"})
+  // ─── Reconcile against derived positions ───────────────────────────────
+  // Reject any trade record whose event-derived position is actually
+  // CLOSED (leftover from pre-refactor rolls), and collapse duplicate
+  // open records that share the same position_id (one row per unique
+  // underlying+type+strike+expiry — no symbol-level collisions).
+  if(typeof getOpenPositionIds === 'function') {
+    var _openPids = getOpenPositionIds()
+    var _seenPid = {}
+    open = open.filter(function(t){
+      var pid = getPositionId(t)
+      if(!pid) return true
+      if(!_openPids.has(pid)) return false      // closed by event log
+      if(_seenPid[pid]) return false            // duplicate row for same pid
+      _seenPid[pid] = t.id
+      return true
+    })
+  }
   var tbody = document.getElementById("pl-open-body")
   if(!tbody) return
   if(!open.length){tbody.innerHTML="<tr><td colspan='7' style='padding:12px;text-align:center;color:#555c6e'>No open trades\x3C/td>\x3C/tr>";return}
@@ -7537,6 +7554,186 @@ try { CLOSED_TRADES = JSON.parse(localStorage.getItem('gt_closed_trades') || '[]
 function saveClosedTrades() {
   try { localStorage.setItem('gt_closed_trades', JSON.stringify(CLOSED_TRADES)) } catch(e) {}
 }
+
+// ═══ POSITION IDENTITY + EVENT-DERIVED POSITIONS ═════════════════════════
+// Single source of truth for "what open positions does the user hold?".
+// Existing TRADES records are treated as IMMUTABLE EVENTS:
+//
+//   • Every TRADE contributes a BUY event (qty=cts, price=cost, ts=date)
+//   • If status==='closed' it ALSO contributes a SELL event at closePrice
+//
+// Positions are DERIVED from events — never stored. To close or roll a
+// position, append a new event. No mutation of old records, no "status"
+// guesswork from the UI layer.
+//
+// Position key = underlying|type|strike|expiryISO
+//   LUNR 21 Call May-26 → "LUNR|Call|21|2026-05-15"
+//   LUNR 23 Call May-26 → "LUNR|Call|23|2026-05-15"
+// These are DISTINCT ids, so a roll from 21 → 23 is naturally:
+//   SELL event on LUNR|Call|21 (closes it, net_qty → 0)
+//   BUY  event on LUNR|Call|23 (opens it, net_qty → n)
+// The old position_id never re-appears in open lists, no double-count.
+
+function getPositionId(t) {
+  if(!t) return ''
+  const sym = String(t.underlying || (t.ticker||'').split(' ')[0] || '')
+    .toUpperCase().replace(/[^A-Z]/g,'')
+  if(!sym) return ''
+  if(t.isStock || t.type === 'Stock') return sym+'|Stock|0|'
+  const typ = /put/i.test(String(t.type||'')) ? 'Put' : 'Call'
+  const strk = Math.round((+t.strike || 0) * 100) / 100
+  const exp  = t.expiryISO || (typeof parseTradeExpiryISO === 'function'
+    ? parseTradeExpiryISO(t.desc || t.expiry || '') : '') || ''
+  return sym+'|'+typ+'|'+strk+'|'+exp
+}
+
+// Yield BUY + optional SELL events from one trade record.
+function getTradeEvents(t) {
+  const pid = getPositionId(t)
+  if(!pid) return []
+  const qty = +t.cts || 0
+  if(qty <= 0) return []
+  const isStock  = !!t.isStock || t.type === 'Stock'
+  const buyPrice = isStock ? (+t.entry || +t.cost || 0) : (+t.cost || +t.entry || 0)
+  const events = [{
+    action: 'BUY', position_id: pid, qty, price: buyPrice,
+    ts: t.date || '', source_id: t.id
+  }]
+  if(t.status === 'closed' && t.closePrice != null) {
+    events.push({
+      action: 'SELL', position_id: pid, qty, price: +t.closePrice,
+      ts: t.closeDate || '', source_id: t.id
+    })
+  }
+  return events
+}
+
+// Derive the full picture of positions from the immutable trade log.
+// Returns array of {
+//   position_id, status ('OPEN'|'CLOSED'), net_qty, avg_cost,
+//   realized_pnl, open_trade_ids, all_trade_ids, sample_trade
+// }.
+function buildPositionsFromTrades(trades) {
+  const trs = Array.isArray(trades) ? trades : []
+  const byPid = {}
+  trs.forEach(function(t) {
+    const pid = getPositionId(t); if(!pid) return
+    if(!byPid[pid]) byPid[pid] = { position_id: pid, events: [], trades: [] }
+    getTradeEvents(t).forEach(function(e){ byPid[pid].events.push(e) })
+    byPid[pid].trades.push(t)
+  })
+  return Object.keys(byPid).map(function(pid) {
+    const bucket = byPid[pid]
+    const buys   = bucket.events.filter(function(e){ return e.action === 'BUY'  })
+    const sells  = bucket.events.filter(function(e){ return e.action === 'SELL' })
+    const buyQty  = buys.reduce(function(s,e){ return s + e.qty }, 0)
+    const sellQty = sells.reduce(function(s,e){ return s + e.qty }, 0)
+    const net_qty = buyQty - sellQty
+    const status  = net_qty <= 0 ? 'CLOSED' : 'OPEN'
+    // Weighted average cost across ALL buy events (correct for typical
+    // single-buy trades; for partial fills/scales the same formula gives
+    // the blended cost basis).
+    const totalBuyCost    = buys.reduce(function(s,e){ return s + e.qty*e.price }, 0)
+    const totalSellRevnu  = sells.reduce(function(s,e){ return s + e.qty*e.price }, 0)
+    const avg_cost = buyQty > 0 ? totalBuyCost / buyQty : 0
+    // Realized P&L: sells - buys once fully closed. Partial-close P&L would
+    // need FIFO matching; deferred until the UI needs it.
+    const realized_pnl = status === 'CLOSED' ? (totalSellRevnu - totalBuyCost) : 0
+    // open_trade_ids: trade records still contributing open qty (FIFO).
+    const open_trade_ids = []
+    if(net_qty > 0) {
+      let remainingToClose = sellQty
+      const buysByDate = buys.slice().sort(function(a,b){
+        return (new Date(a.ts||0) - new Date(b.ts||0))
+      })
+      buysByDate.forEach(function(b){
+        if(remainingToClose >= b.qty) { remainingToClose -= b.qty; return }
+        open_trade_ids.push(b.source_id)
+      })
+    }
+    const sample_trade = bucket.trades.find(function(t){ return t.status === 'open' }) || bucket.trades[0]
+    return {
+      position_id: pid,
+      status, net_qty, avg_cost, realized_pnl,
+      open_trade_ids,
+      all_trade_ids: bucket.trades.map(function(t){ return t.id }),
+      sample_trade,
+      trade_count: bucket.trades.length
+    }
+  })
+}
+
+// Reconciliation pass. Enforces two invariants:
+//   (a) If the event log says a position is CLOSED (net_qty===0), every
+//       TRADE record feeding that position_id must have status='closed'.
+//   (b) If the event log says a position is OPEN but MULTIPLE trade
+//       records carry status='open' for the same position_id, log a
+//       collision warning — the UI will dedupe to one row, but the user
+//       should resolve the duplicate.
+// Called on boot and after every save/close/roll.
+function reconcilePositions() {
+  const positions = buildPositionsFromTrades(TRADES)
+  let changed = 0
+  const openCollisions = []
+  positions.forEach(function(p) {
+    const pidTrades = TRADES.filter(function(t){ return getPositionId(t) === p.position_id })
+    if(p.status === 'CLOSED') {
+      pidTrades.forEach(function(t){
+        if(t.status === 'open') { t.status = 'closed'; changed++ }
+      })
+    } else {
+      const openForPid = pidTrades.filter(function(t){ return t.status === 'open' })
+      if(openForPid.length > 1) {
+        openCollisions.push({ position_id: p.position_id, ids: openForPid.map(function(t){ return t.id }) })
+      }
+    }
+  })
+  if(changed > 0) {
+    console.log('[POSITIONS] Reconciled '+changed+' trade(s) to status=closed (net_qty reached 0)')
+    try { saveTrades() } catch(e) {}
+  }
+  if(openCollisions.length > 0) {
+    console.warn('[POSITIONS] ⚠ Open-trade collisions (same position_id, multiple open rows):', openCollisions)
+  }
+  return { changed, openCollisions, positions }
+}
+
+// Derive a Set of the position_ids that currently have net_qty > 0. UI
+// filters use this to reject rows whose position has actually closed.
+function getOpenPositionIds() {
+  const pos = buildPositionsFromTrades(TRADES)
+  return new Set(pos.filter(function(p){ return p.status === 'OPEN' })
+    .map(function(p){ return p.position_id }))
+}
+
+// TEMP DEBUG: log all LUNR positions with strike/expiry/net_qty. Run
+// `debugLunrPositions()` from the console to inspect.
+function debugLunrPositions() {
+  const positions = buildPositionsFromTrades(TRADES)
+  const lunr = positions.filter(function(p){ return p.position_id.indexOf('LUNR|') === 0 })
+  console.log('[DEBUG LUNR] '+lunr.length+' distinct position(s) derived from '+TRADES.length+' trade record(s):')
+  lunr.forEach(function(p){
+    console.log('  • '+p.position_id
+      +' net_qty='+p.net_qty
+      +' status='+p.status
+      +' avg_cost=$'+(+p.avg_cost).toFixed(2)
+      +' realized_pnl=$'+(+p.realized_pnl).toFixed(0)
+      +' trades='+p.all_trade_ids.length
+      +' open_trades='+p.open_trade_ids.length)
+  })
+  const lunrTrades = TRADES.filter(function(t){
+    const s = String(t.underlying||(t.ticker||'').split(' ')[0]||'').toUpperCase()
+    return s === 'LUNR'
+  })
+  console.log('[DEBUG LUNR] raw LUNR trade records:')
+  lunrTrades.forEach(function(t){
+    console.log('  • id='+t.id+' '+t.ticker+' strike='+t.strike+' expiry='+(t.desc||t.expiryISO)
+      +' cts='+t.cts+' status='+t.status+' cost=$'+t.cost+' closePrice=$'+(t.closePrice==null?'—':t.closePrice))
+  })
+  return { positions: lunr, trades: lunrTrades }
+}
+if(typeof window !== 'undefined') window.debugLunrPositions = debugLunrPositions
+
 setTimeout(() => { renderTrades(); renderPortfolioRisk(); }, 800)
 
 function saveTrades() {
@@ -7759,6 +7956,7 @@ function saveTrade() {
     return
   }
   TRADES.push(t)
+  try { reconcilePositions() } catch(e) {}
   saveTrades()
   document.getElementById('add-form').style.display = 'none'
   renderTrades()
@@ -7779,24 +7977,112 @@ function closeTrade(id) {
   t.closePrice = +cp
   t.closeDate  = new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}).replace(',','')
   t.pnl        = (t.closePrice - t.cost) * t.cts * 100
+  try { reconcilePositions() } catch(e) {}
   saveTrades()
   renderTrades()
   fbAutoSave(1000)
 }
 
+// Non-mutative roll. The old contract is CLOSED (SELL event at the user's
+// sell price) and a new contract is OPENED as a fresh trade record (BUY
+// event at the user's new entry). The two have DIFFERENT position_ids —
+// old position_id is never re-used and never shows up in open lists
+// again. Derived positions and UI pick this up automatically.
 function rollTrade(id) {
   const t = TRADES.find(x => x.id === id)
   if(!t) return
-  const np = prompt('New entry price after roll?')
-  if(!np) return
-  const na = prompt('New ATR? (press Enter to keep'
- + t.atr + ')')
+  const isStock = !!t.isStock || t.type === 'Stock'
+  if(isStock) {
+    // Stock rolls don't change contract identity; fall back to the old
+    // cost-basis-reset behavior for stock positions.
+    const np = prompt('New entry price after roll?')
+    if(np === null || np === '') return
+    const na = prompt('New ATR? (blank = keep '+(t.atr||0)+')')
+    if(!Array.isArray(t.rolls)) t.rolls = []
+    t.rolls.push({from: t.entry, to: +np, atr: t.atr, date: new Date().toLocaleDateString('en-US',{month:'short',day:'numeric'})})
+    t.entry = +np
+    if(na) t.atr = +na
+    saveTrades(); renderTrades()
+    return
+  }
+  // OPTION ROLL — prompt for new contract and close prices.
+  const oldTag = (t.strike ? t.strike+(t.type==='Put'?'P':'C') : t.ticker)
+  const newStrikeStr = prompt('Roll: NEW strike (blank = keep '+(t.strike||'—')+'):')
+  if(newStrikeStr === null) return
+  const newExpiryStr = prompt('Roll: NEW expiry (e.g. May-26 or 2026-05-15; blank = keep "'+(t.desc||'')+'"):')
+  if(newExpiryStr === null) return
+  const closeOldStr = prompt('Roll: SELL price of OLD contract ('+oldTag+'):')
+  if(closeOldStr === null || closeOldStr === '') return
+  const newEntryStr = prompt('Roll: BUY price of NEW contract (per contract):')
+  if(newEntryStr === null || newEntryStr === '') return
+  const newCtsStr   = prompt('Roll: contract count (blank = keep '+(t.cts||1)+'):')
+  if(newCtsStr === null) return
+  const newAtrStr   = prompt('Roll: NEW ATR (blank = keep '+(t.atr||0)+'):')
+  if(newAtrStr === null) return
+
+  const closeOld = +closeOldStr
+  const newEntry = +newEntryStr
+  const newCts   = newCtsStr ? (+newCtsStr) : (t.cts || 1)
+  const newAtr   = newAtrStr ? (+newAtrStr) : (t.atr || 0)
+  const strkNew  = newStrikeStr ? (+newStrikeStr) : (+t.strike || 0)
+  const expNewDesc = newExpiryStr || (t.desc || '')
+  if(!isFinite(closeOld) || closeOld < 0 || !isFinite(newEntry) || newEntry <= 0) {
+    alert('Invalid prices. Roll aborted — no changes made.')
+    return
+  }
+
+  // 1) SELL event: close the old contract. The old record is mutated only
+  //    to append its SELL event (status/closePrice/closeDate). Its
+  //    position_id is preserved as-is — we never overwrite strike/expiry.
+  t.status     = 'closed'
+  t.closePrice = closeOld
+  t.closeDate  = new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}).replace(',','')
+  t.pnl        = (t.closePrice - (t.cost||0)) * (t.cts||0) * 100
+
+  // 2) BUY event: open the NEW contract as a brand-new trade record with
+  //    its own (different) position_id.
+  const under    = String(t.underlying || (t.ticker||'').split(' ')[0] || '').toUpperCase()
+  const typeNew  = /put/i.test(String(t.type||'')) ? 'Put' : 'Call'
+  const expISONew = (typeof parseTradeExpiryISO === 'function' ? parseTradeExpiryISO(expNewDesc) : '') || expNewDesc
+  const cpTag     = typeNew === 'Put' ? 'P' : 'C'
+  const newTicker = under + (strkNew ? ' '+strkNew+cpTag : '')
+  const newTrade = {
+    id:           Date.now() + Math.floor(Math.random()*1000),
+    ticker:       newTicker,
+    underlying:   under,
+    desc:         expNewDesc,
+    expiryISO:    expISONew,
+    strike:       strkNew,
+    type:         typeNew,
+    cts:          newCts,
+    cost:         newEntry,
+    entry:        0,
+    atr:          newAtr,
+    date:         new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}).replace(',',''),
+    notes:        'Rolled from '+(t.ticker||oldTag)+' (trade #'+t.id+')',
+    status:       'open',
+    rolls:        [],
+    rolledFromId: t.id,
+    occ:          (typeof buildOCCFromParts === 'function' ? buildOCCFromParts(under, expISONew, strkNew, typeNew) : '')
+  }
+  TRADES.push(newTrade)
+
+  // Breadcrumb on old record (audit trail only — does NOT drive any
+  // position math, which reads from events).
   if(!Array.isArray(t.rolls)) t.rolls = []
-  t.rolls.push({from: t.entry, to: +np, atr: t.atr, date: new Date().toLocaleDateString('en-US',{month:'short',day:'numeric'})})
-  t.entry = +np
-  if(na) t.atr = +na
+  t.rolls.push({
+    from: t.ticker || oldTag, to: newTicker,
+    closedAt: closeOld, openedAt: newEntry,
+    atr: newAtr,
+    date: new Date().toLocaleDateString('en-US',{month:'short',day:'numeric'}),
+    newTradeId: newTrade.id
+  })
+
+  try { reconcilePositions() } catch(e) { console.warn('[ROLL] reconcile error:', e) }
   saveTrades()
   renderTrades()
+  if(typeof renderPortfolioRisk === 'function') renderPortfolioRisk()
+  if(typeof fbAutoSave === 'function') fbAutoSave(1000)
 }
 
 function deleteTrade(id) {
@@ -7865,8 +8151,24 @@ function renderTrades() {
   const esc = s => String(s == null ? '' : s)
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
     .replace(/"/g,'&quot;').replace(/'/g,'&#39;')
-  const open   = TRADES.filter(t => t.status === 'open').sort(sortFn)
+  let open    = TRADES.filter(t => t.status === 'open').sort(sortFn)
   const closed = TRADES.filter(t => t.status === 'closed').sort(sortFn)
+  // ─── Reconcile against derived positions ───────────────────────────────
+  // Drop any trade whose derived position is CLOSED (net_qty === 0), and
+  // collapse colliding duplicates at the same position_id to a single
+  // canonical row (oldest wins by sort order).
+  if(typeof getOpenPositionIds === 'function') {
+    const _openPids = getOpenPositionIds()
+    const _seenPid  = {}
+    open = open.filter(function(t){
+      const pid = getPositionId(t)
+      if(!pid) return true
+      if(!_openPids.has(pid)) return false
+      if(_seenPid[pid]) return false
+      _seenPid[pid] = t.id
+      return true
+    })
+  }
   // Flag any open trades that are canonical duplicates of another open
   // trade (same underlying+expiry+strike+type). The card's Current value
   // tile shows "Duplicate / unresolved" so the user can spot them and
@@ -9126,6 +9428,13 @@ function initPlatform() {
     console.log('[INIT-BOOT] before loadRiskSettings')
     loadRiskSettings()
     console.log('[INIT-BOOT] after loadRiskSettings')
+    // Reconcile trade events → positions BEFORE rendering. Any "open"
+    // record whose position has actually been closed by the event log
+    // (e.g. legacy roll artifacts) gets flipped to status='closed' so
+    // the UI never sees a stale open row.
+    console.log('[INIT-BOOT] before reconcilePositions')
+    try { reconcilePositions() } catch(e) { console.warn('[INIT-BOOT] reconcilePositions error:', e) }
+    console.log('[INIT-BOOT] after reconcilePositions')
     console.log('[INIT-BOOT] before renderTrades')
     renderTrades()
     console.log('[INIT-BOOT] after renderTrades')
