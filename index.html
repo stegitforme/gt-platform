@@ -1971,143 +1971,37 @@ async function fetchTQQQSignal() {
     const pctFromMa = ((last - ma200) / ma200 * 100).toFixed(1)
     const needsRebalance = Math.abs(tqqqPct - 50) > 5  // example: current is 50/50
 
+    // ── Compact signal card ─────────────────────────────────────────────
+    // Decision-oriented summary: TQQQ target %, SGOV target %, Vol Accel
+    // Guard status. Last-updated time lives in #tqqq-updated (card head,
+    // set below). All signal math above is untouched — this block only
+    // changes how the result is presented. The previous detailed layout
+    // (QQQ/MA/Vol metric strip, allocation bar, turbo mode, vol/guard
+    // reference tables) is removed from the main card per the Market
+    // simplification spec. Logic still drives the rebalancer, setApi
+    // status, and Firebase sync via existing calls below.
+    const tqqqCol  = tqqqPct >= 80 ? '#00d68f' : tqqqPct >= 50 ? '#f0c040' : tqqqPct > 0 ? '#ff8c42' : '#ff4560'
+    const sgovCol  = sgov    >= 50 ? '#4da6ff' : '#8b91a0'
+    const guardLabel = guardFired ? '⚡ FIRED — capped at ' + VOL_ACCEL_CAP + '%' : 'standby'
+    const guardBg    = guardFired ? 'rgba(240,192,64,.15)' : 'rgba(139,145,160,.08)'
+    const guardFg    = guardFired ? '#f0c040' : '#8b91a0'
+    const guardBd    = guardFired ? 'rgba(240,192,64,.45)' : 'rgba(139,145,160,.25)'
     const html =
-      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:12px">' +
-        '<div class="metric"><div class="metric-label">QQQ Price\x3C/div><div class="metric-value" style="font-size:16px">'
-+last.toFixed(2)+'\x3C/div>\x3C/div>' +
-        '<div class="metric"><div class="metric-label">200-Day MA\x3C/div><div class="metric-value" style="font-size:16px;color:'+(aboveMa?'#00d68f':'#ff4560')+'">'
-+ma200str+'\x3C/div><div class="metric-sub">'+(aboveMa?'&#9650; +':'&#9660; ')+pctFromMa+'%\x3C/div>\x3C/div>' +
-        '<div class="metric"><div class="metric-label">Realized Vol (20d)\x3C/div><div class="metric-value" style="font-size:16px;color:'+(annualVol<=35?'#00d68f':annualVol<=50?'#ff8c42':'#ff4560')+'">'+annualVol+'%\x3C/div><div class="metric-sub">5d ago: '+annualVol5dAgo+'%\x3C/div>\x3C/div>' +
-        '<div class="metric"><div class="metric-label">⚡ Vol Accel Guard\x3C/div><div class="metric-value" style="font-size:14px;color:'+(guardFired?'#f0c040':'#555c6e')+'">'+(guardFired?'FIRED':'standby')+'\x3C/div><div class="metric-sub">'+(guardFired?'capped at '+VOL_ACCEL_CAP+'%':((annualVol/annualVol5dAgo)*100-100).toFixed(0)+'% change vs 5d')+'\x3C/div>\x3C/div>' +
-      '\x3C/div>' +
-      '<div style="background:#0a0c0f;border-radius:8px;padding:14px 16px;margin-bottom:10px">' +
-        '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#555c6e;margin-bottom:8px">This Weeks Signal\x3C/div>' +
-        '<div style="font-size:16px;font-weight:600;color:'+signalColor+';margin-bottom:8px">'+signal+'\x3C/div>' +
-        '<div style="display:flex;gap:16px">' +
-          '<div style="flex:1">' +
-            '<div style="font-size:11px;color:#555c6e;margin-bottom:4px">TQQQ Allocation\x3C/div>' +
-            '<div style="font-size:28px;font-weight:700;color:'+(tqqqPct>50?'#00d68f':tqqqPct>0?'#ff8c42':'#ff4560')+'">'+tqqqPct+'%\x3C/div>' +
+      '<div style="padding:18px 20px">' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
+          '<div style="padding:16px 18px;background:rgba(0,214,143,.06);border:1px solid rgba(0,214,143,.22);border-radius:8px;text-align:center">' +
+            '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#555c6e;margin-bottom:6px">TQQQ Target\x3C/div>' +
+            '<div style="font-size:40px;font-weight:700;color:'+tqqqCol+';line-height:1;font-family:\'SF Mono\',monospace">'+tqqqPct+'%\x3C/div>' +
           '\x3C/div>' +
-          '<div style="flex:1">' +
-            '<div style="font-size:11px;color:#555c6e;margin-bottom:4px">SGOV Allocation\x3C/div>' +
-            '<div style="font-size:28px;font-weight:700;color:'+(sgov>50?'#4da6ff':'#8b91a0')+'">'+sgov+'%\x3C/div>' +
-          '\x3C/div>' +
-          '<div style="flex:2;padding-left:16px;border-left:1px solid rgba(255,255,255,.07)">' +
-            '<div style="font-size:11px;color:#555c6e;margin-bottom:4px">Allocation Bar\x3C/div>' +
-            '<div style="display:flex;height:20px;border-radius:4px;overflow:hidden;margin-top:4px">' +
-              '<div style="width:'+tqqqPct+'%;background:#00d68f;transition:width .5s">\x3C/div>' +
-              '<div style="width:'+sgov+'%;background:#4da6ff;transition:width .5s">\x3C/div>' +
-            '\x3C/div>' +
-            '<div style="display:flex;justify-content:space-between;font-size:10px;color:#555c6e;margin-top:3px">' +
-              '<span style="color:#00d68f">TQQQ '+tqqqPct+'%\x3C/span>' +
-              '<span style="color:#4da6ff">SGOV '+sgov+'%\x3C/span>' +
-            '\x3C/div>' +
+          '<div style="padding:16px 18px;background:rgba(77,166,255,.06);border:1px solid rgba(77,166,255,.22);border-radius:8px;text-align:center">' +
+            '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#555c6e;margin-bottom:6px">SGOV Target\x3C/div>' +
+            '<div style="font-size:40px;font-weight:700;color:'+sgovCol+';line-height:1;font-family:\'SF Mono\',monospace">'+sgov+'%\x3C/div>' +
           '\x3C/div>' +
         '\x3C/div>' +
-      '\x3C/div>' +
-      '<div style="margin-bottom:10px;display:flex;align-items:center;gap:8px">' +
-        (turboBadge ? '<div style="background:'+turboBadgeColor+';color:#0a0c0f;font-size:11px;font-weight:700;padding:4px 10px;border-radius:4px;letter-spacing:.05em">' + turboBadge + '\x3C/div>' : '') +
-        '<div style="font-size:11px;color:#555c6e">Turbo fires after 8+ consecutive weeks below 200MA then reclaim\x3C/div>' +
-      '\x3C/div>' +
-      '<div style="font-size:11px;color:#555c6e">Strategy: Vol(35%) Target + 200MA Gate + ⚡Vol Accel Guard | Based on '+n+' trading days of QQQ data . 200MA uses '+ma200window+' days . Vol uses '+vol20window+' days . Run every Friday before market close\x3C/div>' +
-
-      // ── VOL REFERENCE TABLES ──────────────────────────────────────────────
-      '<div style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,.07)">' +
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
-
-      // Table 1: Vol → TQQQ Allocation
-      '<div>' +
-      '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#555c6e;margin-bottom:8px">Vol(20d) → TQQQ Allocation\x3C/div>' +
-      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;font-size:10px">' +
-      '<div style="padding:3px 6px;color:#555c6e;font-weight:700;border-bottom:1px solid rgba(255,255,255,.08)">Vol\x3C/div>' +
-      '<div style="padding:3px 6px;color:#555c6e;font-weight:700;border-bottom:1px solid rgba(255,255,255,.08)">TQQQ\x3C/div>' +
-      '<div style="padding:3px 6px;color:#555c6e;font-weight:700;border-bottom:1px solid rgba(255,255,255,.08)">Zone\x3C/div>' +
-      // Rows — highlight current vol
-      [
-        [10,'100%','#00d68f','Calm'],
-        [15,'100%','#00d68f','Calm'],
-        [20,'100%','#00d68f','Calm'],
-        [25,'100%','#00d68f','Calm'],
-        [30,'100%','#00d68f','Calm'],
-        [35,'100%','#4da6ff','Target'],
-        [40,'90%', '#4da6ff','Normal'],
-        [45,'80%', '#f0c040','Elevated'],
-        [50,'70%', '#f0c040','Elevated'],
-        [55,'65%', '#ff8c42','High'],
-        [60,'60%', '#ff8c42','High'],
-        [70,'50%', '#ff4560','Crash'],
-        [80,'45%', '#ff4560','Crash'],
-        [100,'35%','#ff4560','Crash'],
-        [120,'30%','#ff4560','Crash'],
-      ].map(([v,a,col,zone]) => {
-        const isCurrent = Math.abs(v - annualVol) <= 2.5
-        const bg = isCurrent ? 'background:rgba(240,192,64,.12);' : '';
-        const fw = isCurrent ? 'font-weight:700;' : '';
-        const arrow = isCurrent ? ' ◄' : '';
-        return '<div style="padding:3px 6px;border-bottom:1px solid rgba(255,255,255,.04);color:#8b91a0;'+bg+fw+'font-size:10px;font-family:SF Mono,monospace">'+v+'%'+arrow+'\x3C/div>' +
-               '<div style="padding:3px 6px;border-bottom:1px solid rgba(255,255,255,.04);color:'+col+';'+bg+fw+'font-size:10px;font-family:SF Mono,monospace">'+a+'\x3C/div>' +
-               '<div style="padding:3px 6px;border-bottom:1px solid rgba(255,255,255,.04);color:#555c6e;'+bg+'font-size:10px">'+zone+'\x3C/div>'
-      }).join('') +
-      '\x3C/div>\x3C/div>' +
-
-      // Table 2: Vol Accel Guard reference
-      '<div>' +
-      '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#555c6e;margin-bottom:8px">⚡ Guard — Vol Rise vs Allocation Cap\x3C/div>' +
-      '<div style="font-size:10px;color:#555c6e;margin-bottom:6px;line-height:1.5">Fires when vol rises <span style="color:#f0c040">30%+\x3C/span> in 5 days <span style="color:#555c6e">AND\x3C/span> vol <span style="color:#f0c040">&gt;45%\x3C/span> → caps at <span style="color:#f0c040">50%\x3C/span>\x3C/div>' +
-      '<div style="font-size:10px;color:#555c6e;margin-bottom:6px;line-height:1.5;padding:5px 7px;background:rgba(255,255,255,.03);border-radius:4px;border-left:2px solid rgba(240,192,64,.3)">No memory — rechecked every Friday. Guard lifts automatically when vol rise drops below 30% (even if vol stays high). Normal vol-targeting then takes over — at 70% vol that gives 50% anyway, so they converge.\x3C/div>' +
-      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:0;font-size:10px">' +
-      '<div style="padding:3px 5px;color:#555c6e;font-weight:700;border-bottom:1px solid rgba(255,255,255,.08)">5d ago\x3C/div>' +
-      '<div style="padding:3px 5px;color:#555c6e;font-weight:700;border-bottom:1px solid rgba(255,255,255,.08)">Now\x3C/div>' +
-      '<div style="padding:3px 5px;color:#555c6e;font-weight:700;border-bottom:1px solid rgba(255,255,255,.08)">Rise\x3C/div>' +
-      '<div style="padding:3px 5px;color:#555c6e;font-weight:700;border-bottom:1px solid rgba(255,255,255,.08)">Result\x3C/div>' +
-      [
-        [30, 40, '+33%', '80%→80%', false, 'vol<45 floor, no cap'],
-        [35, 46, '+31%', '75%→50%', true,  'guard fires'],
-        [35, 50, '+43%', '70%→50%', true,  'guard fires'],
-        [40, 53, '+33%', '65%→50%', true,  'guard fires'],
-        [45, 59, '+31%', '60%→50%', true,  'guard fires'],
-        [50, 66, '+32%', '55%→50%', true,  'guard fires'],
-        [50, 60, '+20%', '60%→60%', false, '<30% rise, no cap'],
-        [60, 70, '+17%', '50%→50%', false, '<30% rise, no cap'],
-      ].map(([v5d, vnow, rise, result, fires, note]) => {
-        // Check if this row matches current conditions
-        const matchesCurrent = Math.abs(v5d - annualVol5dAgo) <= 3 && Math.abs(vnow - annualVol) <= 3
-        const bg = matchesCurrent ? 'background:rgba(240,192,64,.12);' : '';
-        const fw = matchesCurrent ? 'font-weight:700;' : '';
-        const fc = fires ? '#f0c040' : '#555c6e';
-        return '<div style="padding:3px 5px;border-bottom:1px solid rgba(255,255,255,.04);color:#8b91a0;'+bg+fw+'font-size:10px;font-family:SF Mono,monospace">'+v5d+'%\x3C/div>' +
-               '<div style="padding:3px 5px;border-bottom:1px solid rgba(255,255,255,.04);color:#8b91a0;'+bg+fw+'font-size:10px;font-family:SF Mono,monospace">'+vnow+'%\x3C/div>' +
-               '<div style="padding:3px 5px;border-bottom:1px solid rgba(255,255,255,.04);color:'+fc+';'+bg+fw+'font-size:10px;font-family:SF Mono,monospace">'+rise+'\x3C/div>' +
-               '<div style="padding:3px 5px;border-bottom:1px solid rgba(255,255,255,.04);color:'+(fires?'#f0c040':'#555c6e')+';'+bg+'font-size:10px">'+result+'\x3C/div>'
-      }).join('') +
-      '\x3C/div>' +
-      // Current conditions row
-      '<div style="margin-top:8px;padding:6px 8px;background:rgba(255,255,255,.04);border-radius:4px;font-size:10px;color:#555c6e">' +
-      'Now: <span style="color:#e8eaf0;font-family:SF Mono,monospace">'+annualVol5dAgo+'%\x3C/span> → <span style="color:#e8eaf0;font-family:SF Mono,monospace">'+annualVol+'%\x3C/span>' +
-      ' (<span style="color:'+(volAccelGuard?'#f0c040':'#555c6e')+'">'+((annualVol/annualVol5dAgo-1)*100).toFixed(0)+'% rise\x3C/span>)' +
-      ' Guard: <span style="color:'+(volAccelGuard?'#f0c040':'#00d68f')+'">'+(volAccelGuard?'⚡ ACTIVE':'standby')+'\x3C/span>' +
-      '\x3C/div>' +
-      '\x3C/div>' +
-
-      '\x3C/div>\x3C/div>' +
-      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
-      '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#555c6e">Turbo Mode\x3C/div>' +
-      '<div style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:3px;background:'+(turboState==='normal'?'rgba(255,255,255,.05)':turboState==='arming'?'rgba(255,140,66,.15)':turboState==='armed'?'rgba(240,192,64,.2)':'rgba(0,214,143,.15)')+';color:'+(turboState==='normal'?'#555c6e':turboState==='arming'?'#ff8c42':turboState==='armed'?'#f0c040':'#00d68f')+'">'+(turboState==='normal'?'Normal':turboState==='arming'?'Arming':turboState==='armed'?'Armed':'Active')+'\x3C/div>' +
-      '\x3C/div>' +
-      (turboState==='arming'||turboState==='normal' ?
-        '<div style="font-size:10px;color:#555c6e;margin-bottom:4px">'+( turboState==='arming'?weeksBelow+' / 8 weeks below 200MA to arm':'QQQ above 200MA — turbo not arming (needs 8 consecutive weeks below to arm)')+'\x3C/div>' +
-        '<div style="height:8px;background:rgba(255,255,255,.06);border-radius:4px;overflow:hidden">' +
-        '<div style="height:100%;border-radius:4px;background:'+(turboState==='arming'?'#ff8c42':'rgba(255,255,255,.08)')+';width:'+( turboState==='arming'?Math.round(weeksBelow/8*100):0)+'%;transition:width .4s">\x3C/div>\x3C/div>'
-      : turboState==='armed' ?
-        '<div style="font-size:10px;color:#f0c040;margin-bottom:4px">8+ weeks below 200MA — waiting for QQQ to reclaim 200MA\x3C/div>' +
-        '<div style="height:8px;background:rgba(240,192,64,.15);border-radius:4px;overflow:hidden">' +
-        '<div style="height:100%;border-radius:4px;background:linear-gradient(90deg,#f0c040,#ff8c42);width:100%">\x3C/div>\x3C/div>'
-      :
-        '<div style="font-size:10px;color:#00d68f;margin-bottom:4px">Week '+turboWeek+' of 12 — '+(12-turboWeek)+' weeks remaining\x3C/div>' +
-        '<div style="height:8px;background:rgba(0,214,143,.12);border-radius:4px;overflow:hidden">' +
-        '<div style="height:100%;border-radius:4px;background:#00d68f;width:'+Math.round(turboWeek/12*100)+'%;transition:width .4s">\x3C/div>\x3C/div>'
-      ) +
-      '<div style="font-size:10px;color:#333a4a;margin-top:6px">'+(turboState==='normal'?'Arms after 8 consecutive weeks below 200MA, fires on reclaim above 200MA for 12 weeks':turboState==='arming'?'Needs '+(8-weeksBelow)+' more weeks below to arm':turboState==='armed'?'Primed — reclaim 200MA starts the 12-week window':'Turbo active — elevated conviction window')+'\x3C/div>' +
+        '<div style="margin-top:14px;display:flex;justify-content:center;align-items:center;gap:10px">' +
+          '<span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#555c6e">Vol Accel Guard\x3C/span>' +
+          '<span title="Fires when vol rises 30%+ in 5 days AND vol >45%. Caps TQQQ at '+VOL_ACCEL_CAP+'%." style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:4px;background:'+guardBg+';color:'+guardFg+';border:1px solid '+guardBd+';letter-spacing:.05em">'+guardLabel+'\x3C/span>' +
+        '\x3C/div>' +
       '\x3C/div>'
 
     if(body) body.innerHTML = html
