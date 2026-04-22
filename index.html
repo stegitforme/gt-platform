@@ -92,6 +92,15 @@ tr:hover td{background:#171b22;cursor:pointer}
 .pos-row{display:flex;align-items:center;gap:9px;padding:9px 13px;border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;transition:background .1s}
 .pos-row:hover{background:#171b22}
 .pos-row:last-child{border:none}
+/* Number-input clipping fix: remove the native spinner arrows so narrow
+   inputs (delta 50px, strike 65px, default-risk 80px, etc.) no longer
+   have the value truncated by the spinner. box-sizing:border-box keeps
+   explicit widths accurate. NOTE: deliberately NOT applying width:100%
+   globally — many planner/sizer/trade inputs rely on explicit px widths
+   and would blow out their containers if forced to fill. */
+input[type="number"]{box-sizing:border-box;-moz-appearance:textfield}
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 #api-bar{background:#0e1116;border-bottom:1px solid rgba(255,255,255,.06);padding:5px 24px;font-size:11px;color:#555c6e;font-family:\'SF Mono\','Fira Code',monospace;display:flex;align-items:center;gap:7px}
 #api-dot{width:6px;height:6px;border-radius:50%;background:#555c6e;flex-shrink:0;transition:background .3s}
 .trade-card{background:#111318;border:1px solid rgba(255,255,255,.07);border-radius:10px;margin-bottom:6px;overflow:hidden}
