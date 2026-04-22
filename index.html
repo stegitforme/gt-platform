@@ -32,7 +32,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#0a0c0f;color:#e8
    the rail. min-height keeps short lists from collapsing; max-height uses
    whichever is smaller of 60vh or (viewport - ~280px for header+toolbar
    +Quick Size head) so Quick Size stays visible below. */
-.sizer-page #pl-cand-table{overflow:auto;min-height:180px;max-height:min(60vh,calc(100vh - 280px))}
+.sizer-page #pl-cand-table{overflow:auto;min-height:180px;max-height:min(60vh,calc(100vh - 280px));overscroll-behavior:contain}
 /* Sticky thead so column labels stay put while scrolling candidate rows.
    Applied to th (not tr) — position:sticky only works on the cells, not
    the row. z-index above the rows; matching background so rows don't
@@ -53,7 +53,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#0a0c0f;color:#e8
    and losing Quick Size visibility. Now Quick Size scrolls inside
    itself, Candidates keeps its own scroll area, and the rail's
    overflow-y:auto remains a last-resort fallback. */
-.sizer-page #qs-body{max-height:min(55vh,600px);overflow-y:auto;overflow-anchor:none}
+.sizer-page #qs-body{max-height:min(55vh,600px);overflow-y:auto;overflow-anchor:none;overscroll-behavior:contain}
 @media(max-width:900px){.sizer-page.active{grid-template-columns:1fr;padding:0 10px}.sizer-page .sizer-left{position:static}.sizer-page #pl-cand-table{max-height:50vh}.sizer-page #qs-body{max-height:70vh}}
 .trades-page{display:none;padding:20px;min-height:calc(100vh - 105px);overflow-y:auto}
 .trades-page.active{display:block}
@@ -665,9 +665,14 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
     </div>
   </div>
   <div class="card-body" style="padding:0">
-    <div style="padding:8px 10px;border-bottom:1px solid #1e2d3d;display:flex;gap:8px;align-items:center">
-      <input type="text" id="pl-add-ticker" placeholder="Add ticker (e.g. AAPL)" style="flex:1;font-size:13px;padding:5px 8px;text-transform:uppercase" oninput="this.value=this.value.toUpperCase()" onkeydown="if(event.key==='Enter')addCandidate(this.value)">
-      <button onclick="addCandidate(document.getElementById('pl-add-ticker').value)" class="btn btn-gold" style="font-size:12px;padding:5px 14px">+ Add</button>
+    <div style="padding:10px 12px;border-bottom:1px solid #1e2d3d;display:flex;gap:10px;align-items:stretch">
+      <input type="text" id="pl-add-ticker" placeholder="Add ticker (e.g. AAPL)"
+        style="flex:1 1 auto;min-width:0;font-size:14px;padding:9px 12px;text-transform:uppercase;background:#0a0c0f;border:1px solid rgba(255,255,255,.12);border-radius:5px;color:#e8eaf0;outline:none;font-family:inherit;box-sizing:border-box"
+        oninput="this.value=this.value.toUpperCase()"
+        onkeydown="if(event.key==='Enter')addCandidate(this.value)"
+        onfocus="this.style.borderColor='#f0c040'" onblur="this.style.borderColor='rgba(255,255,255,.12)'">
+      <button onclick="addCandidate(document.getElementById('pl-add-ticker').value)" class="btn btn-gold"
+        style="font-size:13px;padding:0 18px;white-space:nowrap;flex:0 0 auto;font-weight:600">+ Add</button>
     </div>
     <div id="pl-cand-table" style="overflow:auto">
       <table style="width:100%;border-collapse:collapse;font-size:12px">
@@ -5816,6 +5821,28 @@ function selectCandidateForSizing(c, row) {
     if(!c) return
     selectCandidateForSizing(c, tr)
   })
+})()
+// Wheel-hijack guard for the Candidates list.
+//   Problem: each row has <input type="number"> for delta / risk-override.
+//   Browsers send wheel events to a focused number input to spin its
+//   value. If the user clicked a delta cell (focusing it) and then
+//   tried to scroll with the wheel, the input stole the event and the
+//   table didn't scroll — user's reported "wheel/trackpad doesn't
+//   scroll reliably" symptom.
+//   Fix: on any wheel event inside #pl-cand-table that targets a
+//   number input, blur it and let the event bubble to the scroll
+//   container. Delegated so it survives the tbody innerHTML rewrite.
+;(function wireCandWheelFix() {
+  const wrap = document.getElementById('pl-cand-table')
+  if(!wrap || wrap._wheelFixWired) return
+  wrap._wheelFixWired = true
+  wrap.addEventListener('wheel', function(e) {
+    const t = e.target
+    if(t && t.tagName === 'INPUT' && (t.type === 'number' || t.type === 'text')) {
+      // Unfocus so the browser stops routing wheel to the input
+      if(document.activeElement === t) t.blur()
+    }
+  }, { passive: true, capture: true })
 })()
 // Scroll the Quick Size card into view WITHIN its real scroll container.
 // The Planner's .sizer-right rail is the element with overflow-y:auto;
