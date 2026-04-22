@@ -83,6 +83,24 @@ input:-webkit-autofill,input:-webkit-autofill:hover,input:-webkit-autofill:focus
   caret-color:#f0c040!important;
   transition:background-color 5000s ease-in-out 0s
 }
+/* Force-visible typed text in the Planner Add-ticker input. This
+   input's typed characters were rendering invisibly in some
+   environments despite the global color:#e8eaf0 rule — likely a
+   -webkit-text-fill-color cascade from some ancestor or a browser
+   extension overriding input text. Pin to pure white with
+   !important on both color AND -webkit-text-fill-color (they are
+   separately cascaded in WebKit/Blink; text-fill-color wins over
+   color when both are set). */
+#pl-add-ticker{
+  color:#ffffff!important;
+  -webkit-text-fill-color:#ffffff!important;
+  caret-color:#ffffff!important;
+}
+#pl-add-ticker::placeholder{
+  color:rgba(255,255,255,0.45)!important;
+  -webkit-text-fill-color:rgba(255,255,255,0.45)!important;
+  opacity:1!important;
+}
 .field{margin-bottom:11px}
 .field:last-child{margin-bottom:0}
 .btn{padding:8px 14px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid;font-family:inherit;transition:opacity .15s;white-space:nowrap}
@@ -676,7 +694,7 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
       onclick="(function(e){if(e.target.tagName!=='BUTTON'&&e.target.tagName!=='INPUT'){var i=document.getElementById('pl-add-ticker');if(i){i.focus();console.info('[PL-ADD] toolbar click → input.focus()')}}})(event)">
       <input type="text" id="pl-add-ticker" placeholder="Add ticker (e.g. AAPL)"
         autocomplete="off" spellcheck="false" autocapitalize="characters" tabindex="0"
-        style="flex:1 1 auto;min-width:0;font-size:14px;padding:9px 12px;text-transform:uppercase;background:#0a0c0f;border:1px solid rgba(255,255,255,.12);border-radius:5px;color:#e8eaf0;caret-color:#f0c040;outline:none;font-family:inherit;box-sizing:border-box;pointer-events:auto;user-select:text;-webkit-user-select:text;position:relative;z-index:2"
+        style="flex:1 1 auto;min-width:0;font-size:14px;padding:9px 12px;text-transform:uppercase;background:#0a0c0f;border:1px solid rgba(255,255,255,.12);border-radius:5px;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;caret-color:#ffffff!important;outline:none;font-family:inherit;box-sizing:border-box;pointer-events:auto;user-select:text;-webkit-user-select:text;position:relative;z-index:2"
         oninput="this.value=this.value.toUpperCase()"
         onkeydown="if(event.key==='Enter')addCandidate(this.value)"
         onfocus="this.style.borderColor='#f0c040';console.info('[PL-ADD] focus',{activeBefore:document.activeElement&&document.activeElement.id})"
