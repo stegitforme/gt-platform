@@ -5409,7 +5409,7 @@ function renderCandidateTable() {
           if(lpx<=0) miss.push('price')
           if(cts<1) miss.push('cts')
           tradeBtn = miss.length===0
-            ? "<button id='cand-trade-"+idx+"' onclick='convertCandidateToTrade("+idx+")' style='background:#1e2d3d;color:#00d68f;border:1px solid #00d68f;border-radius:3px;cursor:pointer;font-size:10px;padding:2px 7px;margin-right:6px' title='Create open trade in Trade Manager'>→ Trade\x3C/button>"
+            ? "<button id='cand-trade-"+idx+"' onclick='event.stopPropagation();prepCandidateInQuickSize("+idx+")' style='background:#1e2d3d;color:#00d68f;border:1px solid #00d68f;border-radius:3px;cursor:pointer;font-size:10px;padding:2px 7px;margin-right:6px' title='Open this candidate in Quick Size — review + click Add Trade to create the open trade'>→ Trade\x3C/button>"
             : "<button disabled style='background:transparent;color:#333a4a;border:1px solid #1e2d3d;border-radius:3px;cursor:not-allowed;font-size:10px;padding:2px 7px;margin-right:6px' title='Waiting on: "+miss.join(', ')+"'>→ Trade\x3C/button>"
         }
         return "<td style='padding:5px 4px;text-align:center;white-space:nowrap'>"+tradeBtn+"<button onclick='removeCandidate("+idx+")' style='background:none;border:none;color:#555c6e;cursor:pointer;font-size:14px' title='Remove'>✕\x3C/button>\x3C/td>"
@@ -5487,6 +5487,36 @@ function sendToPlanner(sym) {
   var btn = document.getElementById('send-planner-'+sym)
   if(btn){ var orig=btn.textContent; btn.textContent='✓ Sent'; btn.disabled=true; setTimeout(function(){btn.textContent=orig;btn.disabled=false},1500) }
 }
+// Planner candidate "→ Trade" button behavior:
+// Instead of creating a trade immediately, prefill Quick Size from the
+// candidate and scroll it into view. User then reviews quality + contracts
+// and clicks "+ Add Trade to Manager" in Quick Size. This replaces the
+// old one-click-straight-to-Trade-Manager flow with a deliberate
+//   Candidates → Quick Size → Add Trade
+// pipeline. convertCandidateToTrade() below is kept as a legacy entry
+// point any external caller might still use, but the in-UI button no
+// longer triggers it.
+function prepCandidateInQuickSize(idx) {
+  const c = (typeof PLANNER_CANDIDATES !== 'undefined') ? PLANNER_CANDIDATES[idx] : null
+  if(!c) return
+  // Locate the row so selectCandidateForSizing can toggle the .active
+  // highlight consistently with a direct row click.
+  const row = document.querySelector('#pl-cand-body tr.cand-row[data-cand-idx="' + idx + '"]')
+  if(typeof selectCandidateForSizing === 'function') {
+    // Delegates to the existing bridge:
+    //   - sets window._SELECTED_CAND_SYM for highlight-on-rerender
+    //   - calls toggleQuickSize() if qs-body is collapsed
+    //   - fills tkr / entry / atr / delta / strike / expiry / optcost
+    //   - calls calc() to update the scenarios table + metrics
+    //   - adds .active to the row
+    //   - smooth-scrolls qs-body into view
+    //   - schedules autoFillOptionFromChain() on next tick so strike +
+    //     optcost get refreshed to the live-chain contract whose delta
+    //     is closest to the selected target delta
+    selectCandidateForSizing(c, row)
+  }
+}
+
 function convertCandidateToTrade(idx) {
   var c = PLANNER_CANDIDATES[idx]
   if(!c) return
