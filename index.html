@@ -1379,8 +1379,8 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 // the latest commit — your browser is serving CACHED older HTML.
 // Hard-reload: Cmd+Shift+R (Mac) / Ctrl+Shift+F5 (Win).
 window.__GT_BUILD = {
-  sha:   '5fa06612a2e0de6c5be7dbed48eb0ab2ad6f8d73',
-  short: '5fa0661',
+  sha:   '192c0ca7de6e5f8abeee2cf01f94c8748eed6fda',
+  short: '192c0ca',
   builtAt: new Date().toISOString()
 }
 ;(function(){
@@ -8372,11 +8372,12 @@ async function refreshFidOpenLivePrices() {
 
       p.liveOptionPx              = +mark.toFixed(4)
       p.livePriceSource           = pick.source
-      p.liveBid                   = (pick.bid != null) ? +pick.bid.toFixed(4) : null
-      p.liveAsk                   = (pick.ask != null) ? +pick.ask.toFixed(4) : null
+      p.liveBid                   = (pick.bid != null)       ? +pick.bid.toFixed(4)       : null
+      p.liveAsk                   = (pick.ask != null)       ? +pick.ask.toFixed(4)       : null
       p.liveLastTrade             = (pick.lastTrade != null) ? +pick.lastTrade.toFixed(4) : null
-      p.liveDayClose              = (pick.dayClose != null) ? +pick.dayClose.toFixed(4) : null
-      p.liveMidQuote              = (pick.mid != null) ? +pick.mid.toFixed(4) : null
+      p.liveDayVwap               = (pick.dayVwap != null)   ? +pick.dayVwap.toFixed(4)   : null
+      p.liveDayClose              = (pick.dayClose != null)  ? +pick.dayClose.toFixed(4)  : null
+      p.liveMidQuote              = (pick.mid != null)       ? +pick.mid.toFixed(4)       : null
       p.liveMarkMode              = pick.mode
       p.livePrevClose             = (prevClose != null) ? +prevClose.toFixed(4) : null
       p.liveTodayChangePerContract= +todayChangePerContract.toFixed(4)
@@ -8400,6 +8401,7 @@ async function refreshFidOpenLivePrices() {
           ask:           pick.ask,
           mid:           pick.mid,
           lastTrade:     pick.lastTrade,
+          dayVwap:       pick.dayVwap,
           dayClose:      pick.dayClose,
           chosenMark:    mark,
           chosenSource: pick.source,
@@ -9384,41 +9386,54 @@ function pickLiveOptionPrice(r) {
   const ask       = num(r && r.last_quote && r.last_quote.ask)
   const lastTrade = num(r && r.last_trade && r.last_trade.price) || num(r && r.last_trade && r.last_trade.p)
   const dayClose  = num(r && r.day && r.day.close)               || num(r && r.day && r.day.c)
+  // Volume-weighted average price for today's session. On Polygon's
+  // options snapshot this is the best non-quote signal when the NBBO
+  // book is thin or missing — it reflects actual trading activity
+  // today instead of yesterday's printed close. Empirically much closer
+  // to Fidelity's valuation on low-liquidity options where bid/ask/last
+  // all come back null (e.g. $158,022 close vs $172,104 vwap vs
+  // $171,240 Fidelity, observed live).
+  const dayVwap   = num(r && r.day && r.day.vwap)                || num(r && r.day && r.day.vw)
   // Mid-quote if both sides exist and are in order.
   let mid = null
   if(bid !== null && ask !== null && ask >= bid) {
     const m = (bid + ask) / 2
     if(m > 0) mid = +m.toFixed(4)
   }
-  const out = { px: null, source: null, bid, ask, mid, lastTrade, dayClose }
+  const out = { px: null, source: null, bid, ask, mid, lastTrade, dayVwap, dayClose }
   const mode = (window && window._markMode) || 'mid'
 
   // Priority chain per mode. Each mode defines an ordered list of
   // [candidate, sourceLabel] pairs to try; first positive value wins.
+  //
+  // Default fallback order: bid/ask mid → last trade → day's VWAP →
+  // day close. VWAP sits ABOVE close because, for illiquid options
+  // where Polygon returns null bid/ask/last, VWAP still reflects
+  // today's actual fills (volume-weighted across the session) while
+  // close may be stale. Only when VWAP is also unavailable do we fall
+  // back to close as a last resort.
   let chain
   switch(mode) {
     case 'last':
-      chain = [[lastTrade,'live-last'], [mid,'live-mark'], [dayClose,'live-close']]
+      chain = [[lastTrade,'live-last'], [mid,'live-mark'], [dayVwap,'live-vwap'], [dayClose,'live-close']]
       break
     case 'bid':
-      chain = [[bid,'live-bid'], [mid,'live-mark'], [lastTrade,'live-last'], [dayClose,'live-close']]
+      chain = [[bid,'live-bid'], [mid,'live-mark'], [lastTrade,'live-last'], [dayVwap,'live-vwap'], [dayClose,'live-close']]
       break
     case 'fidelity-like': {
-      // Prefer last when it's within ±15% of mid (i.e. not a stale/outlier
-      // trade against a current two-sided market). Otherwise use mid.
       let preferLast = false
       if(lastTrade !== null && mid !== null && mid > 0) {
         const dev = Math.abs(lastTrade - mid) / mid
         if(dev <= 0.15) preferLast = true
       }
       chain = preferLast
-        ? [[lastTrade,'live-last'], [mid,'live-mark'], [dayClose,'live-close']]
-        : [[mid,'live-mark'], [lastTrade,'live-last'], [dayClose,'live-close']]
+        ? [[lastTrade,'live-last'], [mid,'live-mark'], [dayVwap,'live-vwap'], [dayClose,'live-close']]
+        : [[mid,'live-mark'], [lastTrade,'live-last'], [dayVwap,'live-vwap'], [dayClose,'live-close']]
       break
     }
     case 'mid':
     default:
-      chain = [[mid,'live-mark'], [lastTrade,'live-last'], [dayClose,'live-close']]
+      chain = [[mid,'live-mark'], [lastTrade,'live-last'], [dayVwap,'live-vwap'], [dayClose,'live-close']]
       break
   }
   for(const [cand, src] of chain) {
