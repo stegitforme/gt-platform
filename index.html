@@ -1379,8 +1379,8 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 // the latest commit — your browser is serving CACHED older HTML.
 // Hard-reload: Cmd+Shift+R (Mac) / Ctrl+Shift+F5 (Win).
 window.__GT_BUILD = {
-  sha:   '748b7a570f617bfadc371c69a2369799655f88c7',
-  short: '748b7a5',
+  sha:   '50d9c6359f14cbab6d9908f5dc6f7286652fddf6',
+  short: '50d9c63',
   builtAt: new Date().toISOString()
 }
 ;(function(){
@@ -8962,15 +8962,25 @@ function buildTradeShapesFromFidOpen() {
     const currentValue = hasLive && (+p.liveCurrentValue > 0) ? +p.liveCurrentValue
       : (curPx > 0 ? (curPx * 100 * cts) : (+p.currentValue || 0))
     // ── Entry-snapshot (FROZEN) vs current (LIVE) references ─────────────
-    // The card's stop ladder is anchored on the ORIGINAL entry — so
-    // t.entry and t.atr carry the FROZEN fields captured at first import.
-    // Legacy entry only applies when the user had a prior manual TRADE at
-    // the same position_id; the old-strike-of-a-roll cannot leak because
-    // the NEW contract's position_id differs.
-    const curStockPx = (+p.stockPrice > 0) ? +p.stockPrice : legacyEntry
-    const curAtr     = +p.atr || legacyAtr || 0
-    const entryUnd   = (+p.entryUnderlyingPrice > 0) ? +p.entryUnderlyingPrice : curStockPx
-    const entryAtr   = (+p.entryATR > 0) ? +p.entryATR : curAtr
+    // The card's stop ladder is anchored on the ORIGINAL entry. Fallback
+    // chain for ENTRY values explicitly prefers historical data (frozen
+    // snapshot → legacy journal) BEFORE the current live price. If we
+    // let today's live stockPrice/ATR beat legacy in the chain, every
+    // card whose position_id lacks a frozen snapshot but has a legacy
+    // TRADES journal entry would center its stop ladder on today's
+    // price — meaning "ENTRY" on the chart would silently mean "today"
+    // and the chart would tautologically put NOW on top of ENTRY every
+    // render. Fixes the BCS/UBS/GLW/HOOD/GOOG/VRT bug.
+    //
+    // Correct fallback order:
+    //   entryUnd = p.entryUnderlyingPrice  || legacyEntry  || curStockPx
+    //   entryAtr = p.entryATR              || legacyAtr    || p.atr
+    // (only when all historical sources are missing do we fall back to
+    //  the current / refreshed values)
+    const curStockPx = +p.stockPrice || 0
+    const curAtr     = +p.atr || 0
+    const entryUnd   = +p.entryUnderlyingPrice || legacyEntry || curStockPx
+    const entryAtr   = +p.entryATR             || legacyAtr   || curAtr
     return {
       id:         legacyId,
       ticker:     tickerLabel,
