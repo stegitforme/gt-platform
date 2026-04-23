@@ -861,6 +861,7 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
           </label>
           <button class="btn btn-ghost" style="font-size:11px;padding:6px 12px" onclick="showReconcileView()">Reconcile vs legacy</button>
           <button class="btn btn-ghost" style="font-size:11px;padding:6px 12px" onclick="refreshFidOpenLivePrices()">⟳ Live prices</button>
+          <button class="btn btn-ghost" style="font-size:11px;padding:6px 12px;color:#8b91a0" onclick="enrichFidOpenWithStockPrices().then(()=>{ if(typeof renderTrades==='function') renderTrades() })" title="Fetch current underlying stock price for each open position (used as entry reference for ATR stop levels on rolled positions)">⟳ Stock Px</button>
           <button class="btn btn-ghost" style="font-size:11px;padding:6px 12px;color:#8b91a0" onclick="enrichFidOpenWithATR().then(()=>{ if(typeof renderTrades==='function') renderTrades() })">⟳ ATR</button>
           <span id="fid-closed-count" style="font-size:11px;color:#555c6e;margin-left:4px">no closed lots</span>
           <span id="fid-sync-src"    style="font-size:10px;color:#555c6e;font-family:'SF Mono',monospace"></span>
@@ -8055,10 +8056,14 @@ async function importFidelityOpenPositionsFromFile(file) {
     updateFidSyncUI()
     // Re-render immediately so the user sees the snapshot-driven open list
     try { renderTrades() } catch(e) { console.warn('renderTrades after fid import:', e) }
-    // Fire ATR enrichment in the background
+    // Fire enrichment in the background — ATR first (14-day per underlying),
+    // then current stock price (required for stop-ladder rendering on
+    // freshly-rolled positions that have no legacy TRADE match).
     try { await enrichFidOpenWithATR(); setStatus('✓ '+positions.length+' positions imported · ATR enriched', '#00d68f') }
     catch(e) { setStatus('✓ '+positions.length+' positions imported · ATR enrichment failed: '+e.message, '#ff8c42') }
-    // Persist + re-render with ATR
+    try { await enrichFidOpenWithStockPrices() }
+    catch(e) { console.warn('[FID-IMPORT] stock-price enrichment skipped:', e.message) }
+    // Persist + re-render with all enrichments applied
     saveFidOpen()
     updateFidSyncUI()
     try { renderTrades() } catch(e) {}
@@ -8096,6 +8101,56 @@ async function importFidelityClosedLotsFromFile(file) {
   } catch(e) {
     setStatus('Import failed: '+e.message, '#ff4560')
     console.error('[FID-CLOSED]', e)
+  }
+}
+
+// ── Stock-price enrichment: fetch current underlying price per unique ────
+// ticker, write back onto each snapshot position as p.stockPrice. This is
+// the "entry" reference the stop-ladder rendering uses — critical for
+// freshly-rolled positions that have no legacy TRADE match (otherwise
+// entry resolves to 0 and ½ATR / 1ATR levels are garbage).
+async function enrichFidOpenWithStockPrices() {
+  if(!window.FID_OPEN || !window.FID_OPEN.positions.length) return
+  const tickers = Array.from(new Set(window.FID_OPEN.positions
+    .map(p => p.underlying).filter(Boolean)))
+  if(!tickers.length) return
+  const statusEl = document.getElementById('fid-sync-status')
+  const setStatus = (m, c) => { if(statusEl) { statusEl.textContent = m; statusEl.style.color = c||'#8b91a0' } }
+  setStatus('Fetching underlying prices for '+tickers.length+' ticker(s)...', '#8b91a0')
+  try {
+    const snap = await apiGet('/v2/snapshot/locale/us/markets/stocks/tickers?tickers='+tickers.join(','))
+    const prices = {}
+    if(snap && snap.tickers) {
+      snap.tickers.forEach(t => {
+        if(t.day && t.day.c)         prices[t.ticker] = t.day.c
+        else if(t.prevDay && t.prevDay.c) prices[t.ticker] = t.prevDay.c
+        else if(t.min && t.min.c)    prices[t.ticker] = t.min.c
+      })
+    }
+    // Fallback: individual prev-day fetch for any missing ticker
+    for(const tk of tickers) {
+      if(prices[tk]) continue
+      try {
+        const d = await apiGet('/v2/aggs/ticker/'+tk+'/prev?adjusted=true', false, true)
+        if(d && d.results && d.results[0] && d.results[0].c) prices[tk] = d.results[0].c
+      } catch(e) {}
+    }
+    const now = Date.now()
+    let filled = 0
+    for(const p of window.FID_OPEN.positions) {
+      const px = prices[p.underlying]
+      if(typeof px === 'number' && isFinite(px) && px > 0) {
+        p.stockPrice   = +px.toFixed(2)
+        p.stockPriceAt = now
+        filled++
+      }
+    }
+    setStatus('✓ Underlying prices enriched ('+filled+'/'+window.FID_OPEN.positions.length+')', '#00d68f')
+    saveFidOpen()
+    try { renderTrades() } catch(e) {}
+  } catch(e) {
+    setStatus('Stock price enrichment failed: '+e.message, '#ff4560')
+    console.warn('[FID-STOCK-PX]', e)
   }
 }
 
@@ -8239,6 +8294,12 @@ function buildTradeShapesFromFidOpen() {
     legacyByPid[pid].push(t)
   })
   return positions.map(p => {
+    // Match legacy TRADE by THIS position's position_id only. A rolled
+    // position (e.g. LUNR 24 after rolling from LUNR 21) has a different
+    // position_id than the old contract, so its renderer CANNOT inherit
+    // the old strike's stop basis, ATR-at-entry, or notes. This is by
+    // design — per requirement "do NOT carry forward old strike's stop
+    // levels or entry basis".
     const legacy = (legacyByPid[p.position_id]||[]).sort((a,b) => (b.id||0) - (a.id||0))[0]
     const legacyAtr   = legacy && +legacy.atr   || 0
     const legacyEntry = legacy && +legacy.entry || 0
@@ -8248,13 +8309,18 @@ function buildTradeShapesFromFidOpen() {
     const tickerLabel = p.isStock
       ? p.underlying
       : p.underlying + (p.strike ? ' '+p.strike+(p.type==='Put'?'P':'C') : '')
-    // Choose a "current" per-share price for display: prefer live refresh,
-    // else Fidelity's last price at import time.
+    // Live option price: prefer live refresh, else Fidelity's CSV last price
     const curPx = (+p.liveOptionPx > 0) ? +p.liveOptionPx : (+p.currentPrice || 0)
     const cts   = +p.qty || 0
     const cost  = +p.avgCost || 0
     const costBasisTotal = +p.costBasisTotal || (cost * 100 * cts)
     const currentValue   = curPx > 0 ? (curPx * 100 * cts) : (+p.currentValue || 0)
+    // Entry-reference for ATR stop ladder: use the position's own current
+    // underlying price (freshly fetched via enrichFidOpenWithStockPrices).
+    // NEVER fall back to the old strike's entry — a legacy record only
+    // contributes its entry if its position_id matches the NEW contract
+    // (i.e. the user had previously entered this exact contract manually).
+    const stockPx = (+p.stockPrice > 0) ? +p.stockPrice : legacyEntry
     return {
       id:         legacyId,
       ticker:     tickerLabel,
@@ -8266,7 +8332,7 @@ function buildTradeShapesFromFidOpen() {
       cts,
       cost,
       costTotal:  costBasisTotal,
-      entry:      legacyEntry,  // legacy underlying-at-entry if we have it
+      entry:      stockPx,   // current underlying price → fresh stop levels
       atr:        p.atr || legacyAtr,
       isStock:    !!p.isStock,
       occ:        p.occ,
@@ -8290,7 +8356,7 @@ function buildTradeShapesFromFidOpen() {
       date:       legacy && legacy.date || (window.FID_OPEN.importedAt ? new Date(window.FID_OPEN.importedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}).replace(',','') : ''),
       importedAt: window.FID_OPEN.importedAt,
       pnl:        (+p.totalGL) || 0,
-      stockPrice: legacy && +legacy.stockPrice || 0
+      stockPrice: (+p.stockPrice) || (legacy && +legacy.stockPrice) || 0
     }
   })
 }
@@ -8528,6 +8594,7 @@ if(typeof window !== 'undefined') {
   window.hideReconcileView                   = hideReconcileView
   window.refreshFidOpenLivePrices            = refreshFidOpenLivePrices
   window.enrichFidOpenWithATR                = enrichFidOpenWithATR
+  window.enrichFidOpenWithStockPrices        = enrichFidOpenWithStockPrices
   window.updateFidSyncUI                     = updateFidSyncUI
 }
 
