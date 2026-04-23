@@ -8528,46 +8528,21 @@ function updateFidSyncUI() {
   if(cc) cc.textContent = (window.FID_CLOSED && window.FID_CLOSED.count) ? (window.FID_CLOSED.count+' closed lots') : 'no closed lots'
 }
 
-// ── Mini price chart (per open-trade card) ─────────────────────────────
-// Lightweight canvas sparkline of the underlying's recent bars with three
-// horizontal overlays: ENTRY (yellow), -0.5 ATR stop (red), +0.5 ATR roll
-// (green). Current price is a filled marker on the right. Replaces the
-// old Entry Stop Plan + Decision Ladder blocks — chart is the primary
-// visual risk/decision tool now.
-//
-// Data: last ~2 trading days of 5-minute bars, cached for 60 s per symbol.
-// Auto-refresh: the existing FID_OPEN 60 s tick re-renders the cards and
-// redraws the chart against the freshest cache + latest stockPrice.
-window._miniChartCache = window._miniChartCache || {}
+// ── Level ladder (per open-trade card) ─────────────────────────────
+// Canvas-based ladder showing four horizontal levels — STOP / ENTRY /
+// ROLL / NOW — each with an on-chart label pill. No price history, no
+// bars, no network fetch. The chart is a pure projection of the four
+// numbers onto one shared y-axis, so what you see is exactly what the
+// numbers say. Live updates arrive via the existing 60 s FID_OPEN tick
+// which re-renders cards; each re-render recomputes NOW via
+// getCurrentUnderlyingPxForTrade() and repaints this ladder.
 
-async function fetchMiniChartData(sym) {
-  if(!sym) return []
-  const cached = window._miniChartCache[sym]
-  if(cached && (Date.now() - cached.fetchedAt) < 60 * 1000) return cached.bars
-  try {
-    const to   = new Date().toISOString().split('T')[0]
-    const from = new Date(Date.now() - 5 * 864e5).toISOString().split('T')[0]
-    // 5-min bars span intraday + recent sessions; 400-bar cap covers ~2 full days
-    const d = await apiGet('/v2/aggs/ticker/'+sym+'/range/5/minute/'+from+'/'+to+'?adjusted=true&sort=asc&limit=400', false, true)
-    let bars = (d && Array.isArray(d.results)) ? d.results.map(b => ({ t: b.t, c: b.c })) : []
-    if(!bars.length) {
-      // Fall back to daily bars if no intraday (pre-market, weekends, or rate-limited)
-      const dd = await apiGet('/v2/aggs/ticker/'+sym+'/range/1/day/'+from+'/'+to+'?adjusted=true&sort=asc&limit=30', false, true)
-      bars = (dd && Array.isArray(dd.results)) ? dd.results.map(b => ({ t: b.t, c: b.c })) : []
-    }
-    window._miniChartCache[sym] = { bars, fetchedAt: Date.now() }
-    return bars
-  } catch(e) {
-    return (cached && cached.bars) ? cached.bars : []
-  }
-}
-
-// Optimized for fast card scanning: every key level (STOP / ENTRY / ROLL
-// / NOW) is labeled ON the chart at the right edge. The current-price
-// line is SOLID + glowing to dominate the visual hierarchy — the other
-// three are dashed references. Price history is muted (subordinate to
-// NOW) so the eye lands on the live marker first.
-function drawMiniChart(canvas, bars, entry, stop, roll, current) {
+// Level ladder renderer. Draws four horizontal reference levels
+// (STOP / ENTRY / ROLL / NOW) with on-chart labels and a dominant NOW
+// marker. No price history, no bars — the four labels are the decision
+// surface. Every y is mapped from a single priceToY function so what
+// you see is always what the numbers say.
+function drawMiniChart(canvas, entry, stop, roll, current) {
   if(!canvas) return
   const ctx = canvas.getContext('2d')
   const dpr = window.devicePixelRatio || 1
@@ -8578,10 +8553,9 @@ function drawMiniChart(canvas, bars, entry, stop, roll, current) {
   ctx.scale(dpr, dpr)
   ctx.clearRect(0, 0, W, H)
 
-  const closes = (bars||[]).map(b => +b.c).filter(v => v > 0)
   const refs = [entry, stop, roll, current].filter(v => typeof v === 'number' && isFinite(v) && v > 0)
 
-  if(!closes.length && !refs.length) {
+  if(!refs.length) {
     ctx.fillStyle = '#555c6e'
     ctx.font = '10px "SF Mono", monospace'
     ctx.textAlign = 'center'
@@ -8590,51 +8564,24 @@ function drawMiniChart(canvas, bars, entry, stop, roll, current) {
     return
   }
 
-  // Y-axis range includes ALL reference lines with a small buffer so no
-  // label ever sits outside the plot area.
-  const all = closes.concat(refs)
-  let mn = Math.min.apply(null, all)
-  let mx = Math.max.apply(null, all)
+  // Y-axis range spans every reference level with a small buffer so no
+  // pill ever sits outside the plot area.
+  let mn = Math.min.apply(null, refs)
+  let mx = Math.max.apply(null, refs)
   if(!(mx > mn)) { mn = mn - 0.5; mx = mx + 0.5 }
-  const buf = (mx - mn) * 0.10
+  const buf = (mx - mn) * 0.18
   mn -= buf; mx += buf
 
-  // Right margin reserves space for label pills. Widened to 86 px to fit
-  // the distance-from-NOW chip that now lives in each reference pill
-  // (e.g. "STOP 22.98  -1.5%" or "+0.34").
+  // Right margin reserves space for label pills. 86 px fits the
+  // distance-from-NOW chip that lives inside each reference pill.
   const pad = { t: 10, r: 86, b: 10, l: 6 }
   const plotW = W - pad.l - pad.r
   const plotH = H - pad.t - pad.b
   const y = v => pad.t + plotH * (1 - (v - mn) / (mx - mn))
-  const x = i => pad.l + (i / Math.max(1, closes.length - 1)) * plotW
 
   // Subtle plot background
   ctx.fillStyle = 'rgba(255,255,255,.02)'
   ctx.fillRect(pad.l, pad.t, plotW, plotH)
-
-  // ── Price history (subordinate — muted so NOW dominates) ─────────────
-  // Renders in short segments so we can fade older bars (more transparent
-  // on the left, more solid on the right). Implies time direction at a
-  // glance without another legend.
-  if(closes.length > 1) {
-    ctx.save()
-    ctx.beginPath()
-    ctx.rect(pad.l, pad.t, plotW, plotH)
-    ctx.clip()
-    ctx.lineWidth = 1.25
-    ctx.lineJoin = 'round'
-    const n = closes.length
-    for(let i = 1; i < n; i++) {
-      const t = i / (n - 1)                 // 0 → oldest, 1 → newest
-      const alpha = 0.18 + t * 0.55         // 0.18 → 0.73
-      ctx.strokeStyle = 'rgba(139,145,160,' + alpha.toFixed(3) + ')'
-      ctx.beginPath()
-      ctx.moveTo(x(i-1), y(closes[i-1]))
-      ctx.lineTo(x(i),   y(closes[i]))
-      ctx.stroke()
-    }
-    ctx.restore()
-  }
 
   // ── Reference lines (dashed) — STOP / ENTRY / ROLL ───────────────────
   const drawDashedLevel = (price, color) => {
@@ -8888,15 +8835,16 @@ function getCurrentUnderlyingPxForTrade(t) {
 }
 if(typeof window !== 'undefined') window.getCurrentUnderlyingPxForTrade = getCurrentUnderlyingPxForTrade
 
-// Fetch + draw a single card's mini-chart. Safe to call repeatedly — the
-// fetch layer caches per symbol for 60 s.
+// Draw a single card's level ladder. Synchronous — no network fetch.
+// There is ONE render path: this function is the only caller of
+// drawMiniChart, and drawMiniChart takes only the 4 level prices.
 //
 // Precision rule: every price passed to drawMiniChart is FULL internal
 // precision. Rounding happens only inside drawMiniChart at display time
 // (the .toFixed(2) calls when building label text). This keeps the
 // geometric y-coordinate of each line exactly consistent with the pill
 // attached to it.
-async function renderMiniChartForTrade(t) {
+function renderMiniChartForTrade(t) {
   const canvas = document.getElementById('mini-chart-' + t.id)
   if(!canvas) return
   const sym = t.underlying || (t.ticker||'').split(' ')[0] || ''
@@ -8910,8 +8858,7 @@ async function renderMiniChartForTrade(t) {
   const current  = getCurrentUnderlyingPxForTrade(t)
 
   // One-shot debug log per card per render so the user can verify the
-  // exact values feeding the chart. Logs only when a console listener
-  // is present (standard console.log no-ops in production if muted).
+  // exact values feeding the chart.
   if(typeof console !== 'undefined' && console.log) {
     console.log('[MINI-CHART]', sym, {
       entryUnderlyingPrice: t.entryUnderlyingPrice,
@@ -8923,8 +8870,7 @@ async function renderMiniChartForTrade(t) {
       entry, stop, roll
     })
   }
-  const bars = await fetchMiniChartData(sym)
-  drawMiniChart(canvas, bars, entry, stop, roll, current)
+  drawMiniChart(canvas, entry, stop, roll, current)
 }
 
 // ── Bridge: synthesize trade-shaped objects from FID_OPEN for renderTrades.
@@ -9201,7 +9147,6 @@ if(typeof window !== 'undefined') {
   window.enrichFidOpenWithATR                = enrichFidOpenWithATR
   window.enrichFidOpenWithStockPrices        = enrichFidOpenWithStockPrices
   window.updateFidSyncUI                     = updateFidSyncUI
-  window.fetchMiniChartData                  = fetchMiniChartData
   window.drawMiniChart                       = drawMiniChart
   window.renderMiniChartForTrade             = renderMiniChartForTrade
 }
@@ -9953,34 +9898,20 @@ function renderTrades() {
           (isOpen ? '<button class="btn btn-ghost" style="font-size:10px;padding:2px 8px" onclick="closeTrade(' + t.id + ')">Close\x3C/button>' : '') +
           '<button class="btn btn-ghost" style="font-size:10px;padding:2px 8px;color:#ff4560" onclick="deleteTrade(' + t.id + ')">&#10005;\x3C/button>' +
         '\x3C/div>'
-    // ── Compact live mini-chart (primary visual decision tool) ──────────
-    // One canvas per card; overlaid with ENTRY / -½ATR / +½ATR lines.
-    // Compact metrics row sits directly below. No more Entry Stop Plan
-    // block, no more Decision Ladder ladder rows — the chart carries the
-    // risk/decision signal visually. Data model / frozen entry snapshot /
-    // live pricing pipeline are untouched; we only changed presentation.
-    const entryPx   = +t.entry || 0
-    const entryATRv = +t.entryATR || +t.atr || 0
-    const stopPx    = (+t.stop05Entry > 0) ? +t.stop05Entry
-                      : (entryPx > 0 && entryATRv > 0 ? +(entryPx - 0.5*entryATRv).toFixed(2) : 0)
-    const rollPx    = (entryPx > 0 && entryATRv > 0) ? +(entryPx + 0.5*entryATRv).toFixed(2) : 0
-    const curUnd    = +t.currentUnderlyingPx || +t.stockPrice || 0
-    const fmt$      = v => (!v || !isFinite(v)) ? '—' : '$' + (+v).toFixed(2)
-    const curCol    = (stopPx  > 0 && curUnd <= stopPx) ? '#ff4560'
-                    : (rollPx  > 0 && curUnd >= rollPx) ? '#00d68f'
-                    : (entryPx > 0 && curUnd >= entryPx) ? '#4da6ff'
-                    : '#f0c040'
-
-    // Chart owns the decision surface. Every key level (STOP / ENTRY /
-    // ROLL / NOW) is labeled ON the canvas with distance-from-NOW chips,
-    // so nothing below the chart duplicates those numbers. The chart
-    // footer is minimal: just the underlying ticker tag (left) and a
-    // tiny live-refresh freshness pill (right). If you want the number
-    // big, it's already in the NOW pill.
+    // ── Level ladder (the primary decision surface) ─────────────────────
+    // ONE render path. The canvas is drawn by renderMiniChartForTrade(t)
+    // after the card is mounted; that function uses getCurrentUnderlyingPxForTrade(t)
+    // as the single source of truth for NOW. Nothing in this block
+    // reads or duplicates current-price logic.
+    //
+    // Gate: we only render the canvas if the frozen entry snapshot is
+    // present (entry underlying + entry ATR). Without them there are no
+    // reference levels to draw.
+    const hasEntrySnap = (+t.entry > 0) && ((+t.entryATR > 0) || (+t.atr > 0))
     const refreshedLbl = (+t.livePriceAt > 0)
       ? new Date(t.livePriceAt).toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit' })
       : ''
-    const miniChartHtml = (entryPx > 0 && entryATRv > 0)
+    const miniChartHtml = hasEntrySnap
       ? (
         '<div style="background:#0a0c0f;border:1px solid rgba(255,255,255,.06);border-radius:8px;padding:8px 10px 6px;position:relative">' +
           '<canvas id="mini-chart-' + t.id + '" style="width:100%;height:140px;display:block"></canvas>' +
@@ -10115,13 +10046,11 @@ function renderTrades() {
     appendHeader('Closed (' + closed.length + ')', '#555c6e', true)
     for(const t of closed) listEl.appendChild(buildCard(t))
   }
-  // Kick off mini-chart rendering for every open card. Each call is
-  // independent; fetchMiniChartData caches per symbol for 60s so we hit
-  // the API once per unique underlying, not once per card. Drawing is
-  // non-blocking; charts appear as fetches resolve.
+  // Draw the level ladder on every open card. Pure synchronous canvas
+  // work — no network fetch, no async state. One call → one paint.
   if(typeof renderMiniChartForTrade === 'function') {
     for(const t of open) {
-      renderMiniChartForTrade(t).catch(e => console.warn('[MINI-CHART]', t.underlying, e.message))
+      try { renderMiniChartForTrade(t) } catch(e) { console.warn('[MINI-CHART]', t.underlying, e.message) }
     }
   }
   // ── DOM placement / order audit ───────────────────────────────────────────
