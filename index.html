@@ -1379,8 +1379,8 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 // the latest commit — your browser is serving CACHED older HTML.
 // Hard-reload: Cmd+Shift+R (Mac) / Ctrl+Shift+F5 (Win).
 window.__GT_BUILD = {
-  sha:   '50d9c6359f14cbab6d9908f5dc6f7286652fddf6',
-  short: '50d9c63',
+  sha:   '5fa06612a2e0de6c5be7dbed48eb0ab2ad6f8d73',
+  short: '5fa0661',
   builtAt: new Date().toISOString()
 }
 ;(function(){
@@ -8372,6 +8372,12 @@ async function refreshFidOpenLivePrices() {
 
       p.liveOptionPx              = +mark.toFixed(4)
       p.livePriceSource           = pick.source
+      p.liveBid                   = (pick.bid != null) ? +pick.bid.toFixed(4) : null
+      p.liveAsk                   = (pick.ask != null) ? +pick.ask.toFixed(4) : null
+      p.liveLastTrade             = (pick.lastTrade != null) ? +pick.lastTrade.toFixed(4) : null
+      p.liveDayClose              = (pick.dayClose != null) ? +pick.dayClose.toFixed(4) : null
+      p.liveMidQuote              = (pick.mid != null) ? +pick.mid.toFixed(4) : null
+      p.liveMarkMode              = pick.mode
       p.livePrevClose             = (prevClose != null) ? +prevClose.toFixed(4) : null
       p.liveTodayChangePerContract= +todayChangePerContract.toFixed(4)
       p.liveCurrentValue          = +currentValue.toFixed(2)
@@ -8381,6 +8387,27 @@ async function refreshFidOpenLivePrices() {
       p.liveTotalGLPct            = +totalPct.toFixed(2)
       p.livePriceAt               = now
       p.liveRefreshAt             = now
+
+      // Per-position diagnostic log — full raw snapshot vs chosen mark.
+      // Lets the user reconcile app valuation against Fidelity on any
+      // card. One log line per option per refresh.
+      if(typeof console !== 'undefined' && console.log) {
+        const qShown = qty
+        console.log('[MARK]', p.underlying, p.strike + (p.type==='Put'?'P':'C'), p.expiryISO, {
+          occ:           p.occ,
+          mode:          pick.mode,
+          bid:           pick.bid,
+          ask:           pick.ask,
+          mid:           pick.mid,
+          lastTrade:     pick.lastTrade,
+          dayClose:      pick.dayClose,
+          chosenMark:    mark,
+          chosenSource: pick.source,
+          qty:           qShown,
+          currentValue:  +currentValue.toFixed(2),
+          spreadPct:    (pick.bid && pick.ask && pick.mid) ? +((pick.ask-pick.bid)/pick.mid*100).toFixed(1)+'%' : null
+        })
+      }
       okOpt++
     } catch(e) { failOpt++ }
     setStatus('Live refresh: options '+okOpt+' ok · '+failOpt+' miss', '#8b91a0')
@@ -9326,23 +9353,78 @@ function findDuplicateOpenTrade(candidate, excludeId) {
 // chosen displayOptionPx; `source` is 'live-mark' / 'live-last' /
 // 'live-close' / null. This is the ONLY place price is selected, so every
 // downstream calculation uses the same number.
+// Mark-selection mode. Set at runtime via window.setMarkMode(mode):
+//   'mid'           — midpoint of bid/ask  (DEFAULT; legacy behavior)
+//   'last'          — last trade, fall back to mid, then close
+//   'fidelity-like' — last trade if recent+plausible (within 15% of mid),
+//                     else mid. Tries to match Fidelity's valuation which
+//                     tends to display last-trade when fresh and mid when
+//                     the last trade is stale or an outlier.
+//   'bid'           — the bid (most conservative, matches "what could I
+//                     sell at right now?" — useful for unrealized-P&L
+//                     that doesn't overstate)
+// Default stays 'mid' to preserve behavior until the user decides.
+window._markMode = window._markMode || 'mid'
+if(typeof window !== 'undefined') {
+  window.setMarkMode = function(mode) {
+    const allowed = ['mid','last','fidelity-like','bid']
+    if(!allowed.includes(mode)) {
+      console.warn('[MARK-MODE] unknown mode:', mode, '— allowed:', allowed)
+      return window._markMode
+    }
+    window._markMode = mode
+    console.log('[MARK-MODE] set to', mode, '— refresh live prices to apply (window.refreshFidOpenLivePrices())')
+    return mode
+  }
+}
+
 function pickLiveOptionPrice(r) {
   const num = v => (typeof v === 'number' && isFinite(v) && v > 0) ? v : null
-  const bid = num(r?.last_quote?.bid)
-  const ask = num(r?.last_quote?.ask)
-  const lastTrade = num(r?.last_trade?.price) ?? num(r?.last_trade?.p)
-  const dayClose = num(r?.day?.close) ?? num(r?.day?.c)
-  // Mid-quote if both sides exist. Options can legitimately have wide
-  // spreads; reject only degenerate cases (ask<bid, zero either side).
+  const bid       = num(r && r.last_quote && r.last_quote.bid)
+  const ask       = num(r && r.last_quote && r.last_quote.ask)
+  const lastTrade = num(r && r.last_trade && r.last_trade.price) || num(r && r.last_trade && r.last_trade.p)
+  const dayClose  = num(r && r.day && r.day.close)               || num(r && r.day && r.day.c)
+  // Mid-quote if both sides exist and are in order.
   let mid = null
   if(bid !== null && ask !== null && ask >= bid) {
     const m = (bid + ask) / 2
     if(m > 0) mid = +m.toFixed(4)
   }
   const out = { px: null, source: null, bid, ask, mid, lastTrade, dayClose }
-  if(mid !== null)       { out.px = mid;       out.source = 'live-mark';  return out }
-  if(lastTrade !== null) { out.px = lastTrade; out.source = 'live-last';  return out }
-  if(dayClose !== null)  { out.px = dayClose;  out.source = 'live-close'; return out }
+  const mode = (window && window._markMode) || 'mid'
+
+  // Priority chain per mode. Each mode defines an ordered list of
+  // [candidate, sourceLabel] pairs to try; first positive value wins.
+  let chain
+  switch(mode) {
+    case 'last':
+      chain = [[lastTrade,'live-last'], [mid,'live-mark'], [dayClose,'live-close']]
+      break
+    case 'bid':
+      chain = [[bid,'live-bid'], [mid,'live-mark'], [lastTrade,'live-last'], [dayClose,'live-close']]
+      break
+    case 'fidelity-like': {
+      // Prefer last when it's within ±15% of mid (i.e. not a stale/outlier
+      // trade against a current two-sided market). Otherwise use mid.
+      let preferLast = false
+      if(lastTrade !== null && mid !== null && mid > 0) {
+        const dev = Math.abs(lastTrade - mid) / mid
+        if(dev <= 0.15) preferLast = true
+      }
+      chain = preferLast
+        ? [[lastTrade,'live-last'], [mid,'live-mark'], [dayClose,'live-close']]
+        : [[mid,'live-mark'], [lastTrade,'live-last'], [dayClose,'live-close']]
+      break
+    }
+    case 'mid':
+    default:
+      chain = [[mid,'live-mark'], [lastTrade,'live-last'], [dayClose,'live-close']]
+      break
+  }
+  for(const [cand, src] of chain) {
+    if(cand !== null && cand > 0) { out.px = cand; out.source = src; out.mode = mode; return out }
+  }
+  out.mode = mode
   return out
 }
 
