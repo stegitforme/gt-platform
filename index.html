@@ -951,21 +951,30 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
       <span id="closed-pnl-summary" style="font-size:12px;color:#555c6e"></span>
       <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px;margin-left:auto;color:#ff4560;border-color:rgba(255,69,96,.3)" onclick="if(confirm('Clear all closed trades?')){CLOSED_TRADES=[];saveClosedTrades();fbAutoSave(1500);renderClosedTrades()}">Clear all</button>
     </div>
-    <!-- Date filter bar -->
+    <!-- Date + instrument filter bar -->
     <div style="display:flex;align-items:center;gap:6px;margin-bottom:14px;flex-wrap:wrap;padding:8px 12px;background:#111318;border-radius:8px;border:1px solid rgba(255,255,255,.06)">
-      <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e;margin-right:4px">Filter:</span>
-      <button class="ct-filter btn btn-ghost" data-filter="today"   onclick="setCTFilter('today')"   style="font-size:11px;padding:3px 10px">Today</button>
-      <button class="ct-filter btn btn-ghost" data-filter="month"   onclick="setCTFilter('month')"   style="font-size:11px;padding:3px 10px">This Month</button>
-      <button class="ct-filter btn btn-ghost" data-filter="3m"      onclick="setCTFilter('3m')"      style="font-size:11px;padding:3px 10px">3 Months</button>
-      <button class="ct-filter btn btn-ghost" data-filter="6m"      onclick="setCTFilter('6m')"      style="font-size:11px;padding:3px 10px">6 Months</button>
-      <button class="ct-filter btn btn-ghost" data-filter="1y"      onclick="setCTFilter('1y')"      style="font-size:11px;padding:3px 10px">1 Year</button>
-      <button class="ct-filter btn btn-gold"  data-filter="all"     onclick="setCTFilter('all')"     style="font-size:11px;padding:3px 10px;width:auto;margin:0">All</button>
+      <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e;margin-right:4px">Period:</span>
+      <button class="ct-filter btn btn-ghost" data-filter="today" onclick="setCTFilter('today')" style="font-size:11px;padding:3px 10px">Today</button>
+      <button class="ct-filter btn btn-ghost" data-filter="1m"    onclick="setCTFilter('1m')"    style="font-size:11px;padding:3px 10px">1M</button>
+      <button class="ct-filter btn btn-ghost" data-filter="3m"    onclick="setCTFilter('3m')"    style="font-size:11px;padding:3px 10px">3M</button>
+      <button class="ct-filter btn btn-ghost" data-filter="6m"    onclick="setCTFilter('6m')"    style="font-size:11px;padding:3px 10px">6M</button>
+      <button class="ct-filter btn btn-ghost" data-filter="ytd"   onclick="setCTFilter('ytd')"   style="font-size:11px;padding:3px 10px">YTD</button>
+      <button class="ct-filter btn btn-ghost" data-filter="1y"    onclick="setCTFilter('1y')"    style="font-size:11px;padding:3px 10px">1Y</button>
+      <button class="ct-filter btn btn-ghost" data-filter="3y"    onclick="setCTFilter('3y')"    style="font-size:11px;padding:3px 10px">3Y</button>
+      <button class="ct-filter btn btn-ghost" data-filter="5y"    onclick="setCTFilter('5y')"    style="font-size:11px;padding:3px 10px">5Y</button>
+      <button class="ct-filter btn btn-gold"  data-filter="all"   onclick="setCTFilter('all')"   style="font-size:11px;padding:3px 10px;width:auto;margin:0">All Time</button>
+      <span style="color:rgba(255,255,255,.1);margin:0 4px">|</span>
+      <span style="font-size:10px;color:#555c6e">Type:</span>
+      <button class="ct-inst btn btn-gold"  data-inst="all"     onclick="setCTInstrument('all')"     style="font-size:11px;padding:3px 10px;width:auto;margin:0">Both</button>
+      <button class="ct-inst btn btn-ghost" data-inst="stocks"  onclick="setCTInstrument('stocks')"  style="font-size:11px;padding:3px 10px">Stocks</button>
+      <button class="ct-inst btn btn-ghost" data-inst="options" onclick="setCTInstrument('options')" style="font-size:11px;padding:3px 10px">Options</button>
       <span style="color:rgba(255,255,255,.1);margin:0 4px">|</span>
       <span style="font-size:10px;color:#555c6e">Custom:</span>
       <input type="date" id="ct-from" onchange="setCTFilter('custom')" style="background:#0a0c0f;border:1px solid rgba(255,255,255,.12);border-radius:4px;padding:3px 7px;font-size:11px;color:#e8eaf0;outline:none;width:130px">
       <span style="font-size:11px;color:#555c6e">to</span>
       <input type="date" id="ct-to"   onchange="setCTFilter('custom')" style="background:#0a0c0f;border:1px solid rgba(255,255,255,.12);border-radius:4px;padding:3px 7px;font-size:11px;color:#e8eaf0;outline:none;width:130px">
       <span id="ct-filter-count" style="font-size:11px;color:#555c6e;margin-left:4px"></span>
+      <span id="ct-source-badge"  style="margin-left:8px"></span>
     </div>
 
     <!-- Fidelity Closed Paste Form -->
@@ -1284,17 +1293,35 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 
 <!-- ═══ ANALYTICS ════════════════════════════════════════════════════════════ -->
 <div id="analytics" class="page">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:10px">
     <div>
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#555c6e;margin-bottom:3px">Trade Performance Analytics</div>
-      <div style="font-size:11px;color:#555c6e">Based on closed trades · auto-calculated</div>
+      <div style="font-size:11px;color:#555c6e">Based on closed trades · auto-calculated · <span id="an-source-badge"></span></div>
     </div>
-    <select id="an-period" onchange="renderAnalytics()" style="background:#0a0c0f;border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:4px 8px;font-size:11px;color:#8b91a0;outline:none">
-      <option value="all">All time</option>
-      <option value="1y">Last 12 months</option>
-      <option value="6m">Last 6 months</option>
-      <option value="3m">Last 3 months</option>
-    </select>
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="font-size:10px;color:#555c6e;font-weight:700;letter-spacing:.07em;text-transform:uppercase">Period</span>
+        <select id="an-period" onchange="renderAnalytics()" style="background:#0a0c0f;border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:4px 8px;font-size:11px;color:#8b91a0;outline:none">
+          <option value="today">Today</option>
+          <option value="1m">Last 1 month</option>
+          <option value="3m">Last 3 months</option>
+          <option value="6m">Last 6 months</option>
+          <option value="ytd">Year to date</option>
+          <option value="1y">Last 1 year</option>
+          <option value="3y">Last 3 years</option>
+          <option value="5y">Last 5 years</option>
+          <option value="all" selected>All time</option>
+        </select>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="font-size:10px;color:#555c6e;font-weight:700;letter-spacing:.07em;text-transform:uppercase">Type</span>
+        <select id="an-instrument" onchange="renderAnalytics()" style="background:#0a0c0f;border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:4px 8px;font-size:11px;color:#8b91a0;outline:none">
+          <option value="all" selected>Both</option>
+          <option value="stocks">Stocks</option>
+          <option value="options">Options</option>
+        </select>
+      </div>
+    </div>
   </div>
   <div id="an-summary" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:16px"></div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
@@ -3919,55 +3946,52 @@ async function runFidelityClosedImport() {
 }
 
 // ── RENDER CLOSED TRADES ──────────────────────────────────────────────────────
-// ── CLOSED TRADES DATE FILTER ─────────────────────────────────────────────────
-var CT_FILTER = 'all';
+// Source of truth: getClosedLotsNormalized() (Fidelity Closed-Lots CSV when
+// present, legacy fallback otherwise). CT_FILTER drives the timeframe param,
+// CT_INSTRUMENT drives the stock/option toggle.
+var CT_FILTER     = 'all';
+var CT_INSTRUMENT = 'all';  // 'all' | 'stocks' | 'options'
+
 function setCTFilter(f) {
   CT_FILTER = f
-  // Update button styles
   document.querySelectorAll('.ct-filter').forEach(b => {
     const active = b.dataset.filter === f
     b.className = active ? 'ct-filter btn btn-gold' : 'ct-filter btn btn-ghost'
     b.style.fontSize = '11px'; b.style.padding = '3px 10px'; b.style.width = 'auto'; b.style.margin = '0'
   })
-  // Set custom date inputs to today if switching to custom with no dates
   if(f === 'custom') {
     const from = document.getElementById('ct-from')
     const to   = document.getElementById('ct-to')
-    if(!to.value) to.value = new Date().toISOString().split('T')[0]
-    if(!from.value) {
+    if(to && !to.value) to.value = new Date().toISOString().split('T')[0]
+    if(from && !from.value) {
       const d = new Date(); d.setMonth(d.getMonth()-1)
       from.value = d.toISOString().split('T')[0]
     }
   }
   renderClosedTrades()
 }
+
+function setCTInstrument(kind) {
+  CT_INSTRUMENT = kind
+  document.querySelectorAll('.ct-inst').forEach(b => {
+    const active = b.dataset.inst === kind
+    b.className = active ? 'ct-inst btn btn-gold' : 'ct-inst btn btn-ghost'
+    b.style.fontSize = '11px'; b.style.padding = '3px 10px'; b.style.width = 'auto'; b.style.margin = '0'
+  })
+  renderClosedTrades()
+}
+
+// Back-compat shim: anything that imported the old helper still works, but
+// the canonical source is getClosedLotsNormalized. ctFilterTrades is now
+// only kept for legacy call sites that pass in their own array.
 function ctFilterTrades(trades) {
-  const now = new Date()
-  const startOf = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate())
-  let from = null, to = null
-  if(CT_FILTER === 'today') {
-    from = startOf(now); to = new Date()
-  } else if(CT_FILTER === 'month') {
-    from = new Date(now.getFullYear(), now.getMonth(), 1)
-  } else if(CT_FILTER === '3m') {
-    from = new Date(now); from.setMonth(from.getMonth()-3)
-  } else if(CT_FILTER === '6m') {
-    from = new Date(now); from.setMonth(from.getMonth()-6)
-  } else if(CT_FILTER === '1y') {
-    from = new Date(now); from.setFullYear(from.getFullYear()-1)
-  } else if(CT_FILTER === 'custom') {
-    const fv = document.getElementById('ct-from')?.value
-    const tv = document.getElementById('ct-to')?.value
-    if(fv) from = new Date(fv)
-    if(tv) { to = new Date(tv); to.setHours(23,59,59) }
-  }
-  if(!from && !to) return trades  // 'all';
-  return trades.filter(t => {
-    const d = new Date(t.dateSold?.replace(/-/g,' ') || t.dateAcq?.replace(/-/g,' '))
-    if(isNaN(d)) return true
-    if(from && d < from) return false
-    if(to   && d > to)   return false
-    return true
+  // If we received an array, just return the current canonical filtered
+  // lot set — the old API ignored the array when the filter was active.
+  return getClosedLotsNormalized({
+    timeframe:  CT_FILTER,
+    instrument: CT_INSTRUMENT,
+    customFrom: document.getElementById('ct-from')?.value,
+    customTo:   document.getElementById('ct-to')?.value
   })
 }
 
@@ -3977,18 +4001,34 @@ function renderClosedTrades() {
   const summaryEl = document.getElementById('closed-pnl-summary')
   if(!listEl) return
 
-  if(!CLOSED_TRADES.length) {
-    listEl.innerHTML = '<div style="text-align:center;padding:32px;color:#555c6e;font-size:13px">No closed trades yet — paste Fidelity history above\x3C/div>';
+  // Pull full closed set (no timeframe/instrument filter) for the "N of M"
+  // count, then the filtered set for rendering.
+  const all = getClosedLotsNormalized()
+  const filtered = getClosedLotsNormalized({
+    timeframe:  CT_FILTER,
+    instrument: CT_INSTRUMENT,
+    customFrom: document.getElementById('ct-from')?.value,
+    customTo:   document.getElementById('ct-to')?.value
+  })
+
+  // Source badge
+  const src = document.getElementById('ct-source-badge')
+  if(src) src.innerHTML = (typeof fidSourceBadgeHtml === 'function' && isFidSnapshotActive()) ? fidSourceBadgeHtml() :
+    ((window.FID_CLOSED && window.FID_CLOSED.lots && window.FID_CLOSED.lots.length)
+      ? '<span style="display:inline-flex;align-items:center;gap:4px;font-size:9px;font-weight:700;padding:2px 7px;border-radius:3px;background:rgba(77,166,255,.12);color:#4da6ff;border:1px solid rgba(77,166,255,.28);text-transform:uppercase;letter-spacing:.05em"><span style="width:5px;height:5px;border-radius:50%;background:#4da6ff"></span>Source: Fidelity Closed-Lots CSV · '+window.FID_CLOSED.lots.length+' lots</span>'
+      : '')
+
+  if(!all.length) {
+    listEl.innerHTML = '<div style="text-align:center;padding:32px;color:#555c6e;font-size:13px">No closed trades yet — upload Fidelity Closed-Lots CSV in the Sync card above, or paste closed history here.\x3C/div>';
     if(countEl) countEl.textContent = '0 closed trades';
+    const sb = document.getElementById('closed-stats-bar'); if(sb) sb.style.display = 'none'
     return
   }
 
-  // Apply date filter
-  const filtered = ctFilterTrades(CLOSED_TRADES)
   const fcEl = document.getElementById('ct-filter-count')
-  if(fcEl) fcEl.textContent = CT_FILTER !== 'all' ? '(showing '+filtered.length+' of '+CLOSED_TRADES.length+')' : ''
+  const filterActive = CT_FILTER !== 'all' || CT_INSTRUMENT !== 'all'
+  if(fcEl) fcEl.textContent = filterActive ? '(showing '+filtered.length+' of '+all.length+')' : ''
 
-  // Stats on filtered set
   const wins   = filtered.filter(t => t.pnl > 0)
   const losses = filtered.filter(t => t.pnl <= 0)
   const totalPnl = filtered.reduce((s,t) => s + t.pnl, 0)
@@ -3996,7 +4036,7 @@ function renderClosedTrades() {
   const avgLoss = losses.length ? losses.reduce((s,t) => s+t.pnl, 0) / losses.length : 0
   const winRate = filtered.length ? ((wins.length / filtered.length)*100).toFixed(0) : 0
 
-  if(countEl) countEl.textContent = CLOSED_TRADES.length + ' closed trades';
+  if(countEl) countEl.textContent = all.length + ' closed trades';
   if(summaryEl) summaryEl.textContent = '| P&L: ' + (totalPnl >= 0 ? '+' : '') + ''
  + Math.round(totalPnl).toLocaleString() + (CT_FILTER!=='all'?' (filtered)':'')
   summaryEl.style.color = totalPnl >= 0 ? '#00d68f' : '#ff4560'
@@ -8294,63 +8334,182 @@ function fidSourceBadgeHtml() {
 // Backward-compat alias (renderTrades still calls the old name)
 function getOpenTradesForRender() { return getOpenBook() }
 
-// ── Closed-lots accessor — scaffold for future analytics pivot ───────────
-// When FID_CLOSED has data, this is the authoritative realized log; else
-// falls back to legacy CLOSED_TRADES + status='closed' TRADES. NOT YET
-// wired into renderAnalytics() per product direction — but every future
-// consumer should go through this function so the pivot is a one-line
-// change later.
-function getClosedLotsNormalized() {
-  const fid = (window.FID_CLOSED && window.FID_CLOSED.lots) || []
-  if(fid.length) {
-    return fid.map(l => ({
-      position_id: l.position_id,
-      underlying:  l.underlying,
-      type:        l.type,
-      strike:      l.strike,
-      expiryISO:   l.expiryISO,
-      occ:         l.occ,
-      qty:         l.qty,
-      costBasis:   l.costBasis,
-      proceeds:    l.proceeds,
-      realizedPnl: l.realizedPnl,
-      acquired:    l.acquired,
-      sold:        l.sold,
-      source:      'fidelity_closed_lots_csv'
-    }))
+// ── Closed-lots accessor (canonical for all closed / analytics views) ────
+// Source priority: FID_CLOSED.lots (Fidelity Closed-Lots CSV) → legacy
+// CLOSED_TRADES + status='closed' TRADES. Returned rows carry BOTH
+// canonical field names (qty / costBasis / realizedPnl / acquired / sold)
+// and legacy field names (cts / cost / pnl / pnlPct / dateAcq / dateSold /
+// display / ticker) so every existing consumer — renderClosedTrades,
+// renderAnalytics, future exporters — works from the same shape.
+//
+// Filter parameters (all optional):
+//   timeframe: 'today'|'1m'|'3m'|'6m'|'ytd'|'1y'|'3y'|'5y'|'all'|'custom'
+//   instrument:'all'|'stocks'|'options'
+//   customFrom:'YYYY-MM-DD'  (only when timeframe='custom')
+//   customTo:  'YYYY-MM-DD'  (only when timeframe='custom')
+// Filter semantics: `sold` date is the window anchor (falls back to
+// `acquired` if sold is missing). Instrument filter uses isStock/type.
+function getClosedLotsNormalized(opts) {
+  opts = opts || {}
+  const timeframe  = opts.timeframe  || 'all'
+  const instrument = opts.instrument || 'all'
+
+  // ── Resolve source rows ────────────────────────────────────────────────
+  const fromFid = (window.FID_CLOSED && window.FID_CLOSED.lots) || []
+  let rows = []
+  if(fromFid.length) {
+    rows = fromFid.map(l => {
+      const isStock = l.type === 'Stock' || !!l.isStock
+      const qty    = +l.qty || 0
+      const cost   = qty > 0 ? (+l.costBasis||0) / qty / (isStock ? 1 : 100) : 0
+      const pnl    = +l.realizedPnl || 0
+      const pnlPct = l.costBasis > 0 ? (pnl / l.costBasis * 100) : 0
+      const display = isStock
+        ? (l.underlying || '?')
+        : (l.underlying + (l.strike ? ' '+l.strike+(l.type==='Put'?'P':'C') : ''))
+      return {
+        // Canonical
+        position_id: l.position_id,
+        occ:         l.occ,
+        underlying:  l.underlying,
+        ticker:      l.underlying,
+        type:        l.type,
+        strike:      l.strike,
+        expiryISO:   l.expiryISO,
+        isStock:     isStock,
+        // Dual-named qty / pricing
+        qty, cts: qty,
+        cost,
+        costBasis:  +l.costBasis || 0,
+        costTotal:  +l.costBasis || 0,
+        proceeds:   +l.proceeds  || 0,
+        pnl, realizedPnl: pnl, gain: pnl,
+        pnlPct,
+        // Dual-named dates
+        acquired:   l.acquired,
+        sold:       l.sold,
+        dateAcq:    l.acquired,
+        dateSold:   l.sold,
+        dateAcqISO: l.acquired,  // already ISO (Fidelity CSV format)
+        dateSoldISO:l.sold,
+        // Display + meta
+        display,
+        status: 'closed',
+        source: 'fidelity_closed_lots_csv',
+        atr: null, lot_id: l.lot_id
+      }
+    })
+  } else {
+    // Legacy fallback — synthesize from CLOSED_TRADES + TRADES(closed).
+    ;(CLOSED_TRADES||[]).forEach(ct => {
+      const isStock = !!ct.isStock || ct.type === 'Stock'
+      const qty     = +ct.cts || +ct.qty || 0
+      const pnl     = +ct.pnl || +ct.gain || 0
+      const cost    = +ct.cost || 0
+      const costTotal = +ct.costTotal || (cost * (isStock ? qty : qty*100))
+      rows.push({
+        position_id: (typeof getPositionId==='function' ? getPositionId(ct) : ''),
+        occ: ct.occ || '',
+        underlying: ct.ticker || (ct.underlying||'').split(' ')[0],
+        ticker:     ct.ticker || (ct.underlying||'').split(' ')[0],
+        type: ct.type, strike: ct.strike, expiryISO: ct.expiryISO,
+        isStock,
+        qty, cts: qty,
+        cost,
+        costBasis: costTotal,
+        costTotal,
+        proceeds: +ct.proceeds || 0,
+        pnl, realizedPnl: pnl, gain: pnl,
+        pnlPct: +ct.pnlPct || (costTotal > 0 ? (pnl/costTotal*100) : 0),
+        acquired: ct.dateAcq || ct.dateAcquired || ct.date || '',
+        sold:     ct.dateSold || ct.closeDate || '',
+        dateAcq:  ct.dateAcq || ct.dateAcquired || ct.date || '',
+        dateSold: ct.dateSold || ct.closeDate || '',
+        dateAcqISO: ct.dateAcqISO || '',
+        dateSoldISO:ct.dateSoldISO || '',
+        display: ct.display || (ct.ticker || '?'),
+        status: 'closed',
+        source: 'legacy_closed_trades',
+        atr: ct.atr || null
+      })
+    })
+    ;(TRADES||[]).filter(t => t.status === 'closed').forEach(t => {
+      const isStock = !!t.isStock || t.type === 'Stock'
+      const qty     = +t.cts || 0
+      const cost    = +t.cost || 0
+      const costTotal = (isStock ? qty : qty*100) * cost
+      const proceeds  = (+t.closePrice||0) * (isStock ? qty : qty*100)
+      const pnl = +t.pnl || (proceeds - costTotal)
+      const display = isStock
+        ? (t.underlying || t.ticker || '?')
+        : ((t.underlying || (t.ticker||'').split(' ')[0] || '?') + (t.strike ? ' '+t.strike+(t.type==='Put'?'P':'C') : ''))
+      rows.push({
+        position_id: (typeof getPositionId==='function' ? getPositionId(t) : ''),
+        occ: t.occ || '',
+        underlying: t.underlying || (t.ticker||'').split(' ')[0],
+        ticker:     t.underlying || (t.ticker||'').split(' ')[0],
+        type: t.type, strike: t.strike, expiryISO: t.expiryISO,
+        isStock,
+        qty, cts: qty,
+        cost,
+        costBasis: costTotal,
+        costTotal,
+        proceeds,
+        pnl, realizedPnl: pnl, gain: pnl,
+        pnlPct: costTotal > 0 ? (pnl / costTotal * 100) : 0,
+        acquired: t.date || '',
+        sold:     t.closeDate || '',
+        dateAcq:  t.date || '',
+        dateSold: t.closeDate || '',
+        dateAcqISO: '',
+        dateSoldISO: '',
+        display,
+        status: 'closed',
+        source: 'legacy_trades_closed',
+        atr: t.atr || null
+      })
+    })
   }
-  // Legacy fallback — synthesize from TRADES + CLOSED_TRADES.
-  const rows = []
-  ;(CLOSED_TRADES||[]).forEach(ct => {
-    rows.push({
-      position_id: (typeof getPositionId==='function' ? getPositionId(ct) : ''),
-      underlying:  ct.underlying || (ct.ticker||'').split(' ')[0],
-      type:        ct.type, strike: ct.strike, expiryISO: ct.expiryISO,
-      occ:         ct.occ || '',
-      qty:         ct.qty || ct.cts || 0,
-      costBasis:   +ct.cost || 0,
-      proceeds:    +ct.proceeds || 0,
-      realizedPnl: +ct.gain || +ct.pnl || 0,
-      acquired:    ct.dateAcquired || ct.date || '',
-      sold:        ct.dateSold     || ct.closeDate || '',
-      source:      'legacy_closed_trades'
+
+  // ── Apply filters ──────────────────────────────────────────────────────
+  // Instrument filter
+  if(instrument === 'stocks') {
+    rows = rows.filter(r => r.isStock)
+  } else if(instrument === 'options') {
+    rows = rows.filter(r => !r.isStock)
+  }
+
+  // Timeframe filter — anchor on sold (fallback acquired)
+  const now = new Date()
+  const startOf = d => new Date(d.getFullYear(), d.getMonth(), d.getDate())
+  let from = null, to = null
+  switch(timeframe) {
+    case 'today': from = startOf(now); break
+    case '1m':    from = new Date(now); from.setMonth(from.getMonth()-1); break
+    case '3m':    from = new Date(now); from.setMonth(from.getMonth()-3); break
+    case '6m':    from = new Date(now); from.setMonth(from.getMonth()-6); break
+    case 'ytd':   from = new Date(now.getFullYear(), 0, 1); break
+    case '1y':    from = new Date(now); from.setFullYear(from.getFullYear()-1); break
+    case '3y':    from = new Date(now); from.setFullYear(from.getFullYear()-3); break
+    case '5y':    from = new Date(now); from.setFullYear(from.getFullYear()-5); break
+    case 'custom':
+      if(opts.customFrom) from = new Date(opts.customFrom)
+      if(opts.customTo)   { to = new Date(opts.customTo); to.setHours(23,59,59) }
+      break
+    case 'all':
+    default: break
+  }
+  if(from || to) {
+    rows = rows.filter(r => {
+      const src = r.dateSoldISO || r.sold || r.dateAcqISO || r.acquired || ''
+      if(!src) return true
+      const d = new Date(String(src).replace(/-/g,' '))
+      if(isNaN(d)) return true
+      if(from && d < from) return false
+      if(to   && d > to)   return false
+      return true
     })
-  })
-  ;(TRADES||[]).filter(t => t.status==='closed').forEach(t => {
-    rows.push({
-      position_id: (typeof getPositionId==='function' ? getPositionId(t) : ''),
-      underlying:  t.underlying || (t.ticker||'').split(' ')[0],
-      type:        t.type, strike: t.strike, expiryISO: t.expiryISO,
-      occ:         t.occ || '',
-      qty:         t.cts || 0,
-      costBasis:   (+t.cost||0) * 100 * (+t.cts||0),
-      proceeds:    (+t.closePrice||0) * 100 * (+t.cts||0),
-      realizedPnl: +t.pnl || 0,
-      acquired:    t.date || '',
-      sold:        t.closeDate || '',
-      source:      'legacy_trades_closed'
-    })
-  })
+  }
   return rows
 }
 
@@ -10374,21 +10533,33 @@ async function fetchLeapsData() {
 }
 
 // ── TRADE ANALYTICS ──────────────────────────────────────────────────────────
+// Source of truth: getClosedLotsNormalized() — Fidelity Closed-Lots CSV when
+// present, legacy CLOSED_TRADES + TRADES(closed) fallback. Timeframe and
+// instrument filters flow through the single accessor.
 function renderAnalytics() {
-  if(!CLOSED_TRADES.length) return
-  const period = document.getElementById('an-period')?.value || 'all';
-  const now = new Date()
-  let fromDate = null
-  if(period==='1y') { fromDate=new Date(now); fromDate.setFullYear(fromDate.getFullYear()-1) }
-  else if(period==='6m') { fromDate=new Date(now); fromDate.setMonth(fromDate.getMonth()-6) }
-  else if(period==='3m') { fromDate=new Date(now); fromDate.setMonth(fromDate.getMonth()-3) }
+  const period     = document.getElementById('an-period')?.value     || 'all'
+  const instrument = document.getElementById('an-instrument')?.value || 'all'
 
-  const ct = CLOSED_TRADES.filter(t => {
-    if(!fromDate) return true
-    const d = new Date((t.dateSold||t.dateAcq||'').replace(/-/g,' '))
-    return !isNaN(d) && d >= fromDate
-  })
-  if(!ct.length) { document.getElementById('an-summary').innerHTML='<div style="color:#555c6e;font-size:12px">No trades in this period\x3C/div>'; return }
+  // Source badge — shows "Source: Fidelity Closed-Lots CSV" when FID_CLOSED
+  // has data, otherwise "Source: legacy trade journal".
+  const srcEl = document.getElementById('an-source-badge')
+  if(srcEl) {
+    const usingFid = !!(window.FID_CLOSED && window.FID_CLOSED.lots && window.FID_CLOSED.lots.length)
+    srcEl.innerHTML = usingFid
+      ? '<span style="display:inline-flex;align-items:center;gap:4px;font-size:9px;font-weight:700;padding:1px 6px;border-radius:3px;background:rgba(77,166,255,.12);color:#4da6ff;border:1px solid rgba(77,166,255,.28);text-transform:uppercase;letter-spacing:.05em"><span style="width:5px;height:5px;border-radius:50%;background:#4da6ff"></span>Source: Fidelity · '+window.FID_CLOSED.lots.length+' lots</span>'
+      : '<span style="font-size:10px;color:#555c6e">source: legacy trade journal</span>'
+  }
+
+  const ct = getClosedLotsNormalized({ timeframe: period, instrument })
+  if(!ct.length) {
+    const empty = '<div style="color:#555c6e;font-size:12px;padding:12px">No closed trades match the current period / instrument filter.</div>'
+    ;['an-summary','an-ticker-chart','an-month-chart','an-winloss','an-extremes','an-hold-hist','an-hold-pnl'].forEach(id => {
+      const el = document.getElementById(id); if(el) el.innerHTML = empty
+    })
+    const tbl = document.getElementById('an-table'); if(tbl) tbl.innerHTML = ''
+    const tc  = document.getElementById('an-table-count'); if(tc) tc.textContent = '0 trades'
+    return
+  }
 
   const wins = ct.filter(t=>t.pnl>0), losses = ct.filter(t=>t.pnl<=0)
   const totalPnl = ct.reduce((s,t)=>s+t.pnl,0)
