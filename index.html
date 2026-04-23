@@ -1373,6 +1373,25 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 
   <script>
 
+// ── Build-version stamp ─────────────────────────────────────────────────
+// Updated on every commit. If your console doesn't print this on page
+// load — OR if the short hash shown on rendered cards doesn't match
+// the latest commit — your browser is serving CACHED older HTML.
+// Hard-reload: Cmd+Shift+R (Mac) / Ctrl+Shift+F5 (Win).
+window.__GT_BUILD = {
+  sha:   '748b7a570f617bfadc371c69a2369799655f88c7',
+  short: '748b7a5',
+  builtAt: new Date().toISOString()
+}
+;(function(){
+  try {
+    if(typeof console !== 'undefined' && console.log) {
+      console.log('%c[GT BUILD] '+window.__GT_BUILD.short+' · loaded '+window.__GT_BUILD.builtAt,
+        'color:#4da6ff;font-weight:700')
+    }
+  } catch(e) {}
+})();
+
 // API key stored in localStorage -- never hardcoded in the public file
 let KEY = localStorage.getItem('gt_api_key') || '';
 let TRADIER_TOKEN = localStorage.getItem('gt_tradier_token') || 'iHQefkJNzt7UAHaqw63BnJmK2Zgv';
@@ -9667,6 +9686,12 @@ function renderTrades() {
   }
 
   function renderOne(t) {
+    // Build-version stamp: if the console doesn't print this with each
+    // card, your browser is serving cached older HTML. See top-of-file
+    // window.__GT_BUILD for the full commit SHA.
+    if(typeof console !== 'undefined' && console.log && window.__GT_BUILD) {
+      console.log('[RENDER PATH · renderOne] build='+window.__GT_BUILD.short+' t.id='+t.id+' sym='+(t.underlying||''))
+    }
     const h  = t.atr * 0.5
     const sl = t.entry - h,   em = t.entry - t.atr * 2
     const r1 = t.entry + h,   r2 = t.entry + t.atr, r3 = t.entry + t.atr * 2
