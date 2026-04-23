@@ -8659,105 +8659,164 @@ function drawMiniChart(canvas, bars, entry, stop, roll, current) {
     ctx.beginPath(); ctx.arc(cx, cy, 2.75, 0, Math.PI*2); ctx.fill()
   }
 
-  // ── Right-edge labels (on-chart — the feature the user asked for) ────
-  // All four levels get a colored pill at their y-coordinate. NOW gets
-  // the bright/inverted style so it dominates visually. Stacking
-  // overlap is resolved by a minimum vertical gap between adjacent
-  // label centers so pills never obscure each other.
-  const labelSpecs = []
-  if(stop    > 0) labelSpecs.push({ y: y(stop),    color: '#ff4560', bg: 'rgba(255,69,96,.16)',  border: 'rgba(255,69,96,.45)',  label: 'STOP',  price: stop })
-  if(entry   > 0) labelSpecs.push({ y: y(entry),   color: '#f0c040', bg: 'rgba(240,192,64,.16)', border: 'rgba(240,192,64,.45)', label: 'ENTRY', price: entry })
-  if(roll    > 0) labelSpecs.push({ y: y(roll),    color: '#00d68f', bg: 'rgba(0,214,143,.16)',  border: 'rgba(0,214,143,.45)',  label: 'ROLL',  price: roll })
-  if(current > 0) {
-    const nowCol = (stop  > 0 && current <= stop)  ? '#ff4560'
-                 : (roll  > 0 && current >= roll)  ? '#00d68f'
-                 : '#4da6ff'
-    labelSpecs.push({ y: y(current), color: '#ffffff', bg: nowCol, border: nowCol, label: 'NOW', price: current, solid: true })
+  // ── Right-edge labels (geometric-truth-preserving) ───────────────────
+  // Key rule: the pill's LEADER LINE always returns to the level's TRUE
+  // y on the chart edge. The pill body can be shifted vertically by the
+  // overlap resolver, but the leader visibly traces back to the level's
+  // real position so the visual and the math always agree.
+  //
+  // Equal-or-near-equal-price handling: levels whose truthY values fall
+  // within MERGE_EPS pixels are grouped into a single merged pill
+  // (e.g. "NOW · ENTRY 23.32"). This is cleaner than two pills stacked
+  // pointing at the same row, and it correctly advertises the coincidence.
+  const MERGE_EPS = 2   // px — merge pills whose y rounds to the same row
+  const STYLES = {
+    stop:  { color:'#ff4560', bg:'rgba(255,69,96,.16)',  border:'rgba(255,69,96,.5)',  label:'STOP',  dim:'rgba(255,69,96,.75)'  },
+    entry: { color:'#f0c040', bg:'rgba(240,192,64,.16)', border:'rgba(240,192,64,.5)', label:'ENTRY', dim:'rgba(240,192,64,.75)' },
+    roll:  { color:'#00d68f', bg:'rgba(0,214,143,.16)',  border:'rgba(0,214,143,.5)',  label:'ROLL',  dim:'rgba(0,214,143,.75)'  }
   }
-  // Resolve vertical overlaps: sort by y then nudge any pair whose
-  // centers are closer than MIN_GAP. MIN_GAP accounts for the taller
-  // pills (20 px NOW, 16 px + 5 px distance-chip tail for references).
-  // Preference: keep NOW at its true y position so the live marker
-  // never drifts from the actual price level.
-  labelSpecs.sort((a, b) => a.y - b.y)
+  const nowRegimeColor = (current > 0)
+    ? ((stop > 0 && current <= stop)  ? '#ff4560'
+      : (roll > 0 && current >= roll) ? '#00d68f' : '#4da6ff')
+    : '#4da6ff'
+
+  // 1) Build level list with TRUTH y (mapped through the single y()).
+  //    truthY is the ONLY geometrically-authoritative y for that level.
+  const raw = []
+  if(stop    > 0) raw.push({ kind:'stop',  price: stop,    truthY: y(stop) })
+  if(entry   > 0) raw.push({ kind:'entry', price: entry,   truthY: y(entry) })
+  if(roll    > 0) raw.push({ kind:'roll',  price: roll,    truthY: y(roll) })
+  if(current > 0) raw.push({ kind:'now',   price: current, truthY: y(current), isNow: true })
+
+  // 2) Group by pixel-rounded truthY so equal / sub-pixel-equal prices
+  //    render as ONE merged pill instead of a pointless pair of stacks.
+  raw.sort((a, b) => a.truthY - b.truthY)
+  const groups = []
+  for(const r of raw) {
+    const last = groups[groups.length-1]
+    if(last && Math.abs(r.truthY - last[0].truthY) <= MERGE_EPS) last.push(r)
+    else groups.push([r])
+  }
+
+  // 3) For each group, assign a PILL y. Default = group's truthY (use
+  //    NOW's truthY when the group contains NOW, otherwise the first
+  //    item's truthY — they're within MERGE_EPS so any is fine).
+  const pills = groups.map(g => {
+    const hasNow = g.some(r => r.isNow)
+    const anchor = hasNow ? g.find(r => r.isNow) : g[0]
+    return {
+      items: g,
+      anchorTruthY: anchor.truthY,
+      pillY: anchor.truthY,
+      hasNow
+    }
+  })
+
+  // 4) Resolve vertical overlap BETWEEN groups — but only move the pill
+  //    body; the leader line goes back to anchorTruthY so the visual
+  //    relationship between pill and line never breaks.
   const MIN_GAP = 22
-  for(let i = 1; i < labelSpecs.length; i++) {
-    const delta = labelSpecs[i].y - labelSpecs[i-1].y
+  for(let i = 1; i < pills.length; i++) {
+    const delta = pills[i].pillY - pills[i-1].pillY
     if(delta < MIN_GAP) {
-      if(labelSpecs[i].solid && !labelSpecs[i-1].solid) {
-        labelSpecs[i-1].y -= (MIN_GAP - delta)
+      if(pills[i].hasNow && !pills[i-1].hasNow) {
+        pills[i-1].pillY -= (MIN_GAP - delta)
       } else {
-        labelSpecs[i].y += (MIN_GAP - delta)
+        pills[i].pillY += (MIN_GAP - delta)
       }
     }
   }
-  // Clamp each pill to stay inside the canvas vertical bounds
-  for(const s of labelSpecs) {
-    s.y = Math.min(H - 12, Math.max(12, s.y))
+  for(const p of pills) {
+    p.pillY = Math.min(H - 12, Math.max(12, p.pillY))
   }
 
+  // 5) Render each pill at pillY with a leader line from pillY →
+  //    anchorTruthY on the chart side.
   ctx.textBaseline = 'middle'
-  for(const s of labelSpecs) {
-    const isNow = !!s.solid
-    const pillH = isNow ? 20 : 16      // NOW pill is taller → dominates
+  for(const p of pills) {
+    const isNow = p.hasNow
+    const pillH = isNow ? 20 : 16
     const pillX = W - pad.r + 4
-    const pillY = s.y - pillH / 2
-    const pillW = pad.r - 6            // full right-margin width for consistency
+    const pillW = pad.r - 6
     const pillR = isNow ? 4 : 3
+    const pillY = p.pillY
 
-    // Short leader tick from the chart edge INTO the pill — visually
-    // bolts the pill onto its horizontal level.
-    ctx.strokeStyle = s.border
+    // Pick styling. Merged pills with NOW use the NOW-regime style
+    // (solid + bold); merged pills without NOW use the first member's
+    // style; single-member pills use that member's style.
+    let styleColor, styleBg, styleBorder
+    if(isNow) {
+      styleColor  = '#ffffff'
+      styleBg     = nowRegimeColor
+      styleBorder = nowRegimeColor
+    } else {
+      const primary = p.items[0].kind
+      const s = STYLES[primary]
+      styleColor  = s.color
+      styleBg     = s.bg
+      styleBorder = s.border
+    }
+
+    // Leader line: from the chart edge at anchorTruthY (the level's
+    // true row) to the pill's left edge at pillY. If pillY === truthY
+    // it's a flat horizontal tick; otherwise a short diagonal that
+    // makes the shift visibly deliberate (not an alignment accident).
+    ctx.strokeStyle = styleBorder
     ctx.lineWidth = 1
     ctx.beginPath()
-    ctx.moveTo(W - pad.r - 3, s.y)
-    ctx.lineTo(pillX, s.y)
+    ctx.moveTo(W - pad.r - 3, p.anchorTruthY)
+    ctx.lineTo(pillX, pillY)
     ctx.stroke()
 
     // Pill background
-    ctx.fillStyle = s.bg
-    if(ctx.roundRect) { ctx.beginPath(); ctx.roundRect(pillX, pillY, pillW, pillH, pillR); ctx.fill() }
-    else              { ctx.fillRect(pillX, pillY, pillW, pillH) }
-    // Pill border (thicker for NOW so it reads as "active")
-    ctx.strokeStyle = s.border
+    ctx.fillStyle = styleBg
+    if(ctx.roundRect) { ctx.beginPath(); ctx.roundRect(pillX, pillY - pillH/2, pillW, pillH, pillR); ctx.fill() }
+    else              { ctx.fillRect(pillX, pillY - pillH/2, pillW, pillH) }
+    // Pill border (thicker for NOW)
+    ctx.strokeStyle = styleBorder
     ctx.lineWidth = isNow ? 1.25 : 1
-    if(ctx.roundRect) { ctx.beginPath(); ctx.roundRect(pillX + 0.5, pillY + 0.5, pillW - 1, pillH - 1, pillR); ctx.stroke() }
-    else              { ctx.strokeRect(pillX + 0.5, pillY + 0.5, pillW - 1, pillH - 1) }
+    if(ctx.roundRect) { ctx.beginPath(); ctx.roundRect(pillX + 0.5, pillY - pillH/2 + 0.5, pillW - 1, pillH - 1, pillR); ctx.stroke() }
+    else              { ctx.strokeRect(pillX + 0.5, pillY - pillH/2 + 0.5, pillW - 1, pillH - 1) }
+
+    // Decide the label: single kind, or merged multi-kind.
+    const priceText = p.items[0].price.toFixed(2)  // all prices in a merged group are ≤ MERGE_EPS apart; any is representative
+    let labelText
+    if(p.items.length === 1) {
+      labelText = isNow ? 'NOW' : STYLES[p.items[0].kind].label
+    } else {
+      // Merged: join kinds in a canonical order NOW · ROLL · ENTRY · STOP
+      const order = ['now', 'roll', 'entry', 'stop']
+      const parts = order
+        .filter(k => p.items.some(r => r.kind === k))
+        .map(k => (k === 'now') ? 'NOW' : STYLES[k].label)
+      labelText = parts.join('·')
+    }
 
     if(isNow) {
-      // NOW: big single line — LABEL right after a small dot + price
       ctx.font = 'bold 11px "SF Mono", monospace'
       ctx.textAlign = 'left'
-      ctx.fillStyle = s.color
-      ctx.fillText('NOW', pillX + 6, s.y)
+      ctx.fillStyle = styleColor
+      ctx.fillText(labelText, pillX + 6, pillY)
       ctx.textAlign = 'right'
-      ctx.fillText(s.price.toFixed(2), pillX + pillW - 6, s.y)
+      ctx.fillText(priceText, pillX + pillW - 6, pillY)
     } else {
-      // STOP / ENTRY / ROLL: label + price on the top line, distance
-      // chip on a small bottom line. Distance is in % of current price
-      // if we have current, in absolute points otherwise.
-      const dist = (current > 0) ? (s.price - current) : 0
-      const distPct = (current > 0) ? (dist / current * 100) : null
-      const chipTxt = (distPct != null)
-        ? ((distPct >= 0 ? '+' : '') + distPct.toFixed(1) + '%')
-        : ''
+      // Non-NOW pills: label + price on top row, optional % distance
+      // from NOW on a small bottom row. Distance uses the FULL-precision
+      // current value — text is the only thing we round.
       ctx.font = 'bold 10px "SF Mono", monospace'
       ctx.textAlign = 'left'
-      ctx.fillStyle = s.color
-      ctx.fillText(s.label, pillX + 5, s.y - 3)
+      ctx.fillStyle = styleColor
+      ctx.fillText(labelText, pillX + 5, pillY - 3)
       ctx.textAlign = 'right'
-      ctx.fillText(s.price.toFixed(2), pillX + pillW - 5, s.y - 3)
-      if(chipTxt) {
+      ctx.fillText(priceText, pillX + pillW - 5, pillY - 3)
+      if(current > 0) {
+        const dist = p.items[0].price - current
+        const pct  = current > 0 ? (dist / current * 100) : 0
+        const chip = (pct >= 0 ? '+' : '') + pct.toFixed(1) + '%'
         ctx.font = '8px "SF Mono", monospace'
         ctx.textAlign = 'right'
-        // Distance chip color is dimmer version of the level color
-        const dimMap = {
-          '#ff4560': 'rgba(255,69,96,.75)',
-          '#f0c040': 'rgba(240,192,64,.75)',
-          '#00d68f': 'rgba(0,214,143,.75)'
-        }
-        ctx.fillStyle = dimMap[s.color] || 'rgba(139,145,160,.75)'
-        ctx.fillText(chipTxt, pillX + pillW - 5, s.y + 5)
+        ctx.fillStyle = STYLES[p.items[0].kind].dim
+        ctx.fillText(chip, pillX + pillW - 5, pillY + 5)
       }
     }
   }
@@ -8765,15 +8824,24 @@ function drawMiniChart(canvas, bars, entry, stop, roll, current) {
 
 // Fetch + draw a single card's mini-chart. Safe to call repeatedly — the
 // fetch layer caches per symbol for 60 s.
+//
+// Precision rule: every price passed to drawMiniChart is FULL internal
+// precision. Rounding happens only inside drawMiniChart at display time
+// (the .toFixed(2) calls when building label text). This keeps the
+// geometric y-coordinate of each line exactly consistent with the pill
+// attached to it.
 async function renderMiniChartForTrade(t) {
   const canvas = document.getElementById('mini-chart-' + t.id)
   if(!canvas) return
   const sym = t.underlying || (t.ticker||'').split(' ')[0] || ''
-  const entry   = +t.entry || 0
-  const stop    = +t.stop05Entry || 0
+  const entry    = +t.entry || 0
+  const stop     = +t.stop05Entry || 0   // already stored 2-dec by captureEntrySnapshots
   const entryATR = +t.entryATR || +t.atr || 0
-  const roll    = (entry > 0 && entryATR > 0) ? +(entry + 0.5 * entryATR).toFixed(2) : 0
-  const current = +t.currentUnderlyingPx || +t.stockPrice || 0
+  // Roll is computed at full precision from entry + 0.5·entryATR. We do
+  // NOT .toFixed(2) here — the y-mapping must use the same number the
+  // pill labels use, and the label is rounded internally for display.
+  const roll     = (entry > 0 && entryATR > 0) ? (entry + 0.5 * entryATR) : 0
+  const current  = +t.currentUnderlyingPx || +t.stockPrice || 0
   const bars = await fetchMiniChartData(sym)
   drawMiniChart(canvas, bars, entry, stop, roll, current)
 }
