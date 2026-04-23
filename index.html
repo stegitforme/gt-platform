@@ -835,6 +835,41 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 
   <!-- ── OPEN TRADES PANEL ───────────────────────────────────────── -->
   <div id="tm-open-panel">
+    <!-- ── FIDELITY SYNC (source of truth for open positions) ─────── -->
+    <div id="fid-sync-card" class="card" style="margin-bottom:14px;border-color:rgba(77,166,255,.22)">
+      <div class="card-head" style="border-color:rgba(77,166,255,.14)">
+        <span class="card-title" style="color:#4da6ff">Fidelity Sync <span style="font-size:10px;color:#8b91a0;font-weight:400;margin-left:6px">source of truth for open positions</span></span>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <span id="fid-sync-count" style="font-size:11px;color:#e8eaf0;font-weight:600">no snapshot</span>
+          <span id="fid-sync-ts"    style="font-size:10px;color:#555c6e">never synced</span>
+        </div>
+      </div>
+      <div class="card-body" style="padding:12px 14px">
+        <div style="font-size:11px;color:#8b91a0;line-height:1.6;margin-bottom:10px">
+          Download your latest <b style="color:#e8eaf0">Portfolio Positions</b> and <b style="color:#e8eaf0">Closed Lots</b> CSV from
+          Fidelity (Accounts → <b>Download</b>), then drop them in below. Open-positions import <b style="color:#4da6ff">replaces</b> the snapshot;
+          closed-lots import <b style="color:#4da6ff">merges &amp; dedupes</b> so re-uploads are idempotent. Legacy trades stay available for notes.
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+          <label class="btn btn-gold" style="cursor:pointer;padding:7px 14px;font-size:12px;margin:0">
+            Upload Open Positions CSV
+            <input type="file" accept=".csv,text/csv" style="display:none" onchange="if(this.files&&this.files[0])importFidelityOpenPositionsFromFile(this.files[0]);this.value=''">
+          </label>
+          <label class="btn btn-ghost" style="cursor:pointer;padding:7px 14px;font-size:12px;margin:0;color:#4da6ff;border-color:rgba(77,166,255,.3)">
+            Upload Closed Lots CSV
+            <input type="file" accept=".csv,text/csv" style="display:none" onchange="if(this.files&&this.files[0])importFidelityClosedLotsFromFile(this.files[0]);this.value=''">
+          </label>
+          <button class="btn btn-ghost" style="font-size:11px;padding:6px 12px" onclick="showReconcileView()">Reconcile vs legacy</button>
+          <button class="btn btn-ghost" style="font-size:11px;padding:6px 12px" onclick="refreshFidOpenLivePrices()">⟳ Live prices</button>
+          <button class="btn btn-ghost" style="font-size:11px;padding:6px 12px;color:#8b91a0" onclick="enrichFidOpenWithATR().then(()=>{ if(typeof renderTrades==='function') renderTrades() })">⟳ ATR</button>
+          <span id="fid-closed-count" style="font-size:11px;color:#555c6e;margin-left:4px">no closed lots</span>
+          <span id="fid-sync-src"    style="font-size:10px;color:#555c6e;font-family:'SF Mono',monospace"></span>
+        </div>
+        <div id="fid-sync-status" style="font-size:11px;color:#8b91a0;margin-top:8px;min-height:16px"></div>
+        <div id="fid-reconcile-body" style="display:none;margin-top:10px;padding:10px 12px;background:#0a0c0f;border:1px solid rgba(255,255,255,.07);border-radius:6px"></div>
+      </div>
+    </div>
+
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
       <button class="btn btn-ghost" style="width:auto;font-size:11px;padding:5px 11px" onclick="document.getElementById('fidelity-open-form').style.display=document.getElementById('fidelity-open-form').style.display==='none'?'block':'none'">⬇ Paste from Fidelity</button>
       <button class="btn btn-ghost" style="width:auto;font-size:11px;padding:5px 11px" onclick="document.getElementById('bulk-form').style.display=document.getElementById('bulk-form').style.display==='none'?'block':'none'">⬇ Manual Bulk Import</button>
@@ -7734,7 +7769,503 @@ function debugLunrPositions() {
 }
 if(typeof window !== 'undefined') window.debugLunrPositions = debugLunrPositions
 
-setTimeout(() => { renderTrades(); renderPortfolioRisk(); }, 800)
+// ═════════════════════════════════════════════════════════════════════════
+//  FIDELITY CSV — CANONICAL OPEN-POSITIONS SNAPSHOT (SOURCE OF TRUTH)
+// ─────────────────────────────────────────────────────────────────────────
+//  Philosophy: Fidelity is the book of record. Every time the user uploads
+//  a Portfolio_Positions CSV, we REPLACE window.FID_OPEN.positions wholesale
+//  with what Fidelity reports. TRADES (the legacy journal) is preserved for
+//  notes, ATR-at-entry, and rolls history, but it is NO LONGER the open-
+//  positions source of truth when a snapshot is present.
+//
+//  Closed-lots CSV uploads APPEND-DEDUPE into FID_CLOSED.lots (idempotent —
+//  re-uploading the same CSV does not double-count).
+//
+//  localStorage keys (both are safe — no collision with gt_trades/etc):
+//    gt_fid_open    → { importedAt, source, count, positions:[...] }
+//    gt_fid_closed  → { lastImportAt, count, lots:[...] }
+//
+//  Render path:
+//    • if FID_OPEN.positions.length > 0  → open-trades cards render from it
+//    • else                              → fall back to legacy TRADES filter
+//  This means the app works exactly as before until the first CSV import;
+//  after that, the snapshot takes over.
+// ═════════════════════════════════════════════════════════════════════════
+
+window.FID_OPEN = (function(){
+  try { return JSON.parse(localStorage.getItem('gt_fid_open')||'null') || null } catch(e) { return null }
+})() || { importedAt: 0, source: '', count: 0, positions: [] }
+
+window.FID_CLOSED = (function(){
+  try { return JSON.parse(localStorage.getItem('gt_fid_closed')||'null') || null } catch(e) { return null }
+})() || { lastImportAt: 0, count: 0, lots: [] }
+
+function saveFidOpen()   { try { localStorage.setItem('gt_fid_open',   JSON.stringify(window.FID_OPEN))   } catch(e) {} }
+function saveFidClosed() { try { localStorage.setItem('gt_fid_closed', JSON.stringify(window.FID_CLOSED)) } catch(e) {} }
+
+// Parse OCC symbols of multiple flavors:
+//   short   : LUNR260515C24
+//   padded  : LUNR260515C00024000
+//   CUSIP'd : AMD260515C220(7971239NH)
+// Returns null if not parseable.
+function fidParseOCC(raw) {
+  if(!raw) return null
+  const cleaned = String(raw).trim().replace(/^[-\s]+/, '')
+  // strip trailing (CUSIP) if present
+  const stripped = cleaned.replace(/\([A-Z0-9]+\)\s*$/, '')
+  const m = stripped.match(/^([A-Z]+)(\d{2})(\d{2})(\d{2})([CP])(\d+(?:\.\d+)?)$/)
+  if(!m) return null
+  const [, sym, yy, mm, dd, cp, sk] = m
+  const strike = (sk.length >= 7 && sk.indexOf('.') < 0) ? parseInt(sk,10)/1000 : parseFloat(sk)
+  const type   = cp === 'P' ? 'Put' : 'Call'
+  const expISO = '20'+yy+'-'+mm+'-'+dd
+  const strikeRound = Math.round(strike*100)/100
+  const occ = sym + yy + mm + dd + cp + String(Math.round(strike*1000)).padStart(8,'0')
+  return {
+    occ, underlying: sym, type, strike: strikeRound, expiryISO: expISO,
+    position_id: sym+'|'+type+'|'+strikeRound+'|'+expISO,
+    desc: (function(){
+      const MO = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+      return MO[parseInt(mm,10)-1]+'-'+dd+'-20'+yy
+    })()
+  }
+}
+
+// Minimal RFC-4180-ish CSV parser (handles quoted commas + $ signs + commas
+// inside numbers). Returns array of header-keyed objects.
+function fidParseCSV(text) {
+  if(!text) return []
+  // Strip BOM
+  const t = text.replace(/^\uFEFF/, '')
+  const lines = []
+  let cur = '', inQuote = false
+  const rows = []
+  let row = []
+  for(let i = 0; i < t.length; i++) {
+    const c = t[i]
+    if(inQuote) {
+      if(c === '"' && t[i+1] === '"') { cur += '"'; i++ }
+      else if(c === '"') { inQuote = false }
+      else cur += c
+    } else {
+      if(c === '"') inQuote = true
+      else if(c === ',') { row.push(cur); cur = '' }
+      else if(c === '\r') { /* skip */ }
+      else if(c === '\n') { row.push(cur); rows.push(row); row = []; cur = '' }
+      else cur += c
+    }
+  }
+  if(cur.length || row.length) { row.push(cur); rows.push(row) }
+  if(!rows.length) return []
+  const headers = rows[0].map(h => String(h||'').trim())
+  return rows.slice(1).filter(r => r.length && r.some(c => String(c).trim() !== ''))
+    .map(r => {
+      const o = {}
+      headers.forEach((h,i) => { o[h] = String(r[i]||'').trim() })
+      return o
+    })
+}
+
+function fidNum(s) {
+  if(s === null || s === undefined || s === '') return 0
+  const n = parseFloat(String(s).replace(/[$,+\s]/g,'').replace(/^\((.*)\)$/,'-$1'))
+  return isFinite(n) ? n : 0
+}
+
+// ── Open Positions CSV parser (Fidelity "Portfolio Positions" CSV) ───────
+// Expected columns (case-sensitive): Symbol, Description, Quantity,
+// Last Price, Current Value, Today's Gain/Loss Dollar, Today's Gain/Loss
+// Percent, Total Gain/Loss Dollar, Total Gain/Loss Percent, Cost Basis
+// Total, Average Cost Basis
+function parseFidelityOpenPositionsCSV(text) {
+  const rows = fidParseCSV(text)
+  const out = []
+  const skipped = []
+  for(const r of rows) {
+    const rawSym = (r['Symbol']||'').trim()
+    if(!rawSym) continue
+    // Skip cash / sweep / pending rows
+    if(/^(Pending Activity|SPAXX\*\*|CORE\*\*|FCASH\*\*)$/i.test(rawSym)) continue
+    const parsed = fidParseOCC(rawSym)
+    const qty = Math.abs(fidNum(r['Quantity']))
+    if(qty <= 0) continue
+    if(parsed) {
+      out.push({
+        ...parsed,
+        qty: Math.round(qty),
+        avgCost:        fidNum(r['Average Cost Basis']),
+        costBasisTotal: fidNum(r['Cost Basis Total']),
+        currentPrice:   fidNum(r['Last Price']),
+        currentValue:   fidNum(r['Current Value']),
+        todayGL:        fidNum(r["Today's Gain/Loss Dollar"]),
+        todayGLPct:     fidNum(r["Today's Gain/Loss Percent"]),
+        totalGL:        fidNum(r['Total Gain/Loss Dollar']),
+        totalGLPct:     fidNum(r['Total Gain/Loss Percent']),
+        rawSymbol:      rawSym,
+        // enrichment slots (filled after import)
+        atr: null, atrAt: null,
+        liveOptionPx: null, livePriceSource: null, livePriceAt: null
+      })
+    } else {
+      // Plain stock / ETF row — treat as isStock
+      const sym = rawSym.toUpperCase().replace(/[^A-Z]/g,'')
+      if(!sym) { skipped.push({row:r, reason:'no-symbol'}); continue }
+      out.push({
+        occ: '', underlying: sym, type: 'Stock', strike: 0,
+        expiryISO: '', desc: '', position_id: sym+'|Stock|0|',
+        isStock: true,
+        qty: Math.round(qty),
+        avgCost:        fidNum(r['Average Cost Basis']),
+        costBasisTotal: fidNum(r['Cost Basis Total']),
+        currentPrice:   fidNum(r['Last Price']),
+        currentValue:   fidNum(r['Current Value']),
+        todayGL:        fidNum(r["Today's Gain/Loss Dollar"]),
+        todayGLPct:     fidNum(r["Today's Gain/Loss Percent"]),
+        totalGL:        fidNum(r['Total Gain/Loss Dollar']),
+        totalGLPct:     fidNum(r['Total Gain/Loss Percent']),
+        rawSymbol:      rawSym,
+        atr: null, atrAt: null,
+        liveOptionPx: null, livePriceSource: null, livePriceAt: null
+      })
+    }
+  }
+  return { positions: out, skipped }
+}
+
+// ── Closed Lots CSV parser (Fidelity "Portfolio Closed Lots" CSV) ────────
+// Expected columns: Symbol(CUSIP), Security description, Date acquired,
+// Date sold, Quantity, Cost basis, Proceeds, Short-term gain/loss,
+// Long-term gain/loss
+function parseFidelityClosedLotsCSV(text) {
+  const rows = fidParseCSV(text)
+  const out = []
+  // Track within-file duplicate key occurrences — Fidelity can report
+  // multiple identical fills (same OCC/dates/qty/proceeds). Use an index
+  // suffix to keep them distinct so re-imports dedupe but same-file
+  // duplicates are not dropped.
+  const seqCounter = {}
+  for(const r of rows) {
+    const sym = (r['Symbol(CUSIP)'] || r['Symbol'] || '').trim()
+    if(!sym) continue
+    const parsed = fidParseOCC(sym)
+    const acq  = (r['Date acquired']||'').trim()
+    const sold = (r['Date sold']||'').trim()
+    const qty  = Math.round(fidNum(r['Quantity']))
+    if(qty <= 0) continue
+    const costBasis = fidNum(r['Cost basis'])
+    const proceeds  = fidNum(r['Proceeds'])
+    const shortGL   = fidNum(r['Short-term gain/loss'])
+    const longGL    = fidNum(r['Long-term gain/loss'])
+    const base = parsed ? {
+      occ: parsed.occ, underlying: parsed.underlying, type: parsed.type,
+      strike: parsed.strike, expiryISO: parsed.expiryISO,
+      position_id: parsed.position_id
+    } : {
+      occ: '', underlying: (sym.toUpperCase().replace(/[^A-Z]/g,'')||'?'),
+      type: 'Stock', strike: 0, expiryISO: '',
+      position_id: (sym.toUpperCase().replace(/[^A-Z]/g,'')||'?')+'|Stock|0|'
+    }
+    // Deterministic dedupe key: OCC + dates + qty + proceeds + seq.
+    // seq lets us keep BOTH rows of an identical within-file pair while
+    // staying idempotent on re-upload (same row-position → same seq → same
+    // lot_id → dedupes).
+    const natural = base.occ+'|'+acq+'|'+sold+'|'+qty+'|'+proceeds.toFixed(2)
+    seqCounter[natural] = (seqCounter[natural] || 0) + 1
+    const lot_id = natural + '|#' + (seqCounter[natural] - 1)
+    out.push({
+      lot_id, ...base,
+      acquired: acq, sold, qty,
+      costBasis, proceeds, shortGL, longGL,
+      realizedPnl: +(proceeds - costBasis).toFixed(2),
+      rawSymbol: sym
+    })
+  }
+  return out
+}
+
+// ── Import handlers (file pickers) ───────────────────────────────────────
+async function importFidelityOpenPositionsFromFile(file) {
+  const statusEl = document.getElementById('fid-sync-status')
+  const setStatus = (msg, color) => { if(statusEl) { statusEl.textContent = msg; statusEl.style.color = color || '#8b91a0' } }
+  if(!file) return
+  setStatus('Reading '+file.name+'...', '#f0c040')
+  try {
+    const text = await file.text()
+    const { positions, skipped } = parseFidelityOpenPositionsCSV(text)
+    if(!positions.length) {
+      setStatus('No positions parsed from CSV. Check that columns include Symbol/Quantity/Cost Basis Total.', '#ff4560')
+      return
+    }
+    // REPLACE — do not append. Fidelity is the source of truth.
+    window.FID_OPEN = {
+      importedAt: Date.now(),
+      source: file.name,
+      count: positions.length,
+      positions
+    }
+    saveFidOpen()
+    setStatus('Imported '+positions.length+' open position(s) from '+file.name+'. Enriching ATR...', '#00d68f')
+    updateFidSyncUI()
+    // Re-render immediately so the user sees the snapshot-driven open list
+    try { renderTrades() } catch(e) { console.warn('renderTrades after fid import:', e) }
+    // Fire ATR enrichment in the background
+    try { await enrichFidOpenWithATR(); setStatus('✓ '+positions.length+' positions imported · ATR enriched', '#00d68f') }
+    catch(e) { setStatus('✓ '+positions.length+' positions imported · ATR enrichment failed: '+e.message, '#ff8c42') }
+    // Persist + re-render with ATR
+    saveFidOpen()
+    updateFidSyncUI()
+    try { renderTrades() } catch(e) {}
+    if(typeof fbAutoSave === 'function') fbAutoSave(2000)
+  } catch(e) {
+    setStatus('Import failed: '+e.message, '#ff4560')
+    console.error('[FID-OPEN]', e)
+  }
+}
+
+async function importFidelityClosedLotsFromFile(file) {
+  const statusEl = document.getElementById('fid-sync-status')
+  const setStatus = (msg, color) => { if(statusEl) { statusEl.textContent = msg; statusEl.style.color = color || '#8b91a0' } }
+  if(!file) return
+  setStatus('Reading '+file.name+'...', '#f0c040')
+  try {
+    const text = await file.text()
+    const lots = parseFidelityClosedLotsCSV(text)
+    if(!lots.length) {
+      setStatus('No closed lots parsed from CSV.', '#ff4560')
+      return
+    }
+    // MERGE-DEDUPE by lot_id (idempotent re-import)
+    const have = new Set((window.FID_CLOSED.lots||[]).map(l => l.lot_id))
+    let added = 0
+    for(const lot of lots) {
+      if(!have.has(lot.lot_id)) { window.FID_CLOSED.lots.push(lot); have.add(lot.lot_id); added++ }
+    }
+    window.FID_CLOSED.lastImportAt = Date.now()
+    window.FID_CLOSED.count = window.FID_CLOSED.lots.length
+    saveFidClosed()
+    setStatus('✓ Closed lots imported: +'+added+' new (total '+window.FID_CLOSED.count+')', '#00d68f')
+    updateFidSyncUI()
+    if(typeof fbAutoSave === 'function') fbAutoSave(2000)
+  } catch(e) {
+    setStatus('Import failed: '+e.message, '#ff4560')
+    console.error('[FID-CLOSED]', e)
+  }
+}
+
+// ── ATR enrichment: fetch 14-day ATR per unique underlying, write back ───
+async function enrichFidOpenWithATR() {
+  if(!window.FID_OPEN || !window.FID_OPEN.positions.length) return
+  const tickers = Array.from(new Set(window.FID_OPEN.positions
+    .filter(p => !p.isStock && p.underlying)
+    .map(p => p.underlying)))
+  if(!tickers.length) return
+  if(typeof batchFetchATRs !== 'function') {
+    console.warn('[FID-ATR] batchFetchATRs not available')
+    return
+  }
+  const items = tickers.map(t => ({ ticker: t, dateISO: null }))
+  const atrMap = await batchFetchATRs(items, function(i, total, tk){
+    const el = document.getElementById('fid-sync-status')
+    if(el) el.textContent = 'ATR '+i+'/'+total+' · '+tk
+  })
+  const now = Date.now()
+  for(const p of window.FID_OPEN.positions) {
+    if(p.isStock) continue
+    const atr = atrMap[p.underlying]
+    if(typeof atr === 'number' && isFinite(atr)) {
+      p.atr = +atr.toFixed(2)
+      p.atrAt = now
+    }
+  }
+}
+
+// ── Live-price refresh for FID_OPEN positions ─────────────────────────────
+// Reuses existing Polygon snapshot pattern (same paths as refreshAllPnL).
+async function refreshFidOpenLivePrices() {
+  if(!window.FID_OPEN || !window.FID_OPEN.positions.length) return
+  const statusEl = document.getElementById('fid-sync-status')
+  const setStatus = (msg, col) => { if(statusEl) { statusEl.textContent = msg; statusEl.style.color = col||'#8b91a0' } }
+  const now = Date.now()
+  let ok = 0, fail = 0
+  for(const p of window.FID_OPEN.positions) {
+    if(p.isStock || !p.occ || !p.underlying) continue
+    try {
+      const d = await apiGet('/v3/snapshot/options/'+p.underlying+'/O:'+p.occ, false, true)
+      const r = (d && d.results && typeof d.results === 'object' && !Array.isArray(d.results)) ? d.results : (d && d.results && d.results[0]) || null
+      if(r && typeof pickLiveOptionPrice === 'function') {
+        const pick = pickLiveOptionPrice(r)
+        if(pick && pick.px) {
+          p.liveOptionPx    = pick.px
+          p.livePriceSource = pick.source
+          p.livePriceAt     = now
+          ok++
+        } else { fail++ }
+      } else { fail++ }
+    } catch(e) { fail++ }
+    setStatus('Live refresh: '+ok+' ok · '+fail+' miss', '#8b91a0')
+  }
+  saveFidOpen()
+  try { renderTrades() } catch(e) {}
+  setStatus('✓ Live refresh complete: '+ok+'/'+(ok+fail), '#00d68f')
+}
+
+// ── Reconcile Fidelity snapshot vs legacy TRADES ─────────────────────────
+function reconcileFidVsLegacy() {
+  const fid = (window.FID_OPEN && window.FID_OPEN.positions) || []
+  const fidByPid = {}
+  fid.forEach(p => { fidByPid[p.position_id] = p })
+  const legacyByPid = {}
+  ;(TRADES||[]).forEach(t => {
+    if(t.status !== 'open') return
+    const pid = getPositionId(t)
+    if(!legacyByPid[pid]) legacyByPid[pid] = []
+    legacyByPid[pid].push(t)
+  })
+  const missingInFid    = []  // legacy-only (ghosts — legacy says open but Fid doesn't)
+  const missingInLegacy = []  // fid-only (Fid has it but legacy missing / closed)
+  const qtyMismatches   = []
+  for(const pid of Object.keys(legacyByPid)) {
+    if(!fidByPid[pid]) { missingInFid.push({ position_id: pid, legacyTrades: legacyByPid[pid].map(t=>({id:t.id, cts:t.cts, ticker:t.ticker})) }); continue }
+    const fidQty = fidByPid[pid].qty
+    const legQty = legacyByPid[pid].reduce((s,t) => s + (+t.cts||0), 0)
+    if(fidQty !== legQty) qtyMismatches.push({ position_id: pid, fidQty, legacyQty: legQty,
+      legacyTradeIds: legacyByPid[pid].map(t => t.id) })
+  }
+  for(const pid of Object.keys(fidByPid)) {
+    if(!legacyByPid[pid]) missingInLegacy.push({ position_id: pid, fidPos: { qty: fidByPid[pid].qty, avgCost: fidByPid[pid].avgCost } })
+  }
+  return { missingInFid, missingInLegacy, qtyMismatches,
+           fidCount: fid.length, legacyOpenCount: Object.keys(legacyByPid).length }
+}
+
+function showReconcileView() {
+  const r = reconcileFidVsLegacy()
+  const box = document.getElementById('fid-reconcile-body')
+  if(!box) return
+  const section = (title, color, items, render) => {
+    if(!items.length) return '<div style="color:#555c6e;font-size:11px;padding:4px 0">'+title+': none</div>'
+    return '<div style="margin-top:10px"><div style="color:'+color+';font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">'+title+' ('+items.length+')</div>'
+      + items.map(render).join('') + '</div>'
+  }
+  box.innerHTML =
+    '<div style="font-size:12px;color:#8b91a0;margin-bottom:8px">Fidelity snapshot: <b style="color:#e8eaf0">'+r.fidCount+'</b> positions · legacy TRADES open: <b style="color:#e8eaf0">'+r.legacyOpenCount+'</b></div>'
+    + section('Legacy-only (TRADES says open, Fidelity does not) — ghosts', '#ff4560', r.missingInFid,
+        it => '<div style="font-size:11px;font-family:\'SF Mono\',monospace;color:#c2c7d2;padding:2px 0">'+it.position_id+' — legacy ids: '+it.legacyTrades.map(x=>x.id).join(', ')+'</div>')
+    + section('Fidelity-only (Fidelity says open, legacy missing)',       '#00d68f', r.missingInLegacy,
+        it => '<div style="font-size:11px;font-family:\'SF Mono\',monospace;color:#c2c7d2;padding:2px 0">'+it.position_id+' — qty '+it.fidPos.qty+' @ $'+(+it.fidPos.avgCost||0).toFixed(2)+'</div>')
+    + section('Qty mismatches',                                           '#f0c040', r.qtyMismatches,
+        it => '<div style="font-size:11px;font-family:\'SF Mono\',monospace;color:#c2c7d2;padding:2px 0">'+it.position_id+' — Fidelity '+it.fidQty+' vs legacy '+it.legacyQty+'</div>')
+    + '<div style="font-size:11px;color:#555c6e;margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,.06)">Fidelity snapshot is the authority for open positions. Legacy TRADES are preserved for notes/history and do not drive the open-trades view.</div>'
+  box.style.display = 'block'
+}
+function hideReconcileView() {
+  const box = document.getElementById('fid-reconcile-body')
+  if(box) box.style.display = 'none'
+}
+
+// ── UI refresh (meta pills + reconcile counts) ────────────────────────────
+function updateFidSyncUI() {
+  const c = document.getElementById('fid-sync-count')
+  if(c) c.textContent = (window.FID_OPEN && window.FID_OPEN.count) ? (window.FID_OPEN.count+' open positions') : 'no snapshot'
+  const ts = document.getElementById('fid-sync-ts')
+  if(ts) {
+    const at = window.FID_OPEN && window.FID_OPEN.importedAt
+    ts.textContent = at ? ('last sync: ' + new Date(at).toLocaleString()) : 'never synced'
+  }
+  const src = document.getElementById('fid-sync-src')
+  if(src) src.textContent = (window.FID_OPEN && window.FID_OPEN.source) || ''
+  const cc = document.getElementById('fid-closed-count')
+  if(cc) cc.textContent = (window.FID_CLOSED && window.FID_CLOSED.count) ? (window.FID_CLOSED.count+' closed lots') : 'no closed lots'
+}
+
+// ── Bridge: synthesize trade-shaped objects from FID_OPEN for renderTrades.
+// When a snapshot exists, open-trades cards render from this list. Each item
+// is matched against a legacy TRADE by position_id so notes / rolls / entry
+// / ATR-at-entry carry over when they exist.
+function buildTradeShapesFromFidOpen() {
+  const positions = (window.FID_OPEN && window.FID_OPEN.positions) || []
+  if(!positions.length) return null
+  const legacyByPid = {}
+  ;(TRADES||[]).forEach(t => {
+    const pid = getPositionId(t)
+    if(!legacyByPid[pid]) legacyByPid[pid] = []
+    legacyByPid[pid].push(t)
+  })
+  return positions.map(p => {
+    const legacy = (legacyByPid[p.position_id]||[]).sort((a,b) => (b.id||0) - (a.id||0))[0]
+    const legacyAtr   = legacy && +legacy.atr   || 0
+    const legacyEntry = legacy && +legacy.entry || 0
+    const legacyNotes = (legacy && legacy.notes) || ''
+    const legacyRolls = (legacy && Array.isArray(legacy.rolls)) ? legacy.rolls : []
+    const legacyId    = legacy ? legacy.id : ('fid_'+p.position_id)
+    const tickerLabel = p.isStock
+      ? p.underlying
+      : p.underlying + (p.strike ? ' '+p.strike+(p.type==='Put'?'P':'C') : '')
+    // Choose a "current" per-share price for display: prefer live refresh,
+    // else Fidelity's last price at import time.
+    const curPx = (+p.liveOptionPx > 0) ? +p.liveOptionPx : (+p.currentPrice || 0)
+    const cts   = +p.qty || 0
+    const cost  = +p.avgCost || 0
+    const costBasisTotal = +p.costBasisTotal || (cost * 100 * cts)
+    const currentValue   = curPx > 0 ? (curPx * 100 * cts) : (+p.currentValue || 0)
+    return {
+      id:         legacyId,
+      ticker:     tickerLabel,
+      underlying: p.underlying,
+      type:       p.type,
+      strike:     p.strike,
+      expiryISO:  p.expiryISO,
+      desc:       p.desc || legacy && legacy.desc || '',
+      cts,
+      cost,
+      costTotal:  costBasisTotal,
+      entry:      legacyEntry,  // legacy underlying-at-entry if we have it
+      atr:        p.atr || legacyAtr,
+      isStock:    !!p.isStock,
+      occ:        p.occ,
+      status:     'open',
+      notes:      legacyNotes,
+      rolls:      legacyRolls,
+      source:     'fid_snapshot',
+      fid_position_id: p.position_id,
+      // live + derived fields
+      displayOptionPx: curPx > 0 ? curPx : undefined,
+      liveMidPx:       curPx > 0 ? curPx : undefined,
+      livePriceAt:     p.livePriceAt || (window.FID_OPEN.importedAt||0),
+      lastRefreshAttemptAt: p.livePriceAt || (window.FID_OPEN.importedAt||0),
+      livePriceSource: p.livePriceSource || (p.currentPrice > 0 ? 'fidelity-csv' : null),
+      curVal:     currentValue,
+      totalGL:    (+p.totalGL) || (curPx > 0 ? currentValue - costBasisTotal : 0),
+      totalPct:   (+p.totalGLPct) || (costBasisTotal > 0 ? ((currentValue - costBasisTotal)/costBasisTotal*100) : 0),
+      todayGL:    +p.todayGL || 0,
+      todayPct:   +p.todayGLPct || 0,
+      // stamp import date as trade date for the card's "entered" label
+      date:       legacy && legacy.date || (window.FID_OPEN.importedAt ? new Date(window.FID_OPEN.importedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}).replace(',','') : ''),
+      importedAt: window.FID_OPEN.importedAt,
+      pnl:        (+p.totalGL) || 0,
+      stockPrice: legacy && +legacy.stockPrice || 0
+    }
+  })
+}
+
+function getOpenTradesForRender() {
+  const synth = buildTradeShapesFromFidOpen()
+  if(synth && synth.length) return synth
+  return (TRADES||[]).filter(t => t.status === 'open')
+}
+
+if(typeof window !== 'undefined') {
+  window.importFidelityOpenPositionsFromFile = importFidelityOpenPositionsFromFile
+  window.importFidelityClosedLotsFromFile    = importFidelityClosedLotsFromFile
+  window.reconcileFidVsLegacy                = reconcileFidVsLegacy
+  window.showReconcileView                   = showReconcileView
+  window.hideReconcileView                   = hideReconcileView
+  window.refreshFidOpenLivePrices            = refreshFidOpenLivePrices
+  window.enrichFidOpenWithATR                = enrichFidOpenWithATR
+  window.updateFidSyncUI                     = updateFidSyncUI
+}
+
+setTimeout(() => { renderTrades(); renderPortfolioRisk(); if(typeof updateFidSyncUI==='function') updateFidSyncUI() }, 800)
 
 function saveTrades() {
   try { localStorage.setItem('gt_trades', JSON.stringify(TRADES)) } catch(e) {}
@@ -8151,24 +8682,33 @@ function renderTrades() {
   const esc = s => String(s == null ? '' : s)
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
     .replace(/"/g,'&quot;').replace(/'/g,'&#39;')
-  let open    = TRADES.filter(t => t.status === 'open').sort(sortFn)
-  const closed = TRADES.filter(t => t.status === 'closed').sort(sortFn)
-  // ─── Reconcile against derived positions ───────────────────────────────
-  // Drop any trade whose derived position is CLOSED (net_qty === 0), and
-  // collapse colliding duplicates at the same position_id to a single
-  // canonical row (oldest wins by sort order).
-  if(typeof getOpenPositionIds === 'function') {
-    const _openPids = getOpenPositionIds()
-    const _seenPid  = {}
-    open = open.filter(function(t){
-      const pid = getPositionId(t)
-      if(!pid) return true
-      if(!_openPids.has(pid)) return false
-      if(_seenPid[pid]) return false
-      _seenPid[pid] = t.id
-      return true
-    })
+  // ─── OPEN-POSITIONS SOURCE: Fidelity snapshot first, legacy fallback ────
+  // If a Fidelity Open Positions CSV has been imported, its snapshot is the
+  // authoritative source for what's currently open — legacy TRADES become a
+  // journal (notes/rolls/ATR-at-entry carry over via position_id match).
+  // Only when no snapshot exists do we derive open trades the old way.
+  let open
+  if(typeof getOpenTradesForRender === 'function' &&
+     window.FID_OPEN && window.FID_OPEN.positions && window.FID_OPEN.positions.length) {
+    open = getOpenTradesForRender().slice().sort(sortFn)
+  } else {
+    open = TRADES.filter(t => t.status === 'open').sort(sortFn)
+    // Legacy-path reconciliation: drop any trade whose derived position is
+    // CLOSED, collapse same-position_id duplicates.
+    if(typeof getOpenPositionIds === 'function') {
+      const _openPids = getOpenPositionIds()
+      const _seenPid  = {}
+      open = open.filter(function(t){
+        const pid = getPositionId(t)
+        if(!pid) return true
+        if(!_openPids.has(pid)) return false
+        if(_seenPid[pid]) return false
+        _seenPid[pid] = t.id
+        return true
+      })
+    }
   }
+  const closed = TRADES.filter(t => t.status === 'closed').sort(sortFn)
   // Flag any open trades that are canonical duplicates of another open
   // trade (same underlying+expiry+strike+type). The card's Current value
   // tile shows "Duplicate / unresolved" so the user can spot them and
