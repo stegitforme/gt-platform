@@ -8076,6 +8076,25 @@ async function importFidelityOpenPositionsFromFile(file) {
       setStatus('No positions parsed from CSV. Check that columns include Symbol/Quantity/Cost Basis Total.', '#ff4560')
       return
     }
+    // Capture prior entry snapshots keyed by position_id BEFORE wholesale
+    // REPLACE. Same position_id still present on next upload → preserve its
+    // original entry snapshot (fixed entry underlying / entry ATR / stops).
+    // Brand-new position_id → fresh snapshot captured after enrichment.
+    const priorSnaps = {}
+    if(window.FID_OPEN && Array.isArray(window.FID_OPEN.positions)) {
+      for(const p of window.FID_OPEN.positions) {
+        if(p && p.entryCapturedAt) {
+          priorSnaps[p.position_id] = {
+            entryUnderlyingPrice: p.entryUnderlyingPrice,
+            entryATR:             p.entryATR,
+            stop05Entry:          p.stop05Entry,
+            stop10Entry:          p.stop10Entry,
+            entryOptionPrice:     p.entryOptionPrice,
+            entryCapturedAt:      p.entryCapturedAt
+          }
+        }
+      }
+    }
     // REPLACE — do not append. Fidelity is the source of truth.
     window.FID_OPEN = {
       importedAt: Date.now(),
@@ -8086,15 +8105,19 @@ async function importFidelityOpenPositionsFromFile(file) {
     saveFidOpen()
     setStatus('Imported '+positions.length+' open position(s) from '+file.name+'. Enriching ATR...', '#00d68f')
     updateFidSyncUI()
-    // Re-render immediately so the user sees the snapshot-driven open list
+    // Render immediately so the user sees the snapshot-driven open list
     try { renderTrades() } catch(e) { console.warn('renderTrades after fid import:', e) }
-    // Fire enrichment in the background — ATR first (14-day per underlying),
-    // then current stock price (required for stop-ladder rendering on
-    // freshly-rolled positions that have no legacy TRADE match).
+    // Enrichment pipeline: ATR first (14-day per underlying), then current
+    // stock price. Stock price is required as the entry-snapshot anchor for
+    // fresh positions (entryUnderlyingPrice = current spot at first sight).
     try { await enrichFidOpenWithATR(); setStatus('✓ '+positions.length+' positions imported · ATR enriched', '#00d68f') }
     catch(e) { setStatus('✓ '+positions.length+' positions imported · ATR enrichment failed: '+e.message, '#ff8c42') }
     try { await enrichFidOpenWithStockPrices() }
     catch(e) { console.warn('[FID-IMPORT] stock-price enrichment skipped:', e.message) }
+    // Capture entry snapshots — PRESERVE prior for existing position_ids,
+    // create fresh ones for new / re-entered position_ids.
+    try { captureEntrySnapshots(priorSnaps) }
+    catch(e) { console.warn('[FID-IMPORT] entry snapshot capture skipped:', e.message) }
     // Persist + re-render with all enrichments applied
     saveFidOpen()
     updateFidSyncUI()
@@ -8104,6 +8127,51 @@ async function importFidelityOpenPositionsFromFile(file) {
     setStatus('Import failed: '+e.message, '#ff4560')
     console.error('[FID-OPEN]', e)
   }
+}
+
+// ── Entry snapshot capture ───────────────────────────────────────────────
+// For each position in window.FID_OPEN.positions:
+//   • If its position_id existed in the prior snapshot AND had an
+//     entryCapturedAt timestamp, COPY the frozen fields forward unchanged.
+//     This is the guarantee that stops don't float on re-import.
+//   • Otherwise CAPTURE a fresh entry snapshot now (entryUnderlyingPrice,
+//     entryATR, stop05Entry, stop10Entry, entryOptionPrice, entryCapturedAt).
+// Call this AFTER ATR + stock-price enrichment so the fresh snapshot has
+// real numbers to anchor on. If the same position_id disappears from one
+// upload then reappears later, the re-appearance is treated as a fresh
+// entry (we cannot prove continuity through a gap).
+function captureEntrySnapshots(priorSnaps) {
+  if(!window.FID_OPEN || !Array.isArray(window.FID_OPEN.positions)) return
+  priorSnaps = priorSnaps || {}
+  const now = Date.now()
+  let preserved = 0, created = 0, incomplete = 0
+  for(const p of window.FID_OPEN.positions) {
+    const prior = priorSnaps[p.position_id]
+    if(prior && prior.entryCapturedAt) {
+      // Preserve — frozen fields copied forward verbatim.
+      p.entryUnderlyingPrice = prior.entryUnderlyingPrice
+      p.entryATR             = prior.entryATR
+      p.stop05Entry          = prior.stop05Entry
+      p.stop10Entry          = prior.stop10Entry
+      p.entryOptionPrice     = prior.entryOptionPrice
+      p.entryCapturedAt      = prior.entryCapturedAt
+      preserved++
+      continue
+    }
+    // Fresh capture for new / re-entered position_id.
+    const und = +p.stockPrice || 0
+    const atr = +p.atr || 0
+    p.entryUnderlyingPrice = und > 0 ? +und.toFixed(2) : 0
+    p.entryATR             = atr > 0 ? +atr.toFixed(4) : 0
+    p.stop05Entry          = (und > 0 && atr > 0) ? +(und - 0.5*atr).toFixed(2) : null
+    p.stop10Entry          = (und > 0 && atr > 0) ? +(und - 1.0*atr).toFixed(2) : null
+    p.entryOptionPrice     = +p.avgCost || 0
+    p.entryCapturedAt      = now
+    if(!(und > 0 && atr > 0)) incomplete++
+    created++
+  }
+  console.log('[FID-ENTRY-SNAPSHOT] preserved='+preserved+' created='+created+(incomplete>0?' incomplete='+incomplete+' (missing atr/underlying)':''))
+  return { preserved, created, incomplete }
 }
 
 async function importFidelityClosedLotsFromFile(file) {
@@ -8347,12 +8415,16 @@ function buildTradeShapesFromFidOpen() {
     const cost  = +p.avgCost || 0
     const costBasisTotal = +p.costBasisTotal || (cost * 100 * cts)
     const currentValue   = curPx > 0 ? (curPx * 100 * cts) : (+p.currentValue || 0)
-    // Entry-reference for ATR stop ladder: use the position's own current
-    // underlying price (freshly fetched via enrichFidOpenWithStockPrices).
-    // NEVER fall back to the old strike's entry — a legacy record only
-    // contributes its entry if its position_id matches the NEW contract
-    // (i.e. the user had previously entered this exact contract manually).
-    const stockPx = (+p.stockPrice > 0) ? +p.stockPrice : legacyEntry
+    // ── Entry-snapshot (FROZEN) vs current (LIVE) references ─────────────
+    // The card's stop ladder is anchored on the ORIGINAL entry — so
+    // t.entry and t.atr carry the FROZEN fields captured at first import.
+    // Legacy entry only applies when the user had a prior manual TRADE at
+    // the same position_id; the old-strike-of-a-roll cannot leak because
+    // the NEW contract's position_id differs.
+    const curStockPx = (+p.stockPrice > 0) ? +p.stockPrice : legacyEntry
+    const curAtr     = +p.atr || legacyAtr || 0
+    const entryUnd   = (+p.entryUnderlyingPrice > 0) ? +p.entryUnderlyingPrice : curStockPx
+    const entryAtr   = (+p.entryATR > 0) ? +p.entryATR : curAtr
     return {
       id:         legacyId,
       ticker:     tickerLabel,
@@ -8364,8 +8436,21 @@ function buildTradeShapesFromFidOpen() {
       cts,
       cost,
       costTotal:  costBasisTotal,
-      entry:      stockPx,   // current underlying price → fresh stop levels
-      atr:        p.atr || legacyAtr,
+      // FROZEN entry-snapshot anchors for stop ladder — never updated on
+      // live refresh / ATR refresh / re-import (as long as the position_id
+      // persists).
+      entry:      entryUnd,
+      atr:        entryAtr,
+      // Explicit frozen-snapshot fields for the card's Entry Stop Plan block
+      entryUnderlyingPrice: entryUnd,
+      entryATR:             entryAtr,
+      stop05Entry:          (p.stop05Entry != null) ? +p.stop05Entry : ((entryUnd > 0 && entryAtr > 0) ? +(entryUnd - 0.5*entryAtr).toFixed(2) : null),
+      stop10Entry:          (p.stop10Entry != null) ? +p.stop10Entry : ((entryUnd > 0 && entryAtr > 0) ? +(entryUnd - 1.0*entryAtr).toFixed(2) : null),
+      entryOptionPrice:     (+p.entryOptionPrice > 0) ? +p.entryOptionPrice : cost,
+      entryCapturedAt:      +p.entryCapturedAt || 0,
+      // LIVE secondary fields — informational only, do NOT drive stops
+      currentUnderlyingPx:  curStockPx,
+      currentAtr:           curAtr,
       isStock:    !!p.isStock,
       occ:        p.occ,
       status:     'open',
@@ -8388,7 +8473,7 @@ function buildTradeShapesFromFidOpen() {
       date:       legacy && legacy.date || (window.FID_OPEN.importedAt ? new Date(window.FID_OPEN.importedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}).replace(',','') : ''),
       importedAt: window.FID_OPEN.importedAt,
       pnl:        (+p.totalGL) || 0,
-      stockPrice: (+p.stockPrice) || (legacy && +legacy.stockPrice) || 0
+      stockPrice: curStockPx
     }
   })
 }
@@ -9309,14 +9394,51 @@ function renderTrades() {
           (isOpen ? '<button class="btn btn-ghost" style="font-size:10px;padding:2px 8px" onclick="closeTrade(' + t.id + ')">Close\x3C/button>' : '') +
           '<button class="btn btn-ghost" style="font-size:10px;padding:2px 8px;color:#ff4560" onclick="deleteTrade(' + t.id + ')">&#10005;\x3C/button>' +
         '\x3C/div>'
-    // Left column HTML (Decision Ladder only — no grid involved).
+    // ── Entry Stop Plan (frozen at first sight of this position_id) ────
+    // Shown for every open card when entryATR + entryUnderlyingPrice are
+    // captured. The stop values (stop05Entry / stop10Entry) NEVER change
+    // on live-price refresh, ATR refresh, or re-import; they're copied
+    // forward whenever the same position_id re-appears. Current ATR +
+    // current underlying are shown as secondary reference.
+    const hasEntrySnap = (+t.entryATR > 0 && +t.entryUnderlyingPrice > 0)
+    const curAtrN = +t.currentAtr || 0
+    const curUndN = +t.currentUnderlyingPx || 0
+    const s05 = (t.stop05Entry != null) ? +t.stop05Entry : null
+    const s10 = (t.stop10Entry != null) ? +t.stop10Entry : null
+    const fmt$ = v => (v == null || !isFinite(v)) ? '--' : '$'+(+v).toFixed(2)
+    const fmtP = (v, from) => (v == null || !isFinite(v) || !from) ? '' :
+      '<span style="font-size:9px;color:#555c6e;margin-left:4px">(' + ((v - from) >= 0 ? '+' : '') + ((v - from)/from*100).toFixed(1) + '%)</span>'
+    const entryCapturedLabel = t.entryCapturedAt
+      ? new Date(t.entryCapturedAt).toLocaleDateString('en-US', { month:'short', day:'numeric' })
+      : ''
+    const atrDriftBadge = (hasEntrySnap && curAtrN > 0 && Math.abs(curAtrN - t.entryATR) / t.entryATR > 0.15)
+      ? '<span title="Current ATR has drifted >15% from entry ATR — stops still anchored to original" style="font-size:8px;font-weight:700;color:#ff8c42;margin-left:4px">ATR drift</span>'
+      : ''
+    const entryStopPlanHtml = hasEntrySnap ? (
+      '<div style="background:rgba(240,192,64,.04);border:1px solid rgba(240,192,64,.18);border-radius:6px;padding:8px 10px;margin-bottom:8px">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#f0c040;margin-bottom:5px">' +
+          '<span>Entry Stop Plan</span>' +
+          (entryCapturedLabel ? '<span style="color:#555c6e;font-weight:400;text-transform:none;letter-spacing:0">captured ' + entryCapturedLabel + '</span>' : '') +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;font-size:11px;font-family:\'SF Mono\',monospace">' +
+          '<div><span style="color:#555c6e">Entry under:</span> <span style="color:#e8eaf0">'+fmt$(t.entryUnderlyingPrice)+'</span></div>' +
+          '<div><span style="color:#555c6e">Entry ATR:</span>   <span style="color:#e8eaf0">'+(+t.entryATR).toFixed(2)+'</span>'+atrDriftBadge+'</div>' +
+          '<div><span style="color:#ff8c42;font-weight:700">Orig .5 ATR stop:</span> <span style="color:#ff8c42;font-weight:700">'+fmt$(s05)+'</span>' + (curUndN && s05 != null ? '<div style="font-size:9px;color:#555c6e">'+((curUndN - s05) >= 0 ? '+' : '')+(curUndN - s05).toFixed(2)+' pts from spot</div>' : '') + '</div>' +
+          '<div><span style="color:#ff4560;font-weight:700">Orig 1 ATR stop:</span>  <span style="color:#ff4560;font-weight:700">'+fmt$(s10)+'</span>'  + (curUndN && s10 != null ? '<div style="font-size:9px;color:#555c6e">'+((curUndN - s10) >= 0 ? '+' : '')+(curUndN - s10).toFixed(2)+' pts from spot</div>' : '') + '</div>' +
+          (curUndN > 0 ? '<div style="grid-column:1 / -1;padding-top:4px;margin-top:2px;border-top:1px solid rgba(255,255,255,.05)"><span style="color:#555c6e">Current spot:</span> <span style="color:#4da6ff;font-weight:600">'+fmt$(curUndN)+'</span>' + (curAtrN > 0 ? '<span style="color:#555c6e;margin-left:10px">Current ATR:</span> <span style="color:#8b91a0">'+curAtrN.toFixed(2)+'</span>' : '') + '</div>' : '') +
+        '</div>' +
+      '</div>'
+    ) : ''
+
+    // Left column HTML (Entry Stop Plan + Decision Ladder).
     const ladderInner =
-          '<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e;margin-bottom:4px">Decision Ladder\x3C/div>' +
+          entryStopPlanHtml +
+          '<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e;margin-bottom:4px">Decision Ladder <span style="color:#333a4a;font-weight:400;margin-left:4px">(anchored on ORIGINAL entry)</span>\x3C/div>' +
           (!t.entry ? '<div style="font-size:11px;color:#555c6e">Stock price loading... levels will appear shortly\x3C/div>' : !t.atr ? '<div style="font-size:11px;color:#555c6e">Enter ATR to see levels\x3C/div>' :
           ladderRow('+1 ATR',  r2, pct(r2), false, '#00d68f') +
           ladderRow('+.5 ATR', r1, pct(r1), false, '#4da6ff') +
           ladderRow('ENTRY',   t.entry, 0,   true,  '#f0c040') +
-          ladderRow('-.5 ATR', sl, pct(sl), false, '#ff8c42'))
+          ladderRow('Orig -.5 ATR', sl, pct(sl), false, '#ff8c42'))
     // Right column: tiles are built via createElement in buildCard (no
     // innerHTML involvement for the pnl-grid path). We pre-compute the
     // tile spec here so buildCard can construct nodes directly.
