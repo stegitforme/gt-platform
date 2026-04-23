@@ -8542,7 +8542,7 @@ function updateFidSyncUI() {
 // marker. No price history, no bars — the four labels are the decision
 // surface. Every y is mapped from a single priceToY function so what
 // you see is always what the numbers say.
-function drawMiniChart(canvas, entry, stop, roll, current) {
+function drawMiniChart(canvas, entry, stop, roll, current, sym) {
   if(!canvas) return
   const ctx = canvas.getContext('2d')
   const dpr = window.devicePixelRatio || 1
@@ -8578,6 +8578,34 @@ function drawMiniChart(canvas, entry, stop, roll, current) {
   const plotW = W - pad.l - pad.r
   const plotH = H - pad.t - pad.b
   const y = v => pad.t + plotH * (1 - (v - mn) / (mx - mn))
+
+  // ── Geometry verification log ────────────────────────────────────────
+  // Prints the exact prices + mapped y-coordinates the FINAL drawing
+  // code will use. Fires for the symbol matching window._chartDebugSym
+  // (default 'BCS'). Set window._chartDebugSym = 'NVDA' in the console
+  // at any time to switch target without a reload; set to null to mute.
+  const DEBUG_SYM = (typeof window !== 'undefined')
+    ? (('_chartDebugSym' in window) ? window._chartDebugSym : 'BCS')
+    : 'BCS'
+  if(sym && DEBUG_SYM && sym.toUpperCase() === String(DEBUG_SYM).toUpperCase()
+     && typeof console !== 'undefined' && console.log) {
+    console.log('[MINI-CHART GEOM] '+sym, {
+      prices: {
+        entry:   entry,
+        stop:    stop,
+        roll:    roll,
+        current: current
+      },
+      y: {
+        entry:   entry   > 0 ? +y(entry).toFixed(2)   : null,
+        stop:    stop    > 0 ? +y(stop).toFixed(2)    : null,
+        roll:    roll    > 0 ? +y(roll).toFixed(2)    : null,
+        current: current > 0 ? +y(current).toFixed(2) : null
+      },
+      domain:  { mn: +mn.toFixed(4), mx: +mx.toFixed(4), span: +(mx - mn).toFixed(4) },
+      canvas:  { W, H, plotW, plotH, pad }
+    })
+  }
 
   // Subtle plot background
   ctx.fillStyle = 'rgba(255,255,255,.02)'
@@ -8870,7 +8898,7 @@ function renderMiniChartForTrade(t) {
       entry, stop, roll
     })
   }
-  drawMiniChart(canvas, entry, stop, roll, current)
+  drawMiniChart(canvas, entry, stop, roll, current, sym)
 }
 
 // ── Bridge: synthesize trade-shaped objects from FID_OPEN for renderTrades.
