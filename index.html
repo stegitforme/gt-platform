@@ -8505,6 +8505,169 @@ function updateFidSyncUI() {
   if(cc) cc.textContent = (window.FID_CLOSED && window.FID_CLOSED.count) ? (window.FID_CLOSED.count+' closed lots') : 'no closed lots'
 }
 
+// ── Mini price chart (per open-trade card) ─────────────────────────────
+// Lightweight canvas sparkline of the underlying's recent bars with three
+// horizontal overlays: ENTRY (yellow), -0.5 ATR stop (red), +0.5 ATR roll
+// (green). Current price is a filled marker on the right. Replaces the
+// old Entry Stop Plan + Decision Ladder blocks — chart is the primary
+// visual risk/decision tool now.
+//
+// Data: last ~2 trading days of 5-minute bars, cached for 60 s per symbol.
+// Auto-refresh: the existing FID_OPEN 60 s tick re-renders the cards and
+// redraws the chart against the freshest cache + latest stockPrice.
+window._miniChartCache = window._miniChartCache || {}
+
+async function fetchMiniChartData(sym) {
+  if(!sym) return []
+  const cached = window._miniChartCache[sym]
+  if(cached && (Date.now() - cached.fetchedAt) < 60 * 1000) return cached.bars
+  try {
+    const to   = new Date().toISOString().split('T')[0]
+    const from = new Date(Date.now() - 5 * 864e5).toISOString().split('T')[0]
+    // 5-min bars span intraday + recent sessions; 400-bar cap covers ~2 full days
+    const d = await apiGet('/v2/aggs/ticker/'+sym+'/range/5/minute/'+from+'/'+to+'?adjusted=true&sort=asc&limit=400', false, true)
+    let bars = (d && Array.isArray(d.results)) ? d.results.map(b => ({ t: b.t, c: b.c })) : []
+    if(!bars.length) {
+      // Fall back to daily bars if no intraday (pre-market, weekends, or rate-limited)
+      const dd = await apiGet('/v2/aggs/ticker/'+sym+'/range/1/day/'+from+'/'+to+'?adjusted=true&sort=asc&limit=30', false, true)
+      bars = (dd && Array.isArray(dd.results)) ? dd.results.map(b => ({ t: b.t, c: b.c })) : []
+    }
+    window._miniChartCache[sym] = { bars, fetchedAt: Date.now() }
+    return bars
+  } catch(e) {
+    return (cached && cached.bars) ? cached.bars : []
+  }
+}
+
+function drawMiniChart(canvas, bars, entry, stop, roll, current) {
+  if(!canvas) return
+  const ctx = canvas.getContext('2d')
+  const dpr = window.devicePixelRatio || 1
+  const W = Math.max(200, canvas.clientWidth || canvas.offsetWidth || 260)
+  const H = Math.max(80,  canvas.clientHeight || canvas.offsetHeight || 120)
+  canvas.width  = W * dpr
+  canvas.height = H * dpr
+  ctx.scale(dpr, dpr)
+  ctx.clearRect(0, 0, W, H)
+
+  const closes = (bars||[]).map(b => +b.c).filter(v => v > 0)
+  const refs = [entry, stop, roll, current].filter(v => typeof v === 'number' && isFinite(v) && v > 0)
+
+  if(!closes.length && !refs.length) {
+    ctx.fillStyle = '#555c6e'
+    ctx.font = '10px "SF Mono", monospace'
+    ctx.textAlign = 'center'
+    ctx.fillText('no data', W/2, H/2)
+    return
+  }
+
+  // Y-axis range: span bars + all reference lines with a small buffer
+  const all = closes.concat(refs)
+  let mn = Math.min.apply(null, all)
+  let mx = Math.max.apply(null, all)
+  if(!(mx > mn)) { mn = mn - 0.5; mx = mx + 0.5 }
+  const buf = (mx - mn) * 0.08
+  mn -= buf; mx += buf
+
+  const pad = { t: 10, r: 48, b: 6, l: 6 }  // right padding reserves room for level labels
+  const plotW = W - pad.l - pad.r
+  const plotH = H - pad.t - pad.b
+  const y = v => pad.t + plotH * (1 - (v - mn) / (mx - mn))
+  const x = i => pad.l + (i / Math.max(1, closes.length - 1)) * plotW
+
+  // Soft card-background fill so the chart area reads as its own surface
+  ctx.fillStyle = 'rgba(255,255,255,.015)'
+  ctx.fillRect(pad.l, pad.t, plotW, plotH)
+
+  // Horizontal reference lines (dashed)
+  const drawLevel = (price, color, label) => {
+    if(!(price > 0)) return
+    const py = y(price)
+    ctx.strokeStyle = color
+    ctx.lineWidth = 1
+    ctx.setLineDash([3, 3])
+    ctx.beginPath()
+    ctx.moveTo(pad.l, py)
+    ctx.lineTo(W - pad.r, py)
+    ctx.stroke()
+    ctx.setLineDash([])
+    // Label pill on the right
+    ctx.font = 'bold 9px "SF Mono", monospace'
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'middle'
+    const lbl = label + ' ' + price.toFixed(2)
+    const txtW = ctx.measureText(lbl).width
+    const boxX = W - pad.r + 4
+    const boxY = py - 7
+    const boxW = Math.min(pad.r - 6, txtW + 6)
+    const boxH = 14
+    ctx.fillStyle = color + '22'  // low-alpha suffix via hex (browser-tolerant 8-digit)
+    // fallback: use rgba tints per color
+    const rgba = {
+      '#00d68f': 'rgba(0,214,143,.14)',
+      '#ff4560': 'rgba(255,69,96,.14)',
+      '#f0c040': 'rgba(240,192,64,.14)'
+    }[color] || 'rgba(255,255,255,.08)'
+    ctx.fillStyle = rgba
+    ctx.fillRect(boxX, boxY, boxW, boxH)
+    ctx.fillStyle = color
+    ctx.fillText(lbl, boxX + 3, py)
+  }
+  drawLevel(roll,  '#00d68f', '+½')
+  drawLevel(entry, '#f0c040', 'E')
+  drawLevel(stop,  '#ff4560', '−½')
+
+  // Price line (clipped to plot area)
+  if(closes.length > 1) {
+    ctx.save()
+    ctx.beginPath()
+    ctx.rect(pad.l, pad.t, plotW, plotH)
+    ctx.clip()
+    ctx.strokeStyle = '#4da6ff'
+    ctx.lineWidth = 1.5
+    ctx.lineJoin = 'round'
+    ctx.beginPath()
+    closes.forEach((c, i) => {
+      const px = x(i), py = y(c)
+      if(i === 0) ctx.moveTo(px, py)
+      else        ctx.lineTo(px, py)
+    })
+    ctx.stroke()
+    ctx.restore()
+  }
+
+  // Current-price marker on the right edge
+  if(current > 0) {
+    const cy = y(current)
+    const cx = W - pad.r - 2
+    const dotCol = (stop  > 0 && current <= stop ) ? '#ff4560'
+                  : (roll  > 0 && current >= roll)  ? '#00d68f'
+                  : (entry > 0 && current >= entry) ? '#4da6ff'
+                  : '#f0c040'
+    // pulse halo
+    ctx.fillStyle = dotCol + '66'
+    ctx.beginPath(); ctx.arc(cx, cy, 6, 0, Math.PI*2); ctx.fill()
+    // solid dot
+    ctx.fillStyle = dotCol
+    ctx.beginPath(); ctx.arc(cx, cy, 3.5, 0, Math.PI*2); ctx.fill()
+  }
+}
+
+// Fetch + draw a single card's mini-chart. Safe to call repeatedly — the
+// fetch layer caches per symbol for 60 s.
+async function renderMiniChartForTrade(t) {
+  const canvas = document.getElementById('mini-chart-' + t.id)
+  if(!canvas) return
+  const sym = t.underlying || (t.ticker||'').split(' ')[0] || ''
+  const entry   = +t.entry || 0
+  const stop    = +t.stop05Entry || 0
+  const entryATR = +t.entryATR || +t.atr || 0
+  const roll    = (entry > 0 && entryATR > 0) ? +(entry + 0.5 * entryATR).toFixed(2) : 0
+  const current = +t.currentUnderlyingPx || +t.stockPrice || 0
+  const bars = await fetchMiniChartData(sym)
+  drawMiniChart(canvas, bars, entry, stop, roll, current)
+}
+
 // ── Bridge: synthesize trade-shaped objects from FID_OPEN for renderTrades.
 // When a snapshot exists, open-trades cards render from this list. Each item
 // is matched against a legacy TRADE by position_id so notes / rolls / entry
@@ -8779,6 +8942,9 @@ if(typeof window !== 'undefined') {
   window.enrichFidOpenWithATR                = enrichFidOpenWithATR
   window.enrichFidOpenWithStockPrices        = enrichFidOpenWithStockPrices
   window.updateFidSyncUI                     = updateFidSyncUI
+  window.fetchMiniChartData                  = fetchMiniChartData
+  window.drawMiniChart                       = drawMiniChart
+  window.renderMiniChartForTrade             = renderMiniChartForTrade
 }
 
 setTimeout(() => { renderTrades(); renderPortfolioRisk(); if(typeof updateFidSyncUI==='function') updateFidSyncUI() }, 800)
@@ -9528,51 +9694,39 @@ function renderTrades() {
           (isOpen ? '<button class="btn btn-ghost" style="font-size:10px;padding:2px 8px" onclick="closeTrade(' + t.id + ')">Close\x3C/button>' : '') +
           '<button class="btn btn-ghost" style="font-size:10px;padding:2px 8px;color:#ff4560" onclick="deleteTrade(' + t.id + ')">&#10005;\x3C/button>' +
         '\x3C/div>'
-    // ── Entry Stop Plan (frozen at first sight of this position_id) ────
-    // Shown for every open card when entryATR + entryUnderlyingPrice are
-    // captured. The stop values (stop05Entry / stop10Entry) NEVER change
-    // on live-price refresh, ATR refresh, or re-import; they're copied
-    // forward whenever the same position_id re-appears. Current ATR +
-    // current underlying are shown as secondary reference.
-    const hasEntrySnap = (+t.entryATR > 0 && +t.entryUnderlyingPrice > 0)
-    const curAtrN = +t.currentAtr || 0
-    const curUndN = +t.currentUnderlyingPx || 0
-    const s05 = (t.stop05Entry != null) ? +t.stop05Entry : null
-    const s10 = (t.stop10Entry != null) ? +t.stop10Entry : null
-    const fmt$ = v => (v == null || !isFinite(v)) ? '--' : '$'+(+v).toFixed(2)
-    const fmtP = (v, from) => (v == null || !isFinite(v) || !from) ? '' :
-      '<span style="font-size:9px;color:#555c6e;margin-left:4px">(' + ((v - from) >= 0 ? '+' : '') + ((v - from)/from*100).toFixed(1) + '%)</span>'
-    const entryCapturedLabel = t.entryCapturedAt
-      ? new Date(t.entryCapturedAt).toLocaleDateString('en-US', { month:'short', day:'numeric' })
-      : ''
-    const atrDriftBadge = (hasEntrySnap && curAtrN > 0 && Math.abs(curAtrN - t.entryATR) / t.entryATR > 0.15)
-      ? '<span title="Current ATR has drifted >15% from entry ATR — stops still anchored to original" style="font-size:8px;font-weight:700;color:#ff8c42;margin-left:4px">ATR drift</span>'
-      : ''
-    const entryStopPlanHtml = hasEntrySnap ? (
-      '<div style="background:rgba(240,192,64,.04);border:1px solid rgba(240,192,64,.18);border-radius:6px;padding:8px 10px;margin-bottom:8px">' +
-        '<div style="display:flex;justify-content:space-between;align-items:center;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#f0c040;margin-bottom:5px">' +
-          '<span>Entry Stop Plan</span>' +
-          (entryCapturedLabel ? '<span style="color:#555c6e;font-weight:400;text-transform:none;letter-spacing:0">captured ' + entryCapturedLabel + '</span>' : '') +
-        '</div>' +
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;font-size:11px;font-family:\'SF Mono\',monospace">' +
-          '<div><span style="color:#555c6e">Entry under:</span> <span style="color:#e8eaf0">'+fmt$(t.entryUnderlyingPrice)+'</span></div>' +
-          '<div><span style="color:#555c6e">Entry ATR:</span>   <span style="color:#e8eaf0">'+(+t.entryATR).toFixed(2)+'</span>'+atrDriftBadge+'</div>' +
-          '<div><span style="color:#ff8c42;font-weight:700">Orig .5 ATR stop:</span> <span style="color:#ff8c42;font-weight:700">'+fmt$(s05)+'</span>' + (curUndN && s05 != null ? '<div style="font-size:9px;color:#555c6e">'+((curUndN - s05) >= 0 ? '+' : '')+(curUndN - s05).toFixed(2)+' pts from spot</div>' : '') + '</div>' +
-          '<div><span style="color:#ff4560;font-weight:700">Orig 1 ATR stop:</span>  <span style="color:#ff4560;font-weight:700">'+fmt$(s10)+'</span>'  + (curUndN && s10 != null ? '<div style="font-size:9px;color:#555c6e">'+((curUndN - s10) >= 0 ? '+' : '')+(curUndN - s10).toFixed(2)+' pts from spot</div>' : '') + '</div>' +
-          (curUndN > 0 ? '<div style="grid-column:1 / -1;padding-top:4px;margin-top:2px;border-top:1px solid rgba(255,255,255,.05)"><span style="color:#555c6e">Current spot:</span> <span style="color:#4da6ff;font-weight:600">'+fmt$(curUndN)+'</span>' + (curAtrN > 0 ? '<span style="color:#555c6e;margin-left:10px">Current ATR:</span> <span style="color:#8b91a0">'+curAtrN.toFixed(2)+'</span>' : '') + '</div>' : '') +
-        '</div>' +
-      '</div>'
-    ) : ''
+    // ── Compact live mini-chart (primary visual decision tool) ──────────
+    // One canvas per card; overlaid with ENTRY / -½ATR / +½ATR lines.
+    // Compact metrics row sits directly below. No more Entry Stop Plan
+    // block, no more Decision Ladder ladder rows — the chart carries the
+    // risk/decision signal visually. Data model / frozen entry snapshot /
+    // live pricing pipeline are untouched; we only changed presentation.
+    const entryPx   = +t.entry || 0
+    const entryATRv = +t.entryATR || +t.atr || 0
+    const stopPx    = (+t.stop05Entry > 0) ? +t.stop05Entry
+                      : (entryPx > 0 && entryATRv > 0 ? +(entryPx - 0.5*entryATRv).toFixed(2) : 0)
+    const rollPx    = (entryPx > 0 && entryATRv > 0) ? +(entryPx + 0.5*entryATRv).toFixed(2) : 0
+    const curUnd    = +t.currentUnderlyingPx || +t.stockPrice || 0
+    const fmt$      = v => (!v || !isFinite(v)) ? '—' : '$' + (+v).toFixed(2)
+    const curCol    = (stopPx  > 0 && curUnd <= stopPx) ? '#ff4560'
+                    : (rollPx  > 0 && curUnd >= rollPx) ? '#00d68f'
+                    : (entryPx > 0 && curUnd >= entryPx) ? '#4da6ff'
+                    : '#f0c040'
 
-    // Left column HTML (Entry Stop Plan + Decision Ladder).
-    const ladderInner =
-          entryStopPlanHtml +
-          '<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e;margin-bottom:4px">Decision Ladder <span style="color:#333a4a;font-weight:400;margin-left:4px">(anchored on ORIGINAL entry)</span>\x3C/div>' +
-          (!t.entry ? '<div style="font-size:11px;color:#555c6e">Stock price loading... levels will appear shortly\x3C/div>' : !t.atr ? '<div style="font-size:11px;color:#555c6e">Enter ATR to see levels\x3C/div>' :
-          ladderRow('+1 ATR',  r2, pct(r2), false, '#00d68f') +
-          ladderRow('+.5 ATR', r1, pct(r1), false, '#4da6ff') +
-          ladderRow('ENTRY',   t.entry, 0,   true,  '#f0c040') +
-          ladderRow('Orig -.5 ATR', sl, pct(sl), false, '#ff8c42'))
+    const miniChartHtml = (entryPx > 0 && entryATRv > 0)
+      ? (
+        '<div style="background:#0a0c0f;border:1px solid rgba(255,255,255,.06);border-radius:8px;padding:8px 10px 10px">' +
+          '<canvas id="mini-chart-' + t.id + '" style="width:100%;height:120px;display:block"></canvas>' +
+          '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px;font-size:10px;font-family:\'SF Mono\',monospace">' +
+            '<div><div style="font-size:8px;color:#555c6e;letter-spacing:.08em;text-transform:uppercase">Entry</div><div style="color:#f0c040;font-weight:600">'+fmt$(entryPx)+'</div></div>' +
+            '<div><div style="font-size:8px;color:#555c6e;letter-spacing:.08em;text-transform:uppercase">Stop −½</div><div style="color:#ff4560;font-weight:600">'+fmt$(stopPx)+'</div></div>' +
+            '<div><div style="font-size:8px;color:#555c6e;letter-spacing:.08em;text-transform:uppercase">Roll +½</div><div style="color:#00d68f;font-weight:600">'+fmt$(rollPx)+'</div></div>' +
+            '<div><div style="font-size:8px;color:#555c6e;letter-spacing:.08em;text-transform:uppercase">Current</div><div style="color:'+curCol+';font-weight:700">'+fmt$(curUnd)+'</div></div>' +
+          '</div>' +
+        '</div>'
+      )
+      : '<div style="background:#0a0c0f;border:1px solid rgba(255,255,255,.06);border-radius:8px;padding:20px;text-align:center;color:#555c6e;font-size:11px">Entry snapshot pending — upload Fidelity CSV to capture stops.</div>'
+
+    const ladderInner = miniChartHtml
     // Right column: tiles are built via createElement in buildCard (no
     // innerHTML involvement for the pnl-grid path). We pre-compute the
     // tile spec here so buildCard can construct nodes directly.
@@ -9694,6 +9848,15 @@ function renderTrades() {
   if(closed.length) {
     appendHeader('Closed (' + closed.length + ')', '#555c6e', true)
     for(const t of closed) listEl.appendChild(buildCard(t))
+  }
+  // Kick off mini-chart rendering for every open card. Each call is
+  // independent; fetchMiniChartData caches per symbol for 60s so we hit
+  // the API once per unique underlying, not once per card. Drawing is
+  // non-blocking; charts appear as fetches resolve.
+  if(typeof renderMiniChartForTrade === 'function') {
+    for(const t of open) {
+      renderMiniChartForTrade(t).catch(e => console.warn('[MINI-CHART]', t.underlying, e.message))
+    }
   }
   // ── DOM placement / order audit ───────────────────────────────────────────
   // Stronger invariant than the old nest check: confirms each card's
