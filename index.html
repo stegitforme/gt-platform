@@ -1379,8 +1379,8 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 // the latest commit — your browser is serving CACHED older HTML.
 // Hard-reload: Cmd+Shift+R (Mac) / Ctrl+Shift+F5 (Win).
 window.__GT_BUILD = {
-  sha:   'fb25d924840e5ddbe83a254a2c3271cd1cbff97c',
-  short: 'fb25d92',
+  sha:   '555de90b1eb0f683de09f327ed615576f3742f17',
+  short: '555de90',
   builtAt: new Date().toISOString()
 }
 ;(function(){
@@ -5658,7 +5658,8 @@ var PL_SORT_SPEC = {
     const risk  = c.riskOverride || ctx.defaultRisk || 0
     const delta = c.delta || ctx.defaultDelta || 0
     const atr   = c.atr || 0
-    const rpc   = atr * delta * 100
+    // Golden Ticket sizing: rpc = 100 × delta × STOP_MULT × ATR
+    const rpc   = atr * delta * (window.GT ? window.GT.STOP_MULT : 1.25) * 100
     const cts   = rpc > 0 ? Math.floor(risk / rpc) : 0
     const cap   = cts * (c.optcost || 0) * 100
     return cap > 0 ? cap : null
@@ -5869,7 +5870,9 @@ function renderOpenTable() {
     group.forEach(function(t) {
       var delta = t.delta || defaultDelta
       var atr = t.atr || 0
-      var risk = atr * delta * 100 * (t.cts||1)
+      // Golden Ticket: risk = STOP_MULT × ATR × delta × 100 × cts
+      var stopMult = window.GT ? window.GT.STOP_MULT : 1.25
+      var risk = atr * delta * stopMult * 100 * (t.cts||1)
       groupRisk += risk
       totalRisk += risk
       if(sector!=='—') sectorTotals[sector] = (sectorTotals[sector]||0) + risk
@@ -5958,7 +5961,9 @@ function renderCandidateTable() {
     var atr = c.atr || 0
     var delta = c.delta || defaultDelta
     var riskAlloc = c.riskOverride || defaultRisk
-    var rpc = atr > 0 ? atr * delta * 100 : 0
+    // Golden Ticket: rpc = 100 × delta × STOP_MULT × ATR
+    var stopMult = window.GT ? window.GT.STOP_MULT : 1.25
+    var rpc = atr > 0 ? atr * delta * stopMult * 100 : 0
     var cts = rpc > 0 ? Math.floor(riskAlloc / rpc) : 0
     var tradeRisk = cts * rpc
     var capital = cts * (c.optcost||0) * 100
@@ -6177,7 +6182,9 @@ function convertCandidateToTrade(idx) {
   var delta = c.delta || defaultDelta
   var risk  = c.riskOverride || defaultRisk
   var atr   = c.atr || 0
-  var rpc   = atr * delta * 100
+  // Golden Ticket: rpc = 100 × delta × STOP_MULT × ATR
+  var stopMult = window.GT ? window.GT.STOP_MULT : 1.25
+  var rpc   = atr * delta * stopMult * 100
   var cts   = rpc > 0 ? Math.floor(risk / rpc) : 0
   var missing = []
   if(atr<=0)        missing.push('ATR')
@@ -6718,7 +6725,8 @@ function addQuickSizeTradeToManager() {
     const perTrade = (typeof getPlannerPerTradeRisk === 'function')
       ? getPlannerPerTradeRisk()
       : ((+localStorage.getItem('gt_risk_budget') || 21000) / 10)
-    const rpc = atr * delta * 100
+    // Golden Ticket: rpc = 100 × delta × STOP_MULT × ATR
+    const rpc = atr * delta * (window.GT ? window.GT.STOP_MULT : 1.25) * 100
     const cts = rpc > 0 ? Math.max(1, Math.floor(perTrade / rpc)) : 1
 
     // Expiry ISO via the unified parser (handles "May-26", "May-15-2026",
@@ -7315,7 +7323,8 @@ function calc() {
   const perTradeSource = plannerPerTrade > 0 ? 'planner' : 'budget÷N'
   szTicker.textContent = ticker
   if(!entry || !atr) return
-  const rpc   = atr * delta * 100
+  // Golden Ticket: rpc = 100 × delta × STOP_MULT × ATR
+  const rpc   = atr * delta * (window.GT ? window.GT.STOP_MULT : 1.25) * 100
   const cts_h = Math.max(1, Math.floor(perTrade / (rpc * 0.5)))
   const cts_1 = Math.max(1, Math.floor(perTrade / (rpc * 1.0)))
   const cts_2 = Math.max(1, Math.floor(perTrade / (rpc * 2.0)))
@@ -7784,6 +7793,40 @@ function saveClosedTrades() {
   try { localStorage.setItem('gt_closed_trades', JSON.stringify(CLOSED_TRADES)) } catch(e) {}
 }
 
+// ═══ GOLDEN TICKET RISK CONSTANTS ════════════════════════════════════════
+// Canonical parameters for the Golden Ticket strategy. Any code that sizes
+// a trade, displays risk, or plots a stop reads from these — so changing
+// the rule in one place changes the whole app.
+//
+//   STOP_MULT    — ATR multiple for initial hard stop (−1.25·ATR from entry)
+//   ROLL_1_MULT  — first roll marker (+0.5·ATR from entry)
+//   ROLL_2_MULT  — second roll marker (+1.0·ATR)
+//   ROLL_3_MULT  — third roll marker (+2.0·ATR)
+//   DELTA        — canonical target delta for option sizing (0.80)
+//
+// Sizing formula (per contract):
+//   risk_per_contract = 100 × DELTA × STOP_MULT × ATR
+//                     = 100 × 0.80 × 1.25 × ATR
+//                     = 100 × ATR
+//   contracts         = risk$ / risk_per_contract
+//
+// For STOCKS the formula is risk_per_share = STOP_MULT × ATR (delta = 1,
+// no ×100 contract multiplier).
+window.GT = window.GT || {}
+window.GT.STOP_MULT    = 1.25
+window.GT.ROLL_1_MULT  = 0.5
+window.GT.ROLL_2_MULT  = 1.0
+window.GT.ROLL_3_MULT  = 2.0
+window.GT.DELTA        = 0.80
+window.GT.BASE_RISK    = 625     // default per-trade risk $
+window.GT.MAX_RISK     = 2500    // cap per trade
+window.GT.DAY_STOP     = 25      // force-close on day 25 if unprofitable
+window.GT.DAY_WARN     = 20      // orange warning at day 20+
+window.GT.MIN_OI       = 300     // liquidity threshold
+window.GT.MAX_SPREAD_PCT = 10    // bid/ask spread %
+window.GT.MAX_EXTRINSIC_PCT = 20 // extrinsic value %
+window.GT.DTE_MIN = 20; window.GT.DTE_MAX = 40
+
 // ═══ POSITION IDENTITY + EVENT-DERIVED POSITIONS ═════════════════════════
 // Single source of truth for "what open positions does the user hold?".
 // Existing TRADES records are treated as IMMUTABLE EVENTS:
@@ -7937,6 +7980,70 @@ function getOpenPositionIds() {
 
 // TEMP DEBUG: log all LUNR positions with strike/expiry/net_qty. Run
 // `debugLunrPositions()` from the console to inspect.
+// ── Golden Ticket diagnostic: print position-level rule outputs ─────────
+// Usage:
+//   debugGoldenTicket()            → all open positions
+//   debugGoldenTicket('UBS')       → just UBS
+//   debugGoldenTicket('UBS', 1500) → UBS with override: 1500 cumulativeCredits
+// Useful for verifying stop / roll / trailing / Day 25 math without
+// touching the real FID_CREDITS state.
+function debugGoldenTicket(filterSym, overrideCredits, overrideRollCount) {
+  const book = (typeof getOpenBook === 'function') ? getOpenBook() : []
+  const rows = filterSym
+    ? book.filter(t => (t.underlying||'').toUpperCase() === String(filterSym).toUpperCase())
+    : book
+  if(!rows.length) {
+    console.log('[GT-DIAG] no matching open positions')
+    return []
+  }
+  console.log('[GT-DIAG] Golden Ticket math for '+rows.length+' position(s):')
+  const out = rows.map(t => {
+    const creds = overrideCredits != null ? +overrideCredits : (+t.cumulativeCredits || 0)
+    const rc    = overrideRollCount != null ? +overrideRollCount : (+t.rollCount || 0)
+    const entry = +t.entry, atr = +t.entryATR || +t.atr
+    const stopMult = window.GT.STOP_MULT, delta = window.GT.DELTA
+    const stop125 = entry - stopMult * atr
+    const roll1   = entry + window.GT.ROLL_1_MULT * atr
+    const roll2   = entry + window.GT.ROLL_2_MULT * atr
+    const roll3   = entry + window.GT.ROLL_3_MULT * atr
+    const trailActive = rc >= 1
+    const breakeven = trailActive && creds > 0 ? entry - creds / (100 * delta) : null
+    const newBase = rc === 3 ? roll3 : rc === 2 ? roll2 : rc === 1 ? roll1 : null
+    const trailStop = trailActive && newBase != null
+      ? Math.max(breakeven != null ? breakeven : -Infinity, newBase - 0.5 * atr)
+      : null
+    const activeStop = trailActive ? trailStop : stop125
+    const rpc = atr * delta * stopMult * 100
+    const suggestedCts = rpc > 0 ? Math.floor(window.GT.BASE_RISK / rpc) : 0
+    const phase = trailActive ? 'post-roll' : 'pre-roll'
+    const row = {
+      sym:         t.underlying + (t.strike ? (' '+t.strike+(t.type==='Put'?'P':'C')) : ''),
+      entry, atr,
+      cts:         t.cts,
+      rollCount:   rc,
+      phase,
+      stop125:     +stop125.toFixed(2),
+      roll1:       +roll1.toFixed(2),
+      roll2:       +roll2.toFixed(2),
+      roll3:       +roll3.toFixed(2),
+      newBase:     newBase != null ? +newBase.toFixed(2) : null,
+      breakeven:   breakeven != null ? +breakeven.toFixed(2) : null,
+      trailStop:   trailStop != null ? +trailStop.toFixed(2) : null,
+      activeStop:  activeStop != null ? +activeStop.toFixed(2) : null,
+      rpc:         +rpc.toFixed(2),
+      riskPerCt_check: 'risk/contract = 100·'+delta+'·'+stopMult+'·ATR = 100·ATR = '+Math.round(100*atr),
+      suggestedCts_at625: suggestedCts,
+      daysInTrade: t.daysInTrade,
+      cumulativeCredits: creds,
+      currentUnderPx: (typeof getCurrentUnderlyingPxForTrade === 'function') ? getCurrentUnderlyingPxForTrade(t) : null
+    }
+    console.log('  ▸', row.sym, row)
+    return row
+  })
+  return out
+}
+if(typeof window !== 'undefined') window.debugGoldenTicket = debugGoldenTicket
+
 function debugLunrPositions() {
   const positions = buildPositionsFromTrades(TRADES)
   const lunr = positions.filter(function(p){ return p.position_id.indexOf('LUNR|') === 0 })
@@ -8243,17 +8350,58 @@ async function importFidelityOpenPositionsFromFile(file) {
   }
 }
 
-// ── Entry snapshot capture ───────────────────────────────────────────────
-// For each position in window.FID_OPEN.positions:
-//   • If its position_id existed in the prior snapshot AND had an
-//     entryCapturedAt timestamp, COPY the frozen fields forward unchanged.
-//     This is the guarantee that stops don't float on re-import.
-//   • Otherwise CAPTURE a fresh entry snapshot now (entryUnderlyingPrice,
-//     entryATR, stop05Entry, stop10Entry, entryOptionPrice, entryCapturedAt).
-// Call this AFTER ATR + stock-price enrichment so the fresh snapshot has
-// real numbers to anchor on. If the same position_id disappears from one
-// upload then reappears later, the re-appearance is treated as a fresh
-// entry (we cannot prove continuity through a gap).
+// ═══════════════════════════════════════════════════════════════════════════
+//  GOLDEN TICKET RISK SYSTEM — canonical stop + roll + trailing rules.
+//  Baselines anchored to the entry underlying (not to today's price).
+//
+//    STOP (hard):    entry − 1.25 × ATR         (no exceptions)
+//    ROLL 1 marker:  entry + 0.5  × ATR
+//    ROLL 2 marker:  entry + 1.0  × ATR
+//    ROLL 3 marker:  entry + 2.0  × ATR
+//    Trailing active only after rollCount ≥ 1 (i.e. first successful roll).
+//    Post-roll stop: max(breakevenUnderlying, newBase − 0.5·ATR)
+//      where breakevenUnderlying = entry − (cumulativeCredits / (100·delta))
+//    Time stop:      Day 25 if not profitable
+//
+//  Sizing:  contracts = risk$ / (100 × 0.80 × 1.25 × ATR) = risk$ / (100 × ATR)
+//           (0.80 = delta; 1.25 = stop multiple on the underlying)
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ── Per-position mutable state (manually editable) ─────────────────────────
+// Keyed by position_id so it survives FID_OPEN snapshot replacement. Stored
+// in localStorage; merged onto each snapshot row in the synthesizer.
+window.FID_CREDITS = (function(){
+  try { return JSON.parse(localStorage.getItem('gt_fid_credits')||'{}') || {} }
+  catch(e) { return {} }
+})()
+function saveFidCredits() { try { localStorage.setItem('gt_fid_credits', JSON.stringify(window.FID_CREDITS)) } catch(e) {} }
+
+// Set or update a position's cumulative credits + roll count. Called from
+// the per-card inline inputs. cumulativeCredits is total $ received across
+// all successful rolls on this position (manual — Fidelity doesn't expose
+// per-position roll credits reliably in the CSV).
+function setPositionCredits(positionId, cumulativeCredits, rollCount) {
+  if(!positionId) return
+  if(!window.FID_CREDITS[positionId]) window.FID_CREDITS[positionId] = {}
+  if(cumulativeCredits != null) window.FID_CREDITS[positionId].cumulativeCredits = +cumulativeCredits || 0
+  if(rollCount          != null) window.FID_CREDITS[positionId].rollCount          = Math.max(0, Math.min(3, +rollCount || 0))
+  window.FID_CREDITS[positionId].updatedAt = Date.now()
+  saveFidCredits()
+  try { renderTrades() } catch(e) {}
+  if(typeof fbAutoSave === 'function') fbAutoSave(1500)
+}
+if(typeof window !== 'undefined') window.setPositionCredits = setPositionCredits
+
+// ── Entry snapshot capture (GOLDEN TICKET) ─────────────────────────────
+// For each FID_OPEN position:
+//   • If the position_id already has an entryCapturedAt, PRESERVE every
+//     frozen field. This is what makes stops stable across re-imports.
+//   • Otherwise capture fresh: underlying price, ATR, all stop + roll
+//     levels anchored to entry.
+// Run AFTER ATR + stock-price enrichment so the fresh snapshot has
+// real numbers. If a position_id disappears then reappears later the
+// re-appearance is treated as a fresh entry (continuity can't be proven
+// through a gap).
 function captureEntrySnapshots(priorSnaps) {
   if(!window.FID_OPEN || !Array.isArray(window.FID_OPEN.positions)) return
   priorSnaps = priorSnaps || {}
@@ -8265,10 +8413,15 @@ function captureEntrySnapshots(priorSnaps) {
       // Preserve — frozen fields copied forward verbatim.
       p.entryUnderlyingPrice = prior.entryUnderlyingPrice
       p.entryATR             = prior.entryATR
-      p.stop05Entry          = prior.stop05Entry
-      p.stop10Entry          = prior.stop10Entry
+      p.stop125Entry         = prior.stop125Entry
+      p.roll05Entry          = prior.roll05Entry
+      p.roll10Entry          = prior.roll10Entry
+      p.roll20Entry          = prior.roll20Entry
       p.entryOptionPrice     = prior.entryOptionPrice
       p.entryCapturedAt      = prior.entryCapturedAt
+      // Legacy fields still written for any code that hasn't migrated
+      p.stop05Entry          = prior.stop05Entry
+      p.stop10Entry          = prior.stop10Entry
       preserved++
       continue
     }
@@ -8277,8 +8430,14 @@ function captureEntrySnapshots(priorSnaps) {
     const atr = +p.atr || 0
     p.entryUnderlyingPrice = und > 0 ? +und.toFixed(2) : 0
     p.entryATR             = atr > 0 ? +atr.toFixed(4) : 0
-    p.stop05Entry          = (und > 0 && atr > 0) ? +(und - 0.5*atr).toFixed(2) : null
-    p.stop10Entry          = (und > 0 && atr > 0) ? +(und - 1.0*atr).toFixed(2) : null
+    // GOLDEN TICKET: −1.25 ATR hard stop + three roll markers.
+    p.stop125Entry         = (und > 0 && atr > 0) ? +(und - 1.25*atr).toFixed(2) : null
+    p.roll05Entry          = (und > 0 && atr > 0) ? +(und + 0.5 *atr).toFixed(2) : null
+    p.roll10Entry          = (und > 0 && atr > 0) ? +(und + 1.0 *atr).toFixed(2) : null
+    p.roll20Entry          = (und > 0 && atr > 0) ? +(und + 2.0 *atr).toFixed(2) : null
+    // Legacy fields — kept computed for back-compat; no longer authoritative.
+    p.stop05Entry          = (und > 0 && atr > 0) ? +(und - 0.5 *atr).toFixed(2) : null
+    p.stop10Entry          = (und > 0 && atr > 0) ? +(und - 1.0 *atr).toFixed(2) : null
     p.entryOptionPrice     = +p.avgCost || 0
     p.entryCapturedAt      = now
     if(!(und > 0 && atr > 0)) incomplete++
@@ -8677,7 +8836,14 @@ function updateFidSyncUI() {
 // marker. No price history, no bars — the four labels are the decision
 // surface. Every y is mapped from a single priceToY function so what
 // you see is always what the numbers say.
-function drawMiniChart(canvas, entry, stop, roll, current, sym) {
+// ── Golden Ticket level-ladder drawer ────────────────────────────────────
+// Signature: drawMiniChart(canvas, levels, current, sym, t)
+//   levels  — array of { kind, price, label, color } (already phase-aware
+//             from renderMiniChartForTrade)
+//   current — resolved current underlying price
+//   sym     — underlying ticker (for debug log filter)
+//   t       — synthesized trade (optional, used for strategyPhase + days)
+function drawMiniChart(canvas, levels, current, sym, t) {
   if(!canvas) return
   const ctx = canvas.getContext('2d')
   const dpr = window.devicePixelRatio || 1
@@ -8688,7 +8854,8 @@ function drawMiniChart(canvas, entry, stop, roll, current, sym) {
   ctx.scale(dpr, dpr)
   ctx.clearRect(0, 0, W, H)
 
-  const refs = [entry, stop, roll, current].filter(v => typeof v === 'number' && isFinite(v) && v > 0)
+  levels = Array.isArray(levels) ? levels.filter(l => l && typeof l.price === 'number' && isFinite(l.price) && l.price > 0) : []
+  const refs = levels.map(l => l.price).concat([current].filter(v => typeof v === 'number' && isFinite(v) && v > 0))
 
   if(!refs.length) {
     ctx.fillStyle = '#555c6e'
@@ -8699,127 +8866,93 @@ function drawMiniChart(canvas, entry, stop, roll, current, sym) {
     return
   }
 
-  // Y-axis range spans every reference level with a small buffer so no
-  // pill ever sits outside the plot area.
+  // Y-axis range spans every reference level with a small buffer
   let mn = Math.min.apply(null, refs)
   let mx = Math.max.apply(null, refs)
   if(!(mx > mn)) { mn = mn - 0.5; mx = mx + 0.5 }
   const buf = (mx - mn) * 0.18
   mn -= buf; mx += buf
 
-  // Right margin reserves space for label pills. 86 px fits the
-  // distance-from-NOW chip that lives inside each reference pill.
   const pad = { t: 10, r: 86, b: 10, l: 6 }
   const plotW = W - pad.l - pad.r
   const plotH = H - pad.t - pad.b
   const y = v => pad.t + plotH * (1 - (v - mn) / (mx - mn))
 
-  // ── Geometry verification log ────────────────────────────────────────
-  // Prints the exact prices + mapped y-coordinates the FINAL drawing
-  // code will use. Fires for the symbol matching window._chartDebugSym
-  // (default 'BCS'). Set window._chartDebugSym = 'NVDA' in the console
-  // at any time to switch target without a reload; set to null to mute.
+  // ── Geometry verification log (one per render for target symbol) ───
   const DEBUG_SYM = (typeof window !== 'undefined')
     ? (('_chartDebugSym' in window) ? window._chartDebugSym : 'BCS')
     : 'BCS'
   if(sym && DEBUG_SYM && sym.toUpperCase() === String(DEBUG_SYM).toUpperCase()
      && typeof console !== 'undefined' && console.log) {
+    const yDump = {}
+    for(const l of levels) yDump[l.label || l.kind] = +y(l.price).toFixed(2)
+    yDump.NOW = current > 0 ? +y(current).toFixed(2) : null
     console.log('[MINI-CHART GEOM] '+sym, {
-      prices: {
-        entry:   entry,
-        stop:    stop,
-        roll:    roll,
-        current: current
-      },
-      y: {
-        entry:   entry   > 0 ? +y(entry).toFixed(2)   : null,
-        stop:    stop    > 0 ? +y(stop).toFixed(2)    : null,
-        roll:    roll    > 0 ? +y(roll).toFixed(2)    : null,
-        current: current > 0 ? +y(current).toFixed(2) : null
-      },
-      domain:  { mn: +mn.toFixed(4), mx: +mx.toFixed(4), span: +(mx - mn).toFixed(4) },
-      canvas:  { W, H, plotW, plotH, pad }
+      phase:  t && t.strategyPhase,
+      prices: levels.reduce((a,l) => (a[l.label||l.kind] = l.price, a), {current}),
+      y:      yDump,
+      domain: { mn: +mn.toFixed(4), mx: +mx.toFixed(4), span: +(mx - mn).toFixed(4) }
     })
   }
 
-  // Subtle plot background
+  // Plot background
   ctx.fillStyle = 'rgba(255,255,255,.02)'
   ctx.fillRect(pad.l, pad.t, plotW, plotH)
 
-  // ── Reference lines (dashed) — STOP / ENTRY / ROLL ───────────────────
-  const drawDashedLevel = (price, color) => {
-    if(!(price > 0)) return
-    const py = y(price)
-    ctx.strokeStyle = color
+  // Dashed reference lines — every level
+  for(const l of levels) {
+    const py = y(l.price)
+    ctx.strokeStyle = l.color
     ctx.lineWidth = 1
     ctx.setLineDash([3, 3])
-    ctx.beginPath()
-    ctx.moveTo(pad.l, py)
-    ctx.lineTo(W - pad.r, py)
-    ctx.stroke()
+    ctx.beginPath(); ctx.moveTo(pad.l, py); ctx.lineTo(W - pad.r, py); ctx.stroke()
     ctx.setLineDash([])
   }
-  drawDashedLevel(roll,  '#00d68f')
-  drawDashedLevel(entry, '#f0c040')
-  drawDashedLevel(stop,  '#ff4560')
 
-  // ── NOW line (SOLID — the dominant element) ──────────────────────────
+  // Regime color for NOW — red below any stop, green above any roll, blue middle
+  const stopLvl = levels.find(l => l.kind === 'stop')
+  const highRoll = levels.slice().reverse().find(l => /^(r\d|base|nr)$/.test(l.kind))
+  const nowRegimeColor = (current > 0)
+    ? ((stopLvl && current <= stopLvl.price) ? '#ff4560'
+      : (highRoll && current >= highRoll.price) ? '#00d68f' : '#4da6ff')
+    : '#4da6ff'
+
+  // NOW line (solid, dominant)
   if(current > 0) {
     const cy = y(current)
-    // Regime color for current-vs-levels read at a glance
-    const nowCol = (stop  > 0 && current <= stop)  ? '#ff4560'
-                 : (roll  > 0 && current >= roll)  ? '#00d68f'
-                 : '#4da6ff'
-    // Faint halo band behind the NOW line
-    ctx.fillStyle = 'rgba(77,166,255,.05)'
-    if(nowCol === '#ff4560') ctx.fillStyle = 'rgba(255,69,96,.06)'
-    else if(nowCol === '#00d68f') ctx.fillStyle = 'rgba(0,214,143,.06)'
+    const haloFill = nowRegimeColor === '#ff4560' ? 'rgba(255,69,96,.06)'
+                   : nowRegimeColor === '#00d68f' ? 'rgba(0,214,143,.06)'
+                   : 'rgba(77,166,255,.05)'
+    ctx.fillStyle = haloFill
     ctx.fillRect(pad.l, cy - 3, plotW, 6)
-    // Solid bright line
-    ctx.strokeStyle = nowCol
+    ctx.strokeStyle = nowRegimeColor
     ctx.lineWidth = 1.75
-    ctx.beginPath()
-    ctx.moveTo(pad.l, cy)
-    ctx.lineTo(W - pad.r, cy)
-    ctx.stroke()
-    // Glowing dot on the right edge
+    ctx.beginPath(); ctx.moveTo(pad.l, cy); ctx.lineTo(W - pad.r, cy); ctx.stroke()
     const cx = W - pad.r - 1
-    ctx.fillStyle = nowCol + '55'
+    ctx.fillStyle = nowRegimeColor + '55'
     ctx.beginPath(); ctx.arc(cx, cy, 8, 0, Math.PI*2); ctx.fill()
-    ctx.fillStyle = nowCol + '88'
+    ctx.fillStyle = nowRegimeColor + '88'
     ctx.beginPath(); ctx.arc(cx, cy, 5.5, 0, Math.PI*2); ctx.fill()
     ctx.fillStyle = '#ffffff'
     ctx.beginPath(); ctx.arc(cx, cy, 2.75, 0, Math.PI*2); ctx.fill()
   }
 
   // ── Right-edge labels (geometric-truth-preserving) ───────────────────
-  // Key rule: the pill's LEADER LINE always returns to the level's TRUE
-  // y on the chart edge. The pill body can be shifted vertically by the
-  // overlap resolver, but the leader visibly traces back to the level's
-  // real position so the visual and the math always agree.
-  //
-  // Equal-or-near-equal-price handling: levels whose truthY values fall
-  // within MERGE_EPS pixels are grouped into a single merged pill
-  // (e.g. "NOW · ENTRY 23.32"). This is cleaner than two pills stacked
-  // pointing at the same row, and it correctly advertises the coincidence.
-  const MERGE_EPS = 2   // px — merge pills whose y rounds to the same row
-  const STYLES = {
-    stop:  { color:'#ff4560', bg:'rgba(255,69,96,.16)',  border:'rgba(255,69,96,.5)',  label:'STOP',  dim:'rgba(255,69,96,.75)'  },
-    entry: { color:'#f0c040', bg:'rgba(240,192,64,.16)', border:'rgba(240,192,64,.5)', label:'ENTRY', dim:'rgba(240,192,64,.75)' },
-    roll:  { color:'#00d68f', bg:'rgba(0,214,143,.16)',  border:'rgba(0,214,143,.5)',  label:'ROLL',  dim:'rgba(0,214,143,.75)'  }
+  const MERGE_EPS = 2
+  const kindStyles = {
+    stop:  { color:'#ff4560', bg:'rgba(255,69,96,.16)',  border:'rgba(255,69,96,.5)',  dim:'rgba(255,69,96,.75)'  },
+    entry: { color:'#f0c040', bg:'rgba(240,192,64,.16)', border:'rgba(240,192,64,.5)', dim:'rgba(240,192,64,.75)' },
+    r1:    { color:'#00d68f', bg:'rgba(0,214,143,.16)',  border:'rgba(0,214,143,.5)',  dim:'rgba(0,214,143,.75)'  },
+    r2:    { color:'#00b080', bg:'rgba(0,176,128,.16)',  border:'rgba(0,176,128,.5)',  dim:'rgba(0,176,128,.75)'  },
+    r3:    { color:'#008c60', bg:'rgba(0,140,96,.16)',   border:'rgba(0,140,96,.5)',   dim:'rgba(0,140,96,.75)'   },
+    be:    { color:'#ff8c42', bg:'rgba(255,140,66,.16)', border:'rgba(255,140,66,.5)', dim:'rgba(255,140,66,.75)' },
+    base:  { color:'#f0c040', bg:'rgba(240,192,64,.16)', border:'rgba(240,192,64,.5)', dim:'rgba(240,192,64,.75)' },
+    nr:    { color:'#00d68f', bg:'rgba(0,214,143,.16)',  border:'rgba(0,214,143,.5)',  dim:'rgba(0,214,143,.75)'  }
   }
-  const nowRegimeColor = (current > 0)
-    ? ((stop > 0 && current <= stop)  ? '#ff4560'
-      : (roll > 0 && current >= roll) ? '#00d68f' : '#4da6ff')
-    : '#4da6ff'
 
-  // 1) Build level list with TRUTH y (mapped through the single y()).
-  //    truthY is the ONLY geometrically-authoritative y for that level.
   const raw = []
-  if(stop    > 0) raw.push({ kind:'stop',  price: stop,    truthY: y(stop) })
-  if(entry   > 0) raw.push({ kind:'entry', price: entry,   truthY: y(entry) })
-  if(roll    > 0) raw.push({ kind:'roll',  price: roll,    truthY: y(roll) })
-  if(current > 0) raw.push({ kind:'now',   price: current, truthY: y(current), isNow: true })
+  for(const l of levels) raw.push({ kind: l.kind, label: l.label, price: l.price, truthY: y(l.price) })
+  if(current > 0) raw.push({ kind:'now', label:'NOW', price: current, truthY: y(current), isNow: true })
 
   // 2) Group by pixel-rounded truthY so equal / sub-pixel-equal prices
   //    render as ONE merged pill instead of a pointless pair of stacks.
@@ -8884,7 +9017,7 @@ function drawMiniChart(canvas, entry, stop, roll, current, sym) {
       styleBorder = nowRegimeColor
     } else {
       const primary = p.items[0].kind
-      const s = STYLES[primary]
+      const s = kindStyles[primary] || kindStyles.entry
       styleColor  = s.color
       styleBg     = s.bg
       styleBorder = s.border
@@ -8911,18 +9044,20 @@ function drawMiniChart(canvas, entry, stop, roll, current, sym) {
     if(ctx.roundRect) { ctx.beginPath(); ctx.roundRect(pillX + 0.5, pillY - pillH/2 + 0.5, pillW - 1, pillH - 1, pillR); ctx.stroke() }
     else              { ctx.strokeRect(pillX + 0.5, pillY - pillH/2 + 0.5, pillW - 1, pillH - 1) }
 
-    // Decide the label: single kind, or merged multi-kind.
-    const priceText = p.items[0].price.toFixed(2)  // all prices in a merged group are ≤ MERGE_EPS apart; any is representative
+    // Decide the label: single kind or merged multi-kind. Each level
+    // carries its own .label string (set by the caller), so we no
+    // longer hard-code a STYLES.label map — the Golden Ticket levels
+    // like "ROLL 1", "ROLL 2", "BE", "BASE", "NEXT ROLL" flow through
+    // unchanged.
+    const priceText = p.items[0].price.toFixed(2)
     let labelText
     if(p.items.length === 1) {
-      labelText = isNow ? 'NOW' : STYLES[p.items[0].kind].label
+      labelText = isNow ? 'NOW' : (p.items[0].label || p.items[0].kind.toUpperCase())
     } else {
-      // Merged: join kinds in a canonical order NOW · ROLL · ENTRY · STOP
-      const order = ['now', 'roll', 'entry', 'stop']
-      const parts = order
-        .filter(k => p.items.some(r => r.kind === k))
-        .map(k => (k === 'now') ? 'NOW' : STYLES[k].label)
-      labelText = parts.join('·')
+      // Merged: canonical order — NOW first, then levels by ascending price
+      const withIdx = p.items.map(it => ({ it, isNow: !!it.isNow, price: it.price }))
+      withIdx.sort((a,b) => (a.isNow === b.isNow) ? (b.price - a.price) : (a.isNow ? -1 : 1))
+      labelText = withIdx.map(x => x.isNow ? 'NOW' : (x.it.label || x.it.kind.toUpperCase())).join('·')
     }
 
     if(isNow) {
@@ -8948,7 +9083,8 @@ function drawMiniChart(canvas, entry, stop, roll, current, sym) {
         const chip = (pct >= 0 ? '+' : '') + pct.toFixed(1) + '%'
         ctx.font = '8px "SF Mono", monospace'
         ctx.textAlign = 'right'
-        ctx.fillStyle = STYLES[p.items[0].kind].dim
+        const dimS = kindStyles[p.items[0].kind] || kindStyles.entry
+        ctx.fillStyle = dimS.dim
         ctx.fillText(chip, pillX + pillW - 5, pillY + 5)
       }
     }
@@ -9007,33 +9143,64 @@ if(typeof window !== 'undefined') window.getCurrentUnderlyingPxForTrade = getCur
 // (the .toFixed(2) calls when building label text). This keeps the
 // geometric y-coordinate of each line exactly consistent with the pill
 // attached to it.
+// ── Golden Ticket mini-chart renderer ────────────────────────────────────
+// Pre-roll  (rollCount === 0): five reference levels
+//   STOP (−1.25 ATR), ENTRY, ROLL 1 (+0.5), ROLL 2 (+1.0), ROLL 3 (+2.0)
+// Post-roll (rollCount ≥ 1):   four reference levels
+//   BREAKEVEN, NEW BASE, STOP (active trailing = max(BE, newBase−0.5·ATR)),
+//   plus next ROLL marker if not yet at Roll 3
+// NOW marker always overlaid. All levels flow from the frozen entry
+// snapshot + FID_CREDITS; nothing on this path uses today's ATR.
 function renderMiniChartForTrade(t) {
   const canvas = document.getElementById('mini-chart-' + t.id)
   if(!canvas) return
   const sym = t.underlying || (t.ticker||'').split(' ')[0] || ''
   const entry    = +t.entry || 0
-  const stop     = +t.stop05Entry || 0   // already stored 2-dec by captureEntrySnapshots
   const entryATR = +t.entryATR || +t.atr || 0
-  // Roll is computed at full precision from entry + 0.5·entryATR. We do
-  // NOT .toFixed(2) here — the y-mapping must use the same number the
-  // pill labels use, and the label is rounded internally for display.
-  const roll     = (entry > 0 && entryATR > 0) ? (entry + 0.5 * entryATR) : 0
   const current  = getCurrentUnderlyingPxForTrade(t)
+  const phase    = t.strategyPhase || 'pre-roll'
 
-  // One-shot debug log per card per render so the user can verify the
-  // exact values feeding the chart.
+  // Build level list based on phase.
+  const levels = []
+  if(phase === 'pre-roll') {
+    if(t.stop125Entry != null) levels.push({ kind:'stop', price:+t.stop125Entry, label:'STOP',   color:'#ff4560' })
+    if(entry > 0)              levels.push({ kind:'entry',price:entry,            label:'ENTRY',  color:'#f0c040' })
+    if(t.roll05Entry != null)  levels.push({ kind:'r1',   price:+t.roll05Entry,   label:'ROLL 1', color:'#00d68f' })
+    if(t.roll10Entry != null)  levels.push({ kind:'r2',   price:+t.roll10Entry,   label:'ROLL 2', color:'#00b080' })
+    if(t.roll20Entry != null)  levels.push({ kind:'r3',   price:+t.roll20Entry,   label:'ROLL 3', color:'#008c60' })
+  } else {
+    // Post-roll: focus on trailing stop, breakeven, new base, next roll.
+    const rc = +t.rollCount || 1
+    if(t.activeStop != null)         levels.push({ kind:'stop',  price:+t.activeStop,         label:'STOP',  color:'#ff4560' })
+    if(t.breakevenUnderlying != null)levels.push({ kind:'be',    price:+t.breakevenUnderlying,label:'BE',    color:'#ff8c42' })
+    if(t.newBase != null)            levels.push({ kind:'base',  price:+t.newBase,            label:'BASE',  color:'#f0c040' })
+    // Show the NEXT unreached roll marker if any
+    if(rc < 3) {
+      const nextRoll = rc === 1 ? t.roll10Entry : rc === 2 ? t.roll20Entry : null
+      if(nextRoll != null) levels.push({ kind:'nr', price:+nextRoll, label:'NEXT ROLL', color:'#00d68f' })
+    }
+  }
+
+  // One-shot diagnostic log per card per render
   if(typeof console !== 'undefined' && console.log) {
     console.log('[MINI-CHART]', sym, {
-      entryUnderlyingPrice: t.entryUnderlyingPrice,
-      liveStockPx:          t.liveStockPx,
-      stockPrice:           t.stockPrice,
-      currentUnderlyingPx:  t.currentUnderlyingPx,
-      window_livePrices_sym:(window._livePrices && window._livePrices[sym]) || null,
-      resolvedCurrent:      current,
-      entry, stop, roll
+      phase,
+      rollCount:           t.rollCount,
+      entryUnderlyingPrice:t.entryUnderlyingPrice,
+      entryATR:            t.entryATR,
+      stop125Entry:        t.stop125Entry,
+      roll05:              t.roll05Entry,
+      roll10:              t.roll10Entry,
+      roll20:              t.roll20Entry,
+      activeStop:          t.activeStop,
+      breakevenUnderlying: t.breakevenUnderlying,
+      newBase:             t.newBase,
+      resolvedCurrent:     current,
+      daysInTrade:         t.daysInTrade,
+      cumulativeCredits:   t.cumulativeCredits
     })
   }
-  drawMiniChart(canvas, entry, stop, roll, current, sym)
+  drawMiniChart(canvas, levels, current, sym, t)
 }
 
 // ── Bridge: synthesize trade-shaped objects from FID_OPEN for renderTrades.
@@ -9097,6 +9264,48 @@ function buildTradeShapesFromFidOpen() {
     const curAtr     = +p.atr || 0
     const entryUnd   = +p.entryUnderlyingPrice || legacyEntry || curStockPx
     const entryAtr   = +p.entryATR             || legacyAtr   || curAtr
+    // ── Golden Ticket levels (frozen, derived if missing) ───────────────
+    const stop125    = (p.stop125Entry != null) ? +p.stop125Entry : ((entryUnd > 0 && entryAtr > 0) ? +(entryUnd - 1.25*entryAtr).toFixed(2) : null)
+    const roll05     = (p.roll05Entry  != null) ? +p.roll05Entry  : ((entryUnd > 0 && entryAtr > 0) ? +(entryUnd + 0.5 *entryAtr).toFixed(2) : null)
+    const roll10     = (p.roll10Entry  != null) ? +p.roll10Entry  : ((entryUnd > 0 && entryAtr > 0) ? +(entryUnd + 1.0 *entryAtr).toFixed(2) : null)
+    const roll20     = (p.roll20Entry  != null) ? +p.roll20Entry  : ((entryUnd > 0 && entryAtr > 0) ? +(entryUnd + 2.0 *entryAtr).toFixed(2) : null)
+    // ── Roll state (manually tracked; cumulativeCredits from FID_CREDITS) ─
+    const credMeta   = (window.FID_CREDITS && window.FID_CREDITS[p.position_id]) || {}
+    const cumulativeCredits = +credMeta.cumulativeCredits || 0
+    const rollCount         = Math.max(0, Math.min(3, +credMeta.rollCount || 0))
+    const firstRollAchieved = rollCount >= 1
+    const trailingActive    = firstRollAchieved
+    // Delta for breakeven math — default 0.80 per spec; future enhancement
+    // could read from live chain. Using 0.80 as the canonical trading delta.
+    const deltaForBE = 0.80
+    // Breakeven on the underlying once trailing is active:
+    //   breakeven = entry - credits_in_cash / (100 * delta)
+    // credits_in_cash assumed to be dollars total (sum across rolls).
+    const breakevenUnderlying = trailingActive && entryUnd > 0 && cumulativeCredits > 0
+      ? +(entryUnd - cumulativeCredits / (100 * deltaForBE)).toFixed(2)
+      : null
+    // newBase = most recent roll marker achieved. +0.5 / +1.0 / +2.0 ATR
+    // from entry depending on rollCount (1/2/3).
+    const newBase = rollCount === 3 ? roll20
+                  : rollCount === 2 ? roll10
+                  : rollCount === 1 ? roll05 : null
+    // Post-roll trailing stop: max(breakeven, newBase - 0.5·ATR).
+    const trailingStop = trailingActive && newBase != null && entryAtr > 0
+      ? Math.max(
+          breakevenUnderlying != null ? breakevenUnderlying : -Infinity,
+          +(newBase - 0.5 * entryAtr).toFixed(2)
+        )
+      : null
+    const strategyPhase = trailingActive ? 'post-roll' : 'pre-roll'
+    // Days in trade — from entryCapturedAt; for Day-25 time stop
+    const daysInTrade = p.entryCapturedAt
+      ? Math.floor((Date.now() - p.entryCapturedAt) / 864e5)
+      : 0
+    // activeStop: what the mechanical stop is RIGHT NOW
+    //   pre-roll  → stop125 (entry - 1.25 ATR)
+    //   post-roll → trailingStop
+    const activeStop = trailingActive ? trailingStop : stop125
+
     return {
       id:         legacyId,
       ticker:     tickerLabel,
@@ -9113,9 +9322,25 @@ function buildTradeShapesFromFidOpen() {
       // persists).
       entry:      entryUnd,
       atr:        entryAtr,
-      // Explicit frozen-snapshot fields for the card's Entry Stop Plan block
+      // Explicit frozen-snapshot fields
       entryUnderlyingPrice: entryUnd,
       entryATR:             entryAtr,
+      // GOLDEN TICKET fields (new canonical system)
+      stop125Entry:         stop125,
+      roll05Entry:          roll05,
+      roll10Entry:          roll10,
+      roll20Entry:          roll20,
+      cumulativeCredits:    cumulativeCredits,
+      rollCount:            rollCount,
+      firstRollAchieved:    firstRollAchieved,
+      trailingActive:       trailingActive,
+      strategyPhase:        strategyPhase,
+      breakevenUnderlying:  breakevenUnderlying,
+      newBase:              newBase,
+      trailingStop:         trailingStop,
+      activeStop:           activeStop,
+      daysInTrade:          daysInTrade,
+      // Legacy (pre-Golden-Ticket) fields kept for back-compat — NOT authoritative
       stop05Entry:          (p.stop05Entry != null) ? +p.stop05Entry : ((entryUnd > 0 && entryAtr > 0) ? +(entryUnd - 0.5*entryAtr).toFixed(2) : null),
       stop10Entry:          (p.stop10Entry != null) ? +p.stop10Entry : ((entryUnd > 0 && entryAtr > 0) ? +(entryUnd - 1.0*entryAtr).toFixed(2) : null),
       entryOptionPrice:     (+p.entryOptionPrice > 0) ? +p.entryOptionPrice : cost,
@@ -10158,14 +10383,43 @@ function renderTrades() {
     const refreshedLbl = (+t.livePriceAt > 0)
       ? new Date(t.livePriceAt).toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit' })
       : ''
+    // ── Golden Ticket status ribbon (Day X/25, phase, credits input) ────
+    const dayN     = +t.daysInTrade || 0
+    const dayStop  = (window.GT && window.GT.DAY_STOP) || 25
+    const dayWarn  = (window.GT && window.GT.DAY_WARN) || 20
+    const dayCol   = dayN >= dayStop ? '#ff4560' : dayN >= dayWarn ? '#ff8c42' : '#8b91a0'
+    const dayIcon  = dayN >= dayStop ? '⚠ ' : ''
+    const phaseLbl = t.strategyPhase === 'post-roll' ? ('POST-ROLL · '+(t.rollCount||0)+'/3') : 'PRE-ROLL'
+    const phaseCol = t.strategyPhase === 'post-roll' ? '#00d68f' : '#4da6ff'
+    const pid      = t.fid_position_id || ''
+    const credStr  = (+t.cumulativeCredits || 0).toFixed(0)
+    const rollCt   = +t.rollCount || 0
     const miniChartHtml = hasEntrySnap
       ? (
         '<div style="background:#0a0c0f;border:1px solid rgba(255,255,255,.06);border-radius:8px;padding:8px 10px 6px;position:relative">' +
-          '<canvas id="mini-chart-' + t.id + '" style="width:100%;height:140px;display:block"></canvas>' +
-          '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;padding:0 2px">' +
-            '<span style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#555c6e">'+(t.underlying||'')+'</span>' +
-            (refreshedLbl ? '<span style="font-size:8px;color:#333a4a;letter-spacing:.05em">live · '+refreshedLbl+'</span>' : '') +
+          // Top status strip: Phase · Day X/25 · live refresh timestamp
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;font-size:8px;font-weight:700;letter-spacing:.08em;text-transform:uppercase">' +
+            '<span style="color:'+phaseCol+'">'+phaseLbl+'</span>' +
+            '<span style="color:'+dayCol+'">'+dayIcon+'Day '+dayN+'/'+dayStop+'</span>' +
+            (refreshedLbl ? '<span style="color:#333a4a;font-weight:400;letter-spacing:.03em;text-transform:none">live · '+refreshedLbl+'</span>' : '<span></span>') +
           '</div>' +
+          '<canvas id="mini-chart-' + t.id + '" style="width:100%;height:140px;display:block"></canvas>' +
+          // Bottom ribbon: credits input + roll count input + breakeven readout
+          (pid
+            ? '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;padding:0 2px;gap:8px;flex-wrap:wrap">' +
+                '<div style="display:flex;align-items:center;gap:4px">' +
+                  '<span style="font-size:9px;color:#555c6e;text-transform:uppercase;letter-spacing:.07em">Rolls</span>' +
+                  '<input type="number" min="0" max="3" step="1" value="'+rollCt+'" onchange="setPositionCredits('+JSON.stringify(pid)+', null, +this.value)" style="width:30px;background:#111318;border:1px solid rgba(255,255,255,.08);border-radius:3px;color:#e8eaf0;font-size:10px;padding:1px 3px;text-align:center;font-family:inherit">' +
+                  '<span style="font-size:9px;color:#555c6e;margin-left:6px;text-transform:uppercase;letter-spacing:.07em">Credits $</span>' +
+                  '<input type="number" min="0" step="10" value="'+credStr+'" onchange="setPositionCredits('+JSON.stringify(pid)+', +this.value, null)" style="width:60px;background:#111318;border:1px solid rgba(255,255,255,.08);border-radius:3px;color:#e8eaf0;font-size:10px;padding:1px 4px;font-family:inherit">' +
+                '</div>' +
+                (t.strategyPhase === 'post-roll' && t.breakevenUnderlying != null
+                  ? '<span style="font-size:9px;color:#ff8c42" title="Breakeven = entry − (credits / (100 × delta 0.80)) · approx">BE ≈ $'+(+t.breakevenUnderlying).toFixed(2)+'</span>'
+                  : '<span></span>'
+                ) +
+              '</div>'
+            : ''
+          ) +
         '</div>'
       )
       : '<div style="background:#0a0c0f;border:1px solid rgba(255,255,255,.06);border-radius:8px;padding:20px;text-align:center;color:#555c6e;font-size:11px">Entry snapshot pending — upload Fidelity CSV to capture stops.</div>'
