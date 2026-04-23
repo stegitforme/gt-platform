@@ -1021,8 +1021,8 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
       </div>
     </div>
 
-    <!-- Stats bar -->
-    <div id="closed-stats-bar" style="display:none;background:#111318;border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:12px 16px;margin-bottom:12px;display:flex;gap:24px;flex-wrap:wrap">
+    <!-- Stats bar — always recomputed from the filtered set by renderClosedTrades -->
+    <div id="closed-stats-bar" style="display:none;background:#111318;border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:12px 16px;margin-bottom:12px;gap:24px;flex-wrap:wrap">
       <div style="font-size:11px;color:#555c6e">Total trades: <span id="cs-count" style="color:#e8eaf0;font-family:'SF Mono',monospace">0</span></div>
       <div style="font-size:11px;color:#555c6e">Win rate: <span id="cs-winrate" style="color:#00d68f;font-family:'SF Mono',monospace">--</span></div>
       <div style="font-size:11px;color:#555c6e">Total P&L: <span id="cs-total-pnl" style="font-family:'SF Mono',monospace">--</span></div>
@@ -4069,27 +4069,35 @@ function renderClosedTrades() {
   const avgLoss = losses.length ? losses.reduce((s,t) => s+t.pnl, 0) / losses.length : 0
   const winRate = filtered.length ? ((wins.length / filtered.length)*100).toFixed(0) : 0
 
-  if(countEl) countEl.textContent = all.length + ' closed trades';
-  if(summaryEl) summaryEl.textContent = '| P&L: ' + (totalPnl >= 0 ? '+' : '') + ''
- + Math.round(totalPnl).toLocaleString() + (CT_FILTER!=='all'?' (filtered)':'')
-  summaryEl.style.color = totalPnl >= 0 ? '#00d68f' : '#ff4560'
-
-  // Stats bar
-  const sb = document.getElementById('closed-stats-bar')
-  if(sb) {
-    sb.style.display = 'flex'
-    document.getElementById('cs-count').textContent = filtered.length + (filtered.length !== CLOSED_TRADES.length ? ' / '+CLOSED_TRADES.length : '')
-    document.getElementById('cs-winrate').textContent = winRate + '%'
-    document.getElementById('cs-winrate').style.color = winRate >= 50 ? '#00d68f' : '#ff4560';
-    const pnlEl = document.getElementById('cs-total-pnl')
-    pnlEl.textContent = (totalPnl >= 0 ? '+' : '') + ''
- + Math.round(totalPnl).toLocaleString()
-    pnlEl.style.color = totalPnl >= 0 ? '#00d68f' : '#ff4560'
-    document.getElementById('cs-avg-win').textContent  = wins.length   ? '+'
- + Math.round(avgWin).toLocaleString()  : '--'
-    document.getElementById('cs-avg-loss').textContent = losses.length ? '-'
- + Math.round(Math.abs(avgLoss)).toLocaleString() : '--'
+  // ── Header pills + stats bar — defensive per-element writes so one
+  // missing DOM target can't short-circuit the rest of the updates.
+  // Previous bug: summaryEl.style.color sat OUTSIDE the null guard, so
+  // if closed-pnl-summary was transiently unavailable the whole update
+  // aborted and the stats bar stayed frozen on stale numbers.
+  if(countEl) countEl.textContent = all.length + ' closed lots · '+filtered.length+' in view'
+  if(summaryEl) {
+    summaryEl.textContent = '| P&L: ' + (totalPnl >= 0 ? '+' : '') + ''
+      + Math.round(totalPnl).toLocaleString() + ((CT_FILTER!=='all' || CT_INSTRUMENT!=='all') ? ' (filtered)' : '')
+    summaryEl.style.color = totalPnl >= 0 ? '#00d68f' : '#ff4560'
   }
+  // Stats bar — always recomputed from the filtered set. Every span is
+  // looked up + updated independently so a single missing node never
+  // leaves any other stat stale. Also fixes the previous "N / 0" display
+  // that compared against the legacy CLOSED_TRADES array (now empty).
+  const setText = function(id, text, color) {
+    const el = document.getElementById(id)
+    if(!el) return
+    el.textContent = text
+    if(color !== undefined) el.style.color = color
+  }
+  const sb = document.getElementById('closed-stats-bar')
+  if(sb) sb.style.display = 'flex'
+  const countStr = filtered.length + (filtered.length !== all.length ? ' / '+all.length : '')
+  setText('cs-count',     countStr)
+  setText('cs-winrate',   (filtered.length ? winRate : 0) + '%', (+winRate >= 50 ? '#00d68f' : (+winRate > 0 ? '#ff8c42' : '#ff4560')))
+  setText('cs-total-pnl', (totalPnl >= 0 ? '+' : '') + Math.round(totalPnl).toLocaleString(), totalPnl >= 0 ? '#00d68f' : '#ff4560')
+  setText('cs-avg-win',   wins.length   ? '+' + Math.round(avgWin).toLocaleString()             : '--')
+  setText('cs-avg-loss',  losses.length ? '-' + Math.round(Math.abs(avgLoss)).toLocaleString()   : '--')
 
   // Table
   const rows = filtered.map(t => {
@@ -8283,33 +8291,150 @@ async function enrichFidOpenWithATR() {
 
 // ── Live-price refresh for FID_OPEN positions ─────────────────────────────
 // Reuses existing Polygon snapshot pattern (same paths as refreshAllPnL).
+// ── Live-pricing layer for FID_OPEN positions ───────────────────────────
+// Updates only mark / derived-pricing fields. NEVER touches Fidelity's
+// source-of-truth fields (qty, avgCost, costBasisTotal) or the frozen
+// entry snapshot (entryUnderlyingPrice, entryATR, stop05Entry, stop10Entry).
+//
+// Per-position writes (options):
+//   liveOptionPx        — chosen mark (mid → last → close priority)
+//   livePriceSource     — 'live-mark' | 'live-last' | 'live-close'
+//   livePrevClose       — previous trading-day close (option-level)
+//   liveTodayChangePerContract
+//   liveCurrentValue    — liveOptionPx × 100 × qty
+//   liveTodayGL         — today's $ for the whole position
+//   liveTodayGLPct      — today's % (per-contract change / prev_close)
+//   liveTotalGL         — liveCurrentValue − costBasisTotal
+//   liveTotalGLPct      — liveTotalGL / costBasisTotal × 100
+//   liveRefreshAt       — ms timestamp
+//
+// Stock positions go through the same function but use the stock snapshot
+// endpoint, which already provides todaysChange / todaysChangePerc.
 async function refreshFidOpenLivePrices() {
   if(!window.FID_OPEN || !window.FID_OPEN.positions.length) return
   const statusEl = document.getElementById('fid-sync-status')
   const setStatus = (msg, col) => { if(statusEl) { statusEl.textContent = msg; statusEl.style.color = col||'#8b91a0' } }
   const now = Date.now()
-  let ok = 0, fail = 0
-  for(const p of window.FID_OPEN.positions) {
+  const positions = window.FID_OPEN.positions
+  let okOpt=0, failOpt=0, okStk=0, failStk=0
+
+  // ── Option positions — one snapshot call per OCC ─────────────────────
+  for(const p of positions) {
     if(p.isStock || !p.occ || !p.underlying) continue
     try {
       const d = await apiGet('/v3/snapshot/options/'+p.underlying+'/O:'+p.occ, false, true)
-      const r = (d && d.results && typeof d.results === 'object' && !Array.isArray(d.results)) ? d.results : (d && d.results && d.results[0]) || null
-      if(r && typeof pickLiveOptionPrice === 'function') {
-        const pick = pickLiveOptionPrice(r)
-        if(pick && pick.px) {
-          p.liveOptionPx    = pick.px
-          p.livePriceSource = pick.source
-          p.livePriceAt     = now
-          ok++
-        } else { fail++ }
-      } else { fail++ }
-    } catch(e) { fail++ }
-    setStatus('Live refresh: '+ok+' ok · '+fail+' miss', '#8b91a0')
+      const r = (d && d.results && typeof d.results === 'object' && !Array.isArray(d.results))
+        ? d.results : (d && d.results && d.results[0]) || null
+      if(!r) { failOpt++; continue }
+      const pick = (typeof pickLiveOptionPrice === 'function') ? pickLiveOptionPrice(r) : null
+      if(!pick || !pick.px) { failOpt++; continue }
+      const mark = +pick.px
+      const prevClose = (r.day && typeof r.day.previous_close === 'number' && r.day.previous_close > 0)
+        ? r.day.previous_close
+        : (r.day && typeof r.day.change === 'number') ? (mark - r.day.change) : null
+      const todayChangePerContract = (prevClose != null) ? (mark - prevClose)
+        : (r.day && typeof r.day.change === 'number') ? r.day.change : 0
+      const qty = +p.qty || 0
+      const costBasis = +p.costBasisTotal || (+p.avgCost||0) * 100 * qty
+      const currentValue = mark * 100 * qty
+      const todayGL   = todayChangePerContract * 100 * qty
+      const todayPct  = (prevClose && prevClose > 0) ? (todayChangePerContract / prevClose * 100) : 0
+      const totalGL   = currentValue - costBasis
+      const totalPct  = costBasis > 0 ? (totalGL / costBasis * 100) : 0
+
+      p.liveOptionPx              = +mark.toFixed(4)
+      p.livePriceSource           = pick.source
+      p.livePrevClose             = (prevClose != null) ? +prevClose.toFixed(4) : null
+      p.liveTodayChangePerContract= +todayChangePerContract.toFixed(4)
+      p.liveCurrentValue          = +currentValue.toFixed(2)
+      p.liveTodayGL               = +todayGL.toFixed(2)
+      p.liveTodayGLPct            = +todayPct.toFixed(2)
+      p.liveTotalGL               = +totalGL.toFixed(2)
+      p.liveTotalGLPct            = +totalPct.toFixed(2)
+      p.livePriceAt               = now
+      p.liveRefreshAt             = now
+      okOpt++
+    } catch(e) { failOpt++ }
+    setStatus('Live refresh: options '+okOpt+' ok · '+failOpt+' miss', '#8b91a0')
   }
+
+  // ── Stock positions — one batched snapshot call ──────────────────────
+  const stockTickers = Array.from(new Set(positions.filter(p => p.isStock && p.underlying).map(p => p.underlying)))
+  if(stockTickers.length) {
+    try {
+      const snap = await apiGet('/v2/snapshot/locale/us/markets/stocks/tickers?tickers='+stockTickers.join(','))
+      const byTicker = {}
+      if(snap && Array.isArray(snap.tickers)) {
+        for(const tk of snap.tickers) {
+          const price = (tk.day && tk.day.c) || (tk.min && tk.min.c) || (tk.prevDay && tk.prevDay.c)
+          if(!price) continue
+          const prevClose = (tk.prevDay && tk.prevDay.c) || null
+          const change    = (typeof tk.todaysChange === 'number') ? tk.todaysChange : (prevClose ? price - prevClose : 0)
+          const changePct = (typeof tk.todaysChangePerc === 'number') ? tk.todaysChangePerc : (prevClose ? (change/prevClose*100) : 0)
+          byTicker[tk.ticker] = { price, prevClose, change, changePct }
+        }
+      }
+      for(const p of positions) {
+        if(!p.isStock) continue
+        const q = byTicker[p.underlying]
+        if(!q) { failStk++; continue }
+        const qty = +p.qty || 0
+        const costBasis = +p.costBasisTotal || (+p.avgCost||0) * qty
+        const currentValue = q.price * qty
+        const todayGL   = q.change * qty
+        const totalGL   = currentValue - costBasis
+        const totalPct  = costBasis > 0 ? (totalGL / costBasis * 100) : 0
+
+        p.liveStockPx         = +q.price.toFixed(4)
+        p.livePrevClose       = q.prevClose != null ? +q.prevClose.toFixed(4) : null
+        p.liveCurrentValue    = +currentValue.toFixed(2)
+        p.liveTodayGL         = +todayGL.toFixed(2)
+        p.liveTodayGLPct      = +q.changePct.toFixed(2)
+        p.liveTotalGL         = +totalGL.toFixed(2)
+        p.liveTotalGLPct      = +totalPct.toFixed(2)
+        p.liveRefreshAt       = now
+        // Keep p.stockPrice in sync so the Decision Ladder's "current spot"
+        // reflects the latest quote (entry-snapshot anchors remain frozen).
+        p.stockPrice          = +q.price.toFixed(2)
+        p.stockPriceAt        = now
+        okStk++
+      }
+    } catch(e) { failStk += stockTickers.length; console.warn('[FID-LIVE] stock batch failed:', e.message) }
+  }
+
+  window.FID_OPEN.liveRefreshAt = now
   saveFidOpen()
   try { renderTrades() } catch(e) {}
-  setStatus('✓ Live refresh complete: '+ok+'/'+(ok+fail), '#00d68f')
+  const total = okOpt + failOpt + okStk + failStk
+  setStatus('✓ Live refresh complete · options '+okOpt+'/'+(okOpt+failOpt)+' · stocks '+okStk+'/'+(okStk+failStk), '#00d68f')
+  return { okOpt, failOpt, okStk, failStk, refreshedAt: now }
 }
+
+// ── Auto-refresh during market hours ────────────────────────────────────
+// Every 60s between 9:30 and 16:00 ET, Mon–Fri. Only runs when a snapshot
+// is active and the Trade Manager Open tab is visible (avoid background
+// API burn when the user is elsewhere).
+let _fidLiveTimer = null
+function startFidLiveAutoRefresh() {
+  if(_fidLiveTimer) return
+  const isMarketOpen = () => {
+    const et = new Date(new Date().toLocaleString('en-US',{timeZone:'America/New_York'}))
+    const d = et.getDay(), h = et.getHours(), m = et.getMinutes()
+    return d >= 1 && d <= 5 && (h > 9 || (h === 9 && m >= 30)) && h < 16
+  }
+  _fidLiveTimer = setInterval(() => {
+    if(!window.FID_OPEN || !window.FID_OPEN.positions || !window.FID_OPEN.positions.length) return
+    if(!isMarketOpen()) return
+    const tmOpen = document.getElementById('tm-open-panel')
+    const tradesPage = document.getElementById('trades')
+    if(tradesPage && tradesPage.classList.contains('active') && tmOpen && tmOpen.style.display !== 'none') {
+      refreshFidOpenLivePrices().catch(e => console.warn('[FID-LIVE-AUTO]', e.message))
+    }
+  }, 60 * 1000)
+  console.log('[FID-LIVE] auto-refresh started (60s, market hours, Trade Manager Open tab only)')
+}
+// Kick it off on boot; the interval is idempotent via the _fidLiveTimer guard
+setTimeout(startFidLiveAutoRefresh, 2000)
 
 // ── Reconcile Fidelity snapshot vs legacy TRADES ─────────────────────────
 function reconcileFidVsLegacy() {
@@ -8414,7 +8539,13 @@ function buildTradeShapesFromFidOpen() {
     const cts   = +p.qty || 0
     const cost  = +p.avgCost || 0
     const costBasisTotal = +p.costBasisTotal || (cost * 100 * cts)
-    const currentValue   = curPx > 0 ? (curPx * 100 * cts) : (+p.currentValue || 0)
+    // Derived live-pricing fields (options via liveCurrentValue; stocks via
+    // liveStockPx × qty). Fallback order: live-computed → liveOptionPx math
+    // → Fidelity's CSV currentValue. Fidelity's cost-basis / qty / avgCost
+    // are NEVER overwritten by the live pipeline.
+    const hasLive = (+p.liveRefreshAt > 0)
+    const currentValue = hasLive && (+p.liveCurrentValue > 0) ? +p.liveCurrentValue
+      : (curPx > 0 ? (curPx * 100 * cts) : (+p.currentValue || 0))
     // ── Entry-snapshot (FROZEN) vs current (LIVE) references ─────────────
     // The card's stop ladder is anchored on the ORIGINAL entry — so
     // t.entry and t.atr carry the FROZEN fields captured at first import.
@@ -8465,10 +8596,13 @@ function buildTradeShapesFromFidOpen() {
       lastRefreshAttemptAt: p.livePriceAt || (window.FID_OPEN.importedAt||0),
       livePriceSource: p.livePriceSource || (p.currentPrice > 0 ? 'fidelity-csv' : null),
       curVal:     currentValue,
-      totalGL:    (+p.totalGL) || (curPx > 0 ? currentValue - costBasisTotal : 0),
-      totalPct:   (+p.totalGLPct) || (costBasisTotal > 0 ? ((currentValue - costBasisTotal)/costBasisTotal*100) : 0),
-      todayGL:    +p.todayGL || 0,
-      todayPct:   +p.todayGLPct || 0,
+      // Prefer live-computed totals; fall back to CSV-at-import values.
+      totalGL:    hasLive && (p.liveTotalGL != null) ? +p.liveTotalGL
+                  : (+p.totalGL) || (curPx > 0 ? currentValue - costBasisTotal : 0),
+      totalPct:   hasLive && (p.liveTotalGLPct != null) ? +p.liveTotalGLPct
+                  : (+p.totalGLPct) || (costBasisTotal > 0 ? ((currentValue - costBasisTotal)/costBasisTotal*100) : 0),
+      todayGL:    hasLive && (p.liveTodayGL != null) ? +p.liveTodayGL : (+p.todayGL || 0),
+      todayPct:   hasLive && (p.liveTodayGLPct != null) ? +p.liveTodayGLPct : (+p.todayGLPct || 0),
       // stamp import date as trade date for the card's "entered" label
       date:       legacy && legacy.date || (window.FID_OPEN.importedAt ? new Date(window.FID_OPEN.importedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}).replace(',','') : ''),
       importedAt: window.FID_OPEN.importedAt,
