@@ -652,7 +652,7 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
   <!-- Internal Filters (compact) -->
   <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:8px 14px;background:#090d13;border-radius:6px;border:1px solid #1e2d3d;margin-bottom:10px;font-size:11px">
     <span style="color:#555c6e">Min Score:</span>
-    <input type="number" id="int-f-score" value="40" step="5" min="0" max="100" style="width:50px;padding:3px 5px;font-size:11px">
+    <input type="number" id="int-f-score" value="0" step="5" min="0" max="100" style="width:50px;padding:3px 5px;font-size:11px" title="Default 0 shows every scored ticker; raise to filter by quality">
     <span style="color:#555c6e">Sector:</span>
     <select id="int-f-sector" style="font-size:11px;padding:3px 5px;background:#0d1117;color:#e8eaf0;border:1px solid #1e2d3d">
       <option value="">All</option>
@@ -1379,8 +1379,8 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 // the latest commit — your browser is serving CACHED older HTML.
 // Hard-reload: Cmd+Shift+R (Mac) / Ctrl+Shift+F5 (Win).
 window.__GT_BUILD = {
-  sha:   '192c0ca7de6e5f8abeee2cf01f94c8748eed6fda',
-  short: '192c0ca',
+  sha:   'fb25d924840e5ddbe83a254a2c3271cd1cbff97c',
+  short: 'fb25d92',
   builtAt: new Date().toISOString()
 }
 ;(function(){
@@ -6923,15 +6923,18 @@ function setScreenerMode(mode) {
 }
 
 // ── INTERNAL SCORING ENGINE ───────────────────────────────────────────────────
+// Min-bars threshold is 30 (was 50) so the scorer still works on newly-listed
+// names or thin proxies. Missing EMAs (e.g. 200 EMA with only 60 bars) are
+// handled by treating them as null in the trend score — no hard fail.
 function calcInternalScore(bars, spyBars, sectorBars, quote) {
-  if(!bars || bars.length < 50) return null
+  if(!bars || bars.length < 30) return null
   var closes = bars.map(function(b){return b.c})
   var n = closes.length
   var price = closes[n-1]
 
-  // ── EMA helper ──
+  // ── EMA helper ── returns null when insufficient data
   function ema(data, period) {
-    if(data.length < period) return null
+    if(!data || data.length < period) return null
     var k = 2/(period+1)
     var val = data.slice(0,period).reduce(function(a,b){return a+b},0)/period
     for(var i=period;i<data.length;i++) val = data[i]*k + val*(1-k)
@@ -6939,11 +6942,11 @@ function calcInternalScore(bars, spyBars, sectorBars, quote) {
   }
 
   var e20  = ema(closes, 20)
-  var e50  = ema(closes, 50)
-  var e200 = ema(closes, 200)
+  var e50  = (n >= 50)  ? ema(closes, 50)  : null
+  var e200 = (n >= 200) ? ema(closes, 200) : null
   // 20 EMA slope (compare to 5 bars ago)
   var e20_5ago = ema(closes.slice(0,-5), 20)
-  var emaSlope = e20 && e20_5ago ? e20 - e20_5ago : 0
+  var emaSlope = (e20 != null && e20_5ago != null) ? e20 - e20_5ago : 0
 
   // ── 1. MOMENTUM (0-40) ────────────────────────────────────────────────────
   // 20-day return
@@ -6974,16 +6977,32 @@ function calcInternalScore(bars, spyBars, sectorBars, quote) {
   trendScore = Math.min(25, trendScore)
 
   // ── 3. SENTIMENT / RSI (0-15) ───────────────────────────────────────────
-  // Simple RSI(14)
-  var gains=0, losses=0
+  // Wilder RSI(14). Previous impl had an off-by-one: the i>0 branch was
+  // unreachable because i started at n-14, so closes[i-1] was always
+  // valid but the Wilder smoothing wasn't applied. This uses the
+  // canonical formulation: seed with first 14 diffs, then smooth.
   var rsiPeriod = 14
-  for(var i=n-rsiPeriod;i<n;i++) {
-    var chg = closes[i]-(i>0?closes[i-1]:closes[i])
-    if(chg>0) gains+=chg; else losses+=Math.abs(chg)
+  var rsi = 50
+  if(n >= rsiPeriod + 1) {
+    var gains = 0, losses = 0
+    // Seed average from first 14 changes
+    for(var i = 1; i <= rsiPeriod; i++) {
+      var ch = closes[i] - closes[i-1]
+      if(ch >= 0) gains += ch; else losses += -ch
+    }
+    var avgGain = gains / rsiPeriod
+    var avgLoss = losses / rsiPeriod
+    // Wilder smooth through the rest
+    for(var j = rsiPeriod + 1; j < n; j++) {
+      var c = closes[j] - closes[j-1]
+      var up = c > 0 ? c : 0
+      var dn = c < 0 ? -c : 0
+      avgGain = (avgGain * (rsiPeriod - 1) + up) / rsiPeriod
+      avgLoss = (avgLoss * (rsiPeriod - 1) + dn) / rsiPeriod
+    }
+    var rs2 = avgLoss > 0 ? avgGain / avgLoss : 100
+    rsi = 100 - (100 / (1 + rs2))
   }
-  var avgGain = gains/rsiPeriod, avgLoss = losses/rsiPeriod
-  var rs2 = avgLoss>0 ? avgGain/avgLoss : 100
-  var rsi = 100 - (100/(1+rs2))
   // Healthy RSI: 40-70 = best, 30-40 or 70-80 = ok, extremes = bad
   var sentScore = rsi>=40&&rsi<=70?15 : rsi>=30&&rsi<=80?8 : rsi>80?3 : 0
   sentScore = Math.min(15, sentScore)
@@ -7033,6 +7052,18 @@ function calcInternalScore(bars, spyBars, sectorBars, quote) {
 }
 
 // ── RUN THE INTERNAL SCREEN ───────────────────────────────────────────────────
+// Pipeline stages (all logged to [INT-SCREEN]):
+//   1. UNIVERSE       N tickers in INTERNAL_UNIVERSE minus ETFs
+//   2. BASELINE       fetch SPY + sector-ETF bars for relative-strength math
+//   3. FETCH          per-ticker bars via Tradier proxy (280 days = ~200 trading)
+//   4. VALIDATE       drop tickers with < 30 bars
+//   5. SCORE          calcInternalScore; drop nulls with rejection reason logged
+//   6. RENDER         sort by total, hand to renderInternalResults
+//
+// Previous bug: fetched 70 CALENDAR days (~48 trading) then required 50 bars in
+// calcInternalScore — every ticker rejected. Now fetches 280 days so 200 EMA is
+// available, and the scorer's min-bars threshold is 30 (reasonable for thin
+// universes or listings without long history).
 async function runInternalScreen() {
   var tbody = document.getElementById('int-body')
   var loadBar = document.getElementById('int-load-bar')
@@ -7042,79 +7073,132 @@ async function runInternalScreen() {
   if(!tbody) return
 
   // Reset UI
-  tbody.innerHTML = '';
+  tbody.innerHTML = ''
   if(loadBar) loadBar.style.display = 'block'
 
-  // Exclude ETFs from main scoring, keep for reference data
+  // Diagnostics accumulator — printed at end + shown in last-run line
+  var diag = {
+    universe: 0, fetched: 0, fetchFails: 0, validBars: 0,
+    scoreNull: 0, scored: 0, rejections: {}
+  }
+  var rejReason = function(sym, reason) {
+    diag.rejections[reason] = (diag.rejections[reason]||0) + 1
+    if(typeof console !== 'undefined') console.log('[INT-SCREEN]  reject', sym, reason)
+  }
+
+  // Exclude pure ETFs from scoring — they're used as references only
   var etfs = ['SPY','QQQ','XLK','XLF','XLV','XLE','XLI','XLY','XLC','TLT','IWM','GLD','SLV']
-  var stocks = INTERNAL_UNIVERSE.filter(function(s){return !etfs.includes(s)})
+  var stocks = INTERNAL_UNIVERSE.filter(function(s){ return !etfs.includes(s) })
+  diag.universe = stocks.length
+  console.log('[INT-SCREEN] 1/6 UNIVERSE · '+diag.universe+' tickers (excluding '+etfs.length+' ETFs)')
 
-  // Fetch SPY first for relative strength baseline
+  // ── 2/6 BASELINE ───────────────────────────────────────────────────────
+  // Fetch SPY + sector-ETF bars. 280 days so we have ~200 trading days
+  // for 200 EMA math. Any failures here degrade scoring but don't kill it.
   var spyBars = null
-  try { spyBars = await tBars('SPY', 70) } catch(e) {}
+  try { spyBars = await tBars('SPY', 280) } catch(e) { console.warn('[INT-SCREEN] SPY baseline failed:', e.message) }
+  if(!spyBars || !spyBars.length) console.warn('[INT-SCREEN] SPY returned 0 bars — relative-strength math will use 0 baseline')
+  else console.log('[INT-SCREEN] 2/6 BASELINE · SPY bars='+spyBars.length)
 
-  // Fetch sector ETF bars for sector strength
   var sectorBarCache = {}
   var keyETFs = ['XLK','XLF','XLV','XLE','XLI','XLY','XLC']
   for(var ei=0;ei<keyETFs.length;ei++) {
-    try { sectorBarCache[keyETFs[ei]] = await tBars(keyETFs[ei], 30) } catch(e) {}
+    try { sectorBarCache[keyETFs[ei]] = await tBars(keyETFs[ei], 280) } catch(e) {}
   }
+  var sectHits = Object.keys(sectorBarCache).filter(function(k){return sectorBarCache[k] && sectorBarCache[k].length}).length
+  console.log('[INT-SCREEN]            · sector ETFs loaded: '+sectHits+'/'+keyETFs.length)
 
+  // ── 3-5/6 FETCH + VALIDATE + SCORE ─────────────────────────────────────
   var results = []
   var total = stocks.length
   var done = 0
-  var BATCH = 5 // parallel batches
-
-  // Process in batches
+  var BATCH = 5
   for(var bi=0; bi<stocks.length; bi+=BATCH) {
     var batch = stocks.slice(bi, bi+BATCH)
     var batchResults = await Promise.all(batch.map(async function(sym) {
+      var bars
       try {
-        var bars = await tBars(sym, 70)
-        if(!bars || bars.length < 20) return null
-        // Get sector for this ticker
-        var sec = getSector(sym)
-        var sectorETF = (typeof SECTOR_ETFS !== 'undefined' ? SECTOR_ETFS : SECTOR_ETFS_INT)[sec]
-        var sectorBars = sectorETF ? sectorBarCache[sectorETF] : null
-        // Score it
-        var score = calcInternalScore(bars, spyBars, sectorBars, null)
-        if(!score) return null
-        return {
-          sym: sym,
-          sector: sec,
-          cluster: getCluster(sym),
-          score: score
-        }
-      } catch(e) { return null }
+        bars = await tBars(sym, 280)
+      } catch(e) {
+        diag.fetchFails++; rejReason(sym, 'fetch-error'); return null
+      }
+      if(!bars || !Array.isArray(bars) || !bars.length) {
+        diag.fetchFails++; rejReason(sym, 'no-bars'); return null
+      }
+      diag.fetched++
+      if(bars.length < 30) { rejReason(sym, 'too-few-bars-'+bars.length); return null }
+      diag.validBars++
+      var sec = getSector(sym)
+      var sectorETF = (typeof SECTOR_ETFS !== 'undefined' ? SECTOR_ETFS : SECTOR_ETFS_INT)[sec]
+      var sectorBars = sectorETF ? sectorBarCache[sectorETF] : null
+      var score
+      try {
+        score = calcInternalScore(bars, spyBars, sectorBars, null)
+      } catch(e) {
+        rejReason(sym, 'score-error'); return null
+      }
+      if(!score) { diag.scoreNull++; rejReason(sym, 'score-null'); return null }
+      diag.scored++
+      return {
+        sym: sym,
+        sector: sec,
+        cluster: (typeof getCluster === 'function' ? getCluster(sym) : sec),
+        score: score,
+        barCount: bars.length
+      }
     }))
     done += batch.length
     var pct = Math.round(done/total*100)
-    if(barFill) barFill.style.width = pct+'%';
-    if(barLabel) barLabel.textContent = 'Scoring '+done+' / '+total+' tickers...';
+    if(barFill) barFill.style.width = pct+'%'
+    if(barLabel) barLabel.textContent = 'Scoring '+done+' / '+total+' tickers...'
     if(progress) progress.textContent = pct+'%'
-    // Add valid results
-    batchResults.filter(Boolean).forEach(function(r){results.push(r)})
+    batchResults.filter(Boolean).forEach(function(r){ results.push(r) })
   }
 
-  // Sort by total score
-  results.sort(function(a,b){return b.score.total - a.score.total})
+  // Sort descending by total score
+  results.sort(function(a,b){ return b.score.total - a.score.total })
 
-  // Save to Firebase
+  // ── 6/6 RENDER + persist + diagnostics ─────────────────────────────────
+  console.log('[INT-SCREEN] 3/6 FETCH    · '+diag.fetched+' ok · '+diag.fetchFails+' fail')
+  console.log('[INT-SCREEN] 4/6 VALIDATE · '+diag.validBars+' had \u226530 bars')
+  console.log('[INT-SCREEN] 5/6 SCORE    · '+diag.scored+' scored · '+diag.scoreNull+' null')
+  if(Object.keys(diag.rejections).length) console.log('[INT-SCREEN]      rejections:', diag.rejections)
+  console.log('[INT-SCREEN] 6/6 RENDER   · '+results.length+' candidates')
+  if(results.length) {
+    console.log('[INT-SCREEN]      top 20 raw scores:')
+    results.slice(0, 20).forEach(function(r, i) {
+      console.log('  '+String(i+1).padStart(2)+'. '+r.sym.padEnd(6)+' total='+String(r.score.total).padStart(3)+
+        '  mom='+String(r.score.mom).padStart(2)+
+        '  trend='+String(r.score.trend).padStart(2)+
+        '  sent='+String(r.score.sent).padStart(2)+
+        '  sect='+String(r.score.sect).padStart(2)+
+        '  exec='+String(r.score.exec).padStart(2)+
+        '  ret20='+r.score.ret20+'%  ('+r.sector+')')
+    })
+  } else {
+    console.error('[INT-SCREEN] ✗ zero candidates — check proxy health or baseline fetches. Diag:', diag)
+  }
+
   INTERNAL_RESULTS = results
   INTERNAL_SCORED_AT = Date.now().toString()
-  localStorage.setItem('gt_internal_results', JSON.stringify(results.slice(0,200)))
-  localStorage.setItem('gt_internal_scored_at', INTERNAL_SCORED_AT)
-  fbAutoSave(2000)
+  try { localStorage.setItem('gt_internal_results', JSON.stringify(results.slice(0,200))) } catch(e) {}
+  try { localStorage.setItem('gt_internal_scored_at', INTERNAL_SCORED_AT) } catch(e) {}
+  if(typeof fbAutoSave === 'function') fbAutoSave(2000)
 
-  // Update last run
   var lastRun = document.getElementById('int-last-run')
-  if(lastRun) lastRun.textContent = 'Scored '+results.length+' tickers · '+new Date().toLocaleTimeString()
+  if(lastRun) {
+    lastRun.textContent = 'Scored '+results.length+'/'+diag.universe+' · '+
+      diag.fetchFails+' fetch-fail · '+diag.scoreNull+' score-null · '+
+      new Date().toLocaleTimeString()
+  }
 
-  // Hide loader, render
-  if(loadBar) loadBar.style.display = 'none';
+  if(loadBar) loadBar.style.display = 'none'
   if(progress) progress.textContent = ''
   renderInternalResults(results)
+
+  return { results: results, diag: diag }
 }
+if(typeof window !== 'undefined') window.runInternalScreen = runInternalScreen
 
 function runInternalFilter() {
   var minScore = +document.getElementById('int-f-score')?.value || 0
@@ -7132,7 +7216,10 @@ function renderInternalResults(results, filtered) {
   var tbody = document.getElementById('int-body')
   if(!tbody) return
   if(!results || !results.length) {
-    tbody.innerHTML = '<tr><td colspan="11" style="padding:20px;text-align:center;color:#555c6e">No results — click "Run Screen" to score tickers\x3C/td>\x3C/tr>';
+    var msg = filtered
+      ? 'No candidates match the current filter — try lowering Min Score or clearing the sector filter. The raw results are still in <code>INTERNAL_RESULTS</code>.'
+      : 'No results yet. Click <b>▶ Run Screen</b> to score the universe. Check DevTools console for <code>[INT-SCREEN]</code> stage counts if results come back empty.'
+    tbody.innerHTML = '<tr><td colspan="11" style="padding:20px;text-align:center;color:#555c6e;font-size:12px;line-height:1.8">'+msg+'</td></tr>'
     return
   }
   var display = results.slice(0, 100)
