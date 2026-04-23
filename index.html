@@ -8576,8 +8576,10 @@ function drawMiniChart(canvas, bars, entry, stop, roll, current) {
   const buf = (mx - mn) * 0.10
   mn -= buf; mx += buf
 
-  // Right margin reserves space for label pills (widest ≈ "ENTRY 999.99")
-  const pad = { t: 10, r: 72, b: 10, l: 6 }
+  // Right margin reserves space for label pills. Widened to 86 px to fit
+  // the distance-from-NOW chip that now lives in each reference pill
+  // (e.g. "STOP 22.98  -1.5%" or "+0.34").
+  const pad = { t: 10, r: 86, b: 10, l: 6 }
   const plotW = W - pad.l - pad.r
   const plotH = H - pad.t - pad.b
   const y = v => pad.t + plotH * (1 - (v - mn) / (mx - mn))
@@ -8588,21 +8590,26 @@ function drawMiniChart(canvas, bars, entry, stop, roll, current) {
   ctx.fillRect(pad.l, pad.t, plotW, plotH)
 
   // ── Price history (subordinate — muted so NOW dominates) ─────────────
+  // Renders in short segments so we can fade older bars (more transparent
+  // on the left, more solid on the right). Implies time direction at a
+  // glance without another legend.
   if(closes.length > 1) {
     ctx.save()
     ctx.beginPath()
     ctx.rect(pad.l, pad.t, plotW, plotH)
     ctx.clip()
-    ctx.strokeStyle = 'rgba(139,145,160,.55)'
     ctx.lineWidth = 1.25
     ctx.lineJoin = 'round'
-    ctx.beginPath()
-    closes.forEach((c, i) => {
-      const px = x(i), py = y(c)
-      if(i === 0) ctx.moveTo(px, py)
-      else        ctx.lineTo(px, py)
-    })
-    ctx.stroke()
+    const n = closes.length
+    for(let i = 1; i < n; i++) {
+      const t = i / (n - 1)                 // 0 → oldest, 1 → newest
+      const alpha = 0.18 + t * 0.55         // 0.18 → 0.73
+      ctx.strokeStyle = 'rgba(139,145,160,' + alpha.toFixed(3) + ')'
+      ctx.beginPath()
+      ctx.moveTo(x(i-1), y(closes[i-1]))
+      ctx.lineTo(x(i),   y(closes[i]))
+      ctx.stroke()
+    }
     ctx.restore()
   }
 
@@ -8668,10 +8675,12 @@ function drawMiniChart(canvas, bars, entry, stop, roll, current) {
     labelSpecs.push({ y: y(current), color: '#ffffff', bg: nowCol, border: nowCol, label: 'NOW', price: current, solid: true })
   }
   // Resolve vertical overlaps: sort by y then nudge any pair whose
-  // centers are closer than MIN_GAP. Preference: keep NOW at its true y.
+  // centers are closer than MIN_GAP. MIN_GAP accounts for the taller
+  // pills (20 px NOW, 16 px + 5 px distance-chip tail for references).
+  // Preference: keep NOW at its true y position so the live marker
+  // never drifts from the actual price level.
   labelSpecs.sort((a, b) => a.y - b.y)
-  const MIN_GAP = 16
-  // First pass: forward, push overlapping pills down (skip forcing NOW).
+  const MIN_GAP = 22
   for(let i = 1; i < labelSpecs.length; i++) {
     const delta = labelSpecs[i].y - labelSpecs[i-1].y
     if(delta < MIN_GAP) {
@@ -8684,43 +8693,73 @@ function drawMiniChart(canvas, bars, entry, stop, roll, current) {
   }
   // Clamp each pill to stay inside the canvas vertical bounds
   for(const s of labelSpecs) {
-    s.y = Math.min(H - 9, Math.max(9, s.y))
+    s.y = Math.min(H - 12, Math.max(12, s.y))
   }
 
-  ctx.font = 'bold 9px "SF Mono", monospace'
   ctx.textBaseline = 'middle'
   for(const s of labelSpecs) {
-    const lbl = s.label
-    const px  = s.price.toFixed(2)
-    const labelWidth = ctx.measureText(lbl).width
-    const priceWidth = ctx.measureText(px).width
+    const isNow = !!s.solid
+    const pillH = isNow ? 20 : 16      // NOW pill is taller → dominates
     const pillX = W - pad.r + 4
-    const pillY = s.y - 8
-    const pillW = Math.min(pad.r - 5, Math.max(labelWidth + priceWidth + 12, 58))
-    const pillH = 16
-    // Background pill
-    ctx.fillStyle = s.bg
-    if(ctx.roundRect) {
-      ctx.beginPath(); ctx.roundRect(pillX, pillY, pillW, pillH, 3); ctx.fill()
-    } else {
-      ctx.fillRect(pillX, pillY, pillW, pillH)
-    }
-    // Thin border
+    const pillY = s.y - pillH / 2
+    const pillW = pad.r - 6            // full right-margin width for consistency
+    const pillR = isNow ? 4 : 3
+
+    // Short leader tick from the chart edge INTO the pill — visually
+    // bolts the pill onto its horizontal level.
     ctx.strokeStyle = s.border
     ctx.lineWidth = 1
-    if(ctx.roundRect) {
-      ctx.beginPath(); ctx.roundRect(pillX + 0.5, pillY + 0.5, pillW - 1, pillH - 1, 3); ctx.stroke()
+    ctx.beginPath()
+    ctx.moveTo(W - pad.r - 3, s.y)
+    ctx.lineTo(pillX, s.y)
+    ctx.stroke()
+
+    // Pill background
+    ctx.fillStyle = s.bg
+    if(ctx.roundRect) { ctx.beginPath(); ctx.roundRect(pillX, pillY, pillW, pillH, pillR); ctx.fill() }
+    else              { ctx.fillRect(pillX, pillY, pillW, pillH) }
+    // Pill border (thicker for NOW so it reads as "active")
+    ctx.strokeStyle = s.border
+    ctx.lineWidth = isNow ? 1.25 : 1
+    if(ctx.roundRect) { ctx.beginPath(); ctx.roundRect(pillX + 0.5, pillY + 0.5, pillW - 1, pillH - 1, pillR); ctx.stroke() }
+    else              { ctx.strokeRect(pillX + 0.5, pillY + 0.5, pillW - 1, pillH - 1) }
+
+    if(isNow) {
+      // NOW: big single line — LABEL right after a small dot + price
+      ctx.font = 'bold 11px "SF Mono", monospace'
+      ctx.textAlign = 'left'
+      ctx.fillStyle = s.color
+      ctx.fillText('NOW', pillX + 6, s.y)
+      ctx.textAlign = 'right'
+      ctx.fillText(s.price.toFixed(2), pillX + pillW - 6, s.y)
     } else {
-      ctx.strokeRect(pillX + 0.5, pillY + 0.5, pillW - 1, pillH - 1)
+      // STOP / ENTRY / ROLL: label + price on the top line, distance
+      // chip on a small bottom line. Distance is in % of current price
+      // if we have current, in absolute points otherwise.
+      const dist = (current > 0) ? (s.price - current) : 0
+      const distPct = (current > 0) ? (dist / current * 100) : null
+      const chipTxt = (distPct != null)
+        ? ((distPct >= 0 ? '+' : '') + distPct.toFixed(1) + '%')
+        : ''
+      ctx.font = 'bold 10px "SF Mono", monospace'
+      ctx.textAlign = 'left'
+      ctx.fillStyle = s.color
+      ctx.fillText(s.label, pillX + 5, s.y - 3)
+      ctx.textAlign = 'right'
+      ctx.fillText(s.price.toFixed(2), pillX + pillW - 5, s.y - 3)
+      if(chipTxt) {
+        ctx.font = '8px "SF Mono", monospace'
+        ctx.textAlign = 'right'
+        // Distance chip color is dimmer version of the level color
+        const dimMap = {
+          '#ff4560': 'rgba(255,69,96,.75)',
+          '#f0c040': 'rgba(240,192,64,.75)',
+          '#00d68f': 'rgba(0,214,143,.75)'
+        }
+        ctx.fillStyle = dimMap[s.color] || 'rgba(139,145,160,.75)'
+        ctx.fillText(chipTxt, pillX + pillW - 5, s.y + 5)
+      }
     }
-    // Label text on the left of the pill
-    ctx.textAlign = 'left'
-    ctx.fillStyle = s.color
-    ctx.fillText(lbl, pillX + 4, s.y)
-    // Price on the right of the pill
-    ctx.textAlign = 'right'
-    ctx.fillStyle = s.color
-    ctx.fillText(px, pillX + pillW - 4, s.y)
   }
 }
 
@@ -9783,18 +9822,22 @@ function renderTrades() {
                     : (entryPx > 0 && curUnd >= entryPx) ? '#4da6ff'
                     : '#f0c040'
 
-    // Chart is the primary visual — key levels (STOP / ENTRY / ROLL /
-    // NOW) are labeled ON the chart itself. No redundant metrics row
-    // beneath; the canvas owns the decision surface. A minimal fallback
-    // ribbon shows only the NOW price in a large font when snapshot is
-    // ready — the single number that matters for "is this card alive?".
+    // Chart owns the decision surface. Every key level (STOP / ENTRY /
+    // ROLL / NOW) is labeled ON the canvas with distance-from-NOW chips,
+    // so nothing below the chart duplicates those numbers. The chart
+    // footer is minimal: just the underlying ticker tag (left) and a
+    // tiny live-refresh freshness pill (right). If you want the number
+    // big, it's already in the NOW pill.
+    const refreshedLbl = (+t.livePriceAt > 0)
+      ? new Date(t.livePriceAt).toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit' })
+      : ''
     const miniChartHtml = (entryPx > 0 && entryATRv > 0)
       ? (
-        '<div style="background:#0a0c0f;border:1px solid rgba(255,255,255,.06);border-radius:8px;padding:8px 10px 4px;position:relative">' +
+        '<div style="background:#0a0c0f;border:1px solid rgba(255,255,255,.06);border-radius:8px;padding:8px 10px 6px;position:relative">' +
           '<canvas id="mini-chart-' + t.id + '" style="width:100%;height:140px;display:block"></canvas>' +
-          '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:2px;padding:0 2px 2px">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;padding:0 2px">' +
             '<span style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#555c6e">'+(t.underlying||'')+'</span>' +
-            '<span style="font-size:13px;font-weight:700;color:'+curCol+';font-family:\'SF Mono\',monospace">'+fmt$(curUnd)+'</span>' +
+            (refreshedLbl ? '<span style="font-size:8px;color:#333a4a;letter-spacing:.05em">live · '+refreshedLbl+'</span>' : '') +
           '</div>' +
         '</div>'
       )
