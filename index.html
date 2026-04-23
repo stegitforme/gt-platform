@@ -8253,6 +8253,15 @@ async function enrichFidOpenWithStockPrices() {
         filled++
       }
     }
+    // Publish to the shared window._livePrices cache so the card header
+    // (which reads window._livePrices[underlying] first) and the
+    // mini-chart's getCurrentUnderlyingPxForTrade() resolver see the
+    // exact same value. Without this both views diverged after every
+    // CSV import — the card header would read a stale _livePrices from
+    // a prior legacy refresh (or nothing) while the chart used p.stockPrice.
+    if(!window._livePrices) window._livePrices = {}
+    for(const tk of Object.keys(prices)) window._livePrices[tk] = prices[tk]
+    window._livePricesAt = new Date()
     setStatus('✓ Underlying prices enriched ('+filled+'/'+window.FID_OPEN.positions.length+')', '#00d68f')
     saveFidOpen()
     try { renderTrades() } catch(e) {}
@@ -8358,11 +8367,17 @@ async function refreshFidOpenLivePrices() {
     setStatus('Live refresh: options '+okOpt+' ok · '+failOpt+' miss', '#8b91a0')
   }
 
-  // ── Stock positions — one batched snapshot call ──────────────────────
-  const stockTickers = Array.from(new Set(positions.filter(p => p.isStock && p.underlying).map(p => p.underlying)))
-  if(stockTickers.length) {
+  // ── Underlying stock prices — one batched snapshot call ─────────────
+  // Fetches for ALL unique underlyings (stock AND option positions), not
+  // just stock positions. Option positions also need a fresh underlying
+  // so the mini-chart NOW line / pill / header action badge / distance
+  // chips all read from one canonical source. Also populates the shared
+  // window._livePrices cache, which is the first lookup in
+  // getCurrentUnderlyingPxForTrade().
+  const allTickers = Array.from(new Set(positions.map(p => p.underlying).filter(Boolean)))
+  if(allTickers.length) {
     try {
-      const snap = await apiGet('/v2/snapshot/locale/us/markets/stocks/tickers?tickers='+stockTickers.join(','))
+      const snap = await apiGet('/v2/snapshot/locale/us/markets/stocks/tickers?tickers='+allTickers.join(','))
       const byTicker = {}
       if(snap && Array.isArray(snap.tickers)) {
         for(const tk of snap.tickers) {
@@ -8374,32 +8389,40 @@ async function refreshFidOpenLivePrices() {
           byTicker[tk.ticker] = { price, prevClose, change, changePct }
         }
       }
-      for(const p of positions) {
-        if(!p.isStock) continue
-        const q = byTicker[p.underlying]
-        if(!q) { failStk++; continue }
-        const qty = +p.qty || 0
-        const costBasis = +p.costBasisTotal || (+p.avgCost||0) * qty
-        const currentValue = q.price * qty
-        const todayGL   = q.change * qty
-        const totalGL   = currentValue - costBasis
-        const totalPct  = costBasis > 0 ? (totalGL / costBasis * 100) : 0
+      // Publish to the shared cache — single source of truth across the
+      // whole Trade Manager. getCurrentUnderlyingPxForTrade reads here first.
+      if(!window._livePrices) window._livePrices = {}
+      for(const tk of Object.keys(byTicker)) window._livePrices[tk] = byTicker[tk].price
+      window._livePricesAt = new Date()
 
-        p.liveStockPx         = +q.price.toFixed(4)
-        p.livePrevClose       = q.prevClose != null ? +q.prevClose.toFixed(4) : null
-        p.liveCurrentValue    = +currentValue.toFixed(2)
-        p.liveTodayGL         = +todayGL.toFixed(2)
-        p.liveTodayGLPct      = +q.changePct.toFixed(2)
-        p.liveTotalGL         = +totalGL.toFixed(2)
-        p.liveTotalGLPct      = +totalPct.toFixed(2)
-        p.liveRefreshAt       = now
-        // Keep p.stockPrice in sync so the Decision Ladder's "current spot"
-        // reflects the latest quote (entry-snapshot anchors remain frozen).
-        p.stockPrice          = +q.price.toFixed(2)
-        p.stockPriceAt        = now
-        okStk++
+      // Write p.liveStockPx on EVERY position (options included) so the
+      // synthesized trade shape / debug log / any secondary consumer has
+      // consistent data. Only stock positions get the full P&L rewrite
+      // (options already got theirs from the option snapshot above).
+      for(const p of positions) {
+        const q = byTicker[p.underlying]
+        if(!q) { if(p.isStock) failStk++; continue }
+        p.liveStockPx   = +q.price.toFixed(4)
+        p.livePrevClose = q.prevClose != null ? +q.prevClose.toFixed(4) : (p.livePrevClose || null)
+        p.stockPrice    = +q.price.toFixed(2)   // keep chart entry-anchor display live
+        p.stockPriceAt  = now
+        p.liveRefreshAt = now
+        if(p.isStock) {
+          const qty = +p.qty || 0
+          const costBasis = +p.costBasisTotal || (+p.avgCost||0) * qty
+          const currentValue = q.price * qty
+          const todayGL = q.change * qty
+          const totalGL = currentValue - costBasis
+          const totalPct = costBasis > 0 ? (totalGL / costBasis * 100) : 0
+          p.liveCurrentValue = +currentValue.toFixed(2)
+          p.liveTodayGL      = +todayGL.toFixed(2)
+          p.liveTodayGLPct   = +q.changePct.toFixed(2)
+          p.liveTotalGL      = +totalGL.toFixed(2)
+          p.liveTotalGLPct   = +totalPct.toFixed(2)
+          okStk++
+        }
       }
-    } catch(e) { failStk += stockTickers.length; console.warn('[FID-LIVE] stock batch failed:', e.message) }
+    } catch(e) { failStk += allTickers.length; console.warn('[FID-LIVE] stock batch failed:', e.message) }
   }
 
   window.FID_OPEN.liveRefreshAt = now
@@ -8822,6 +8845,49 @@ function drawMiniChart(canvas, bars, entry, stop, roll, current) {
   }
 }
 
+// ── Canonical current-underlying resolver ────────────────────────────────
+// SINGLE source-of-truth function for "what is the live underlying price
+// for this trade, right now?". Every surface that shows a current price
+// (mini-chart NOW line/pill/dot/merge-logic, card header action badge,
+// distance chips, regime coloring, % vs entry) must flow through here.
+//
+// Explicit priority order:
+//   1. window._livePrices[underlying]         — freshest cache (shared by
+//                                                fetchStockPricesForTrades
+//                                                AND refreshFidOpenLivePrices
+//                                                / enrichFidOpenWithStockPrices,
+//                                                which all now write here)
+//   2. FID_OPEN.positions[*].liveStockPx       — set by refreshFidOpenLivePrices
+//   3. FID_OPEN.positions[*].stockPrice        — set by enrichment at import
+//   4. t.stockPrice / t.currentUnderlyingPx    — synthesized fallback
+//
+// NEVER falls back to t.entry for NOW — if no live source exists, returns
+// 0 and the caller should render a "no live price yet" state rather than
+// silently showing the entry as the current.
+function getCurrentUnderlyingPxForTrade(t) {
+  if(!t) return 0
+  const sym = t.underlying || (t.ticker||'').split(' ')[0] || ''
+  // 1. Global fresh cache (shared by all refresh paths)
+  if(sym && window._livePrices && typeof window._livePrices[sym] === 'number' && window._livePrices[sym] > 0) {
+    return +window._livePrices[sym]
+  }
+  // 2 & 3. FID_OPEN snapshot row for this underlying
+  if(sym && window.FID_OPEN && Array.isArray(window.FID_OPEN.positions)) {
+    const p = window.FID_OPEN.positions.find(pp => pp.underlying === sym)
+    if(p) {
+      if(+p.liveStockPx > 0) return +p.liveStockPx
+      if(+p.stockPrice  > 0) return +p.stockPrice
+    }
+  }
+  // 4. Per-trade fallback fields (synthesized or legacy)
+  if(+t.stockPrice        > 0) return +t.stockPrice
+  if(+t.currentUnderlyingPx > 0) return +t.currentUnderlyingPx
+  // DO NOT fall back to entry — return 0 so the caller can render a
+  // "current price pending" state instead of painting NOW on top of ENTRY.
+  return 0
+}
+if(typeof window !== 'undefined') window.getCurrentUnderlyingPxForTrade = getCurrentUnderlyingPxForTrade
+
 // Fetch + draw a single card's mini-chart. Safe to call repeatedly — the
 // fetch layer caches per symbol for 60 s.
 //
@@ -8841,7 +8907,22 @@ async function renderMiniChartForTrade(t) {
   // NOT .toFixed(2) here — the y-mapping must use the same number the
   // pill labels use, and the label is rounded internally for display.
   const roll     = (entry > 0 && entryATR > 0) ? (entry + 0.5 * entryATR) : 0
-  const current  = +t.currentUnderlyingPx || +t.stockPrice || 0
+  const current  = getCurrentUnderlyingPxForTrade(t)
+
+  // One-shot debug log per card per render so the user can verify the
+  // exact values feeding the chart. Logs only when a console listener
+  // is present (standard console.log no-ops in production if muted).
+  if(typeof console !== 'undefined' && console.log) {
+    console.log('[MINI-CHART]', sym, {
+      entryUnderlyingPrice: t.entryUnderlyingPrice,
+      liveStockPx:          t.liveStockPx,
+      stockPrice:           t.stockPrice,
+      currentUnderlyingPx:  t.currentUnderlyingPx,
+      window_livePrices_sym:(window._livePrices && window._livePrices[sym]) || null,
+      resolvedCurrent:      current,
+      entry, stop, roll
+    })
+  }
   const bars = await fetchMiniChartData(sym)
   drawMiniChart(canvas, bars, entry, stop, roll, current)
 }
