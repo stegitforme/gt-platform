@@ -835,20 +835,30 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 
   <!-- ── OPEN TRADES PANEL ───────────────────────────────────────── -->
   <div id="tm-open-panel">
-    <!-- ── FIDELITY SYNC (source of truth for open positions) ─────── -->
+    <!-- ── FIDELITY SYNC (single source of truth) ─────────────────── -->
     <div id="fid-sync-card" class="card" style="margin-bottom:14px;border-color:rgba(77,166,255,.22)">
       <div class="card-head" style="border-color:rgba(77,166,255,.14)">
-        <span class="card-title" style="color:#4da6ff">Fidelity Sync <span style="font-size:10px;color:#8b91a0;font-weight:400;margin-left:6px">source of truth for open positions</span></span>
+        <span class="card-title" style="color:#4da6ff">Fidelity Sync <span style="font-size:10px;color:#8b91a0;font-weight:400;margin-left:6px">single source of truth — open + closed</span></span>
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
           <span id="fid-sync-count" style="font-size:11px;color:#e8eaf0;font-weight:600">no snapshot</span>
           <span id="fid-sync-ts"    style="font-size:10px;color:#555c6e">never synced</span>
         </div>
       </div>
       <div class="card-body" style="padding:12px 14px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;font-size:11px">
+          <div style="padding:7px 10px;background:rgba(77,166,255,.06);border:1px solid rgba(77,166,255,.2);border-radius:6px;color:#c2c7d2">
+            <span style="font-size:9px;font-weight:700;color:#4da6ff;letter-spacing:.07em;text-transform:uppercase">Open Trades</span><br>
+            Source: <b style="color:#e8eaf0">Fidelity Open Positions CSV</b>
+          </div>
+          <div style="padding:7px 10px;background:rgba(77,166,255,.06);border:1px solid rgba(77,166,255,.2);border-radius:6px;color:#c2c7d2">
+            <span style="font-size:9px;font-weight:700;color:#4da6ff;letter-spacing:.07em;text-transform:uppercase">Closed Trades + Analytics</span><br>
+            Source: <b style="color:#e8eaf0">Fidelity Closed Lots CSV</b>
+          </div>
+        </div>
         <div style="font-size:11px;color:#8b91a0;line-height:1.6;margin-bottom:10px">
-          Download your latest <b style="color:#e8eaf0">Portfolio Positions</b> and <b style="color:#e8eaf0">Closed Lots</b> CSV from
-          Fidelity (Accounts → <b>Download</b>), then drop them in below. Open-positions import <b style="color:#4da6ff">replaces</b> the snapshot;
-          closed-lots import <b style="color:#4da6ff">merges &amp; dedupes</b> so re-uploads are idempotent. Legacy trades stay available for notes.
+          Download from Fidelity (Accounts → <b style="color:#e8eaf0">Download</b>), then upload below. Open-positions import
+          <b style="color:#4da6ff">replaces</b> the snapshot; closed-lots import <b style="color:#4da6ff">merges &amp; dedupes</b> so re-uploads are idempotent.
+          Legacy paste-ingestion has been retired — this is the only path.
         </div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
           <label class="btn btn-gold" style="cursor:pointer;padding:7px 14px;font-size:12px;margin:0">
@@ -872,9 +882,13 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
     </div>
 
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
-      <button class="btn btn-ghost" style="width:auto;font-size:11px;padding:5px 11px" onclick="document.getElementById('fidelity-open-form').style.display=document.getElementById('fidelity-open-form').style.display==='none'?'block':'none'">⬇ Paste from Fidelity</button>
-      <button class="btn btn-ghost" style="width:auto;font-size:11px;padding:5px 11px" onclick="document.getElementById('bulk-form').style.display=document.getElementById('bulk-form').style.display==='none'?'block':'none'">⬇ Manual Bulk Import</button>
-      <button class="btn btn-gold" style="width:auto" onclick="openAddTrade()">+ New Trade</button>
+      <!-- Legacy paste + bulk ingestion retired — Fidelity Sync CSV upload
+           is the canonical source of truth for open positions. The + New
+           Trade button is retained for journaling non-Fidelity entries
+           (notes/custom trades); it writes to legacy TRADES which is
+           preserved for metadata but not displayed when FID_OPEN is the
+           active snapshot. -->
+      <button class="btn btn-gold" style="width:auto" onclick="openAddTrade()" title="Journal a manual / non-Fidelity trade (notes only — does not override Fidelity snapshot)">+ New Trade (legacy journal)</button>
       <span id="trade-count" style="font-size:12px;color:#555c6e">0 open</span>
       <span id="total-pnl-display" style="font-size:12px;color:#555c6e"></span>
       <button id="pnl-refresh-btn" class="btn btn-ghost" style="font-size:11px;padding:4px 10px" onclick="refreshAllPnL()">Refresh P&amp;L</button>
@@ -892,8 +906,10 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
       <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px;margin-left:auto" onclick="clearAllTrades()">Clear all</button>
     </div>
 
-    <!-- Fidelity Open Paste Form -->
-    <div id="fidelity-open-form" style="display:none;background:#111318;border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:14px;margin-bottom:12px">
+    <!-- Fidelity Open Paste Form (RETIRED — Fidelity Sync card's
+         "Upload Open Positions CSV" is the canonical ingestion path.
+         Parser functions kept for back-compat; do not re-expose this. -->
+    <div id="fidelity-open-form" style="display:none !important;background:#111318;border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:14px;margin-bottom:12px">
       <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#f0c040;margin-bottom:6px">Paste Fidelity Open Positions</div>
       <div style="font-size:11px;color:#555c6e;margin-bottom:8px;line-height:1.6">
         In Fidelity → Accounts → select account → click <b style="color:#e8eaf0">Download</b> (CSV) → open in Excel → select all option rows → paste here.<br>
@@ -906,7 +922,7 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
         <button class="btn btn-ghost" onclick="document.getElementById('fidelity-open-form').style.display='none'" style="padding:8px 14px">Cancel</button>
       </div>
     </div>
-  <div id="bulk-form" style="display:none;background:#111318;border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:14px;margin-bottom:12px">
+  <div id="bulk-form" style="display:none !important;background:#111318;border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:14px;margin-bottom:12px">
     <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#f0c040;margin-bottom:8px">Bulk Import Trades</div>
     <div style="font-size:11px;color:#555c6e;margin-bottom:8px;line-height:1.6">
       One trade per line: <span style="color:#e8eaf0;font-family:'SF Mono',monospace">TICKER, contracts, expiry, strike, cost</span><br>
@@ -945,12 +961,20 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
   </div><!-- end tm-open-panel -->
 
   <!-- ── CLOSED TRADES PANEL ────────────────────────────────────────── -->
+  <!--
+    Source of truth: Fidelity Closed Lots CSV (FID_CLOSED.lots), loaded
+    via the "Upload Closed Lots CSV" button in the Fidelity Sync card.
+    Legacy paste-ingestion has been retired — see Fidelity Sync.
+  -->
   <div id="tm-closed-panel" style="display:none">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">
-      <button class="btn btn-ghost" style="width:auto;font-size:11px;padding:5px 11px" onclick="document.getElementById('fidelity-closed-form').style.display=document.getElementById('fidelity-closed-form').style.display==='none'?'block':'none'">⬇ Paste from Fidelity</button>
+      <div style="display:inline-flex;align-items:center;gap:6px;font-size:11px;color:#8b91a0">
+        <span style="display:inline-flex;align-items:center;gap:4px;font-size:9px;font-weight:700;padding:2px 7px;border-radius:3px;background:rgba(77,166,255,.12);color:#4da6ff;border:1px solid rgba(77,166,255,.28);text-transform:uppercase;letter-spacing:.05em"><span style="width:5px;height:5px;border-radius:50%;background:#4da6ff"></span>Source: Fidelity Closed Lots CSV</span>
+        <span style="color:#555c6e">· upload via the Fidelity Sync card on the Open tab</span>
+      </div>
       <span id="closed-trade-count" style="font-size:12px;color:#555c6e">0 closed trades</span>
       <span id="closed-pnl-summary" style="font-size:12px;color:#555c6e"></span>
-      <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px;margin-left:auto;color:#ff4560;border-color:rgba(255,69,96,.3)" onclick="if(confirm('Clear all closed trades?')){CLOSED_TRADES=[];saveClosedTrades();fbAutoSave(1500);renderClosedTrades()}">Clear all</button>
+      <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px;margin-left:auto;color:#ff4560;border-color:rgba(255,69,96,.3)" onclick="if(confirm('Clear the Fidelity Closed Lots snapshot?\\n\\nThis wipes FID_CLOSED.lots. Legacy CLOSED_TRADES/TRADES history is preserved. Re-upload the Closed Lots CSV to rebuild.')){window.FID_CLOSED={lastImportAt:0,count:0,lots:[]};saveFidClosed();fbAutoSave(1500);updateFidSyncUI();renderClosedTrades();renderAnalytics&amp;&amp;renderAnalytics()}">Clear Fidelity closed lots</button>
     </div>
     <!-- Date + instrument filter bar -->
     <div style="display:flex;align-items:center;gap:6px;margin-bottom:14px;flex-wrap:wrap;padding:8px 12px;background:#111318;border-radius:8px;border:1px solid rgba(255,255,255,.06)">
@@ -978,8 +1002,11 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
       <span id="ct-source-badge"  style="margin-left:8px"></span>
     </div>
 
-    <!-- Fidelity Closed Paste Form -->
-    <div id="fidelity-closed-form" style="display:none;background:#111318;border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:14px;margin-bottom:12px">
+    <!-- Fidelity Closed Paste Form (RETIRED — kept hidden to preserve the
+         parser functions for legacy code paths; the user-facing ingestion
+         path is now the "Upload Closed Lots CSV" button in the Fidelity
+         Sync card. Do not re-expose this form.) -->
+    <div id="fidelity-closed-form" style="display:none !important;background:#111318;border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:14px;margin-bottom:12px">
       <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#f0c040;margin-bottom:6px">Paste Fidelity Closed Trade History</div>
       <div style="font-size:11px;color:#555c6e;margin-bottom:8px;line-height:1.6">
         In Fidelity → Accounts → History → Gains &amp; Losses → Download (CSV) → open in Excel → select all option rows → paste here.<br>
@@ -4020,8 +4047,13 @@ function renderClosedTrades() {
       : '')
 
   if(!all.length) {
-    listEl.innerHTML = '<div style="text-align:center;padding:32px;color:#555c6e;font-size:13px">No closed trades yet — upload Fidelity Closed-Lots CSV in the Sync card above, or paste closed history here.\x3C/div>';
-    if(countEl) countEl.textContent = '0 closed trades';
+    listEl.innerHTML = '<div style="text-align:center;padding:48px 20px;color:#555c6e;font-size:13px;line-height:1.8">'
+      + '<div style="font-size:32px;margin-bottom:10px">📄</div>'
+      + '<div style="color:#8b91a0;font-weight:600;margin-bottom:6px">No closed lots loaded yet</div>'
+      + '<div style="font-size:12px">Go to the <b style="color:#4da6ff">Open Trades</b> tab, find the <b style="color:#4da6ff">Fidelity Sync</b> card, and click <b style="color:#4da6ff">Upload Closed Lots CSV</b>.</div>'
+      + '<div style="font-size:11px;color:#333a4a;margin-top:10px">Fidelity Closed Lots CSV is the single source of truth for realized P&amp;L.</div>'
+      + '</div>'
+    if(countEl) countEl.textContent = '0 closed lots';
     const sb = document.getElementById('closed-stats-bar'); if(sb) sb.style.display = 'none'
     return
   }
@@ -8401,12 +8433,17 @@ function fidSourceBadgeHtml() {
 function getOpenTradesForRender() { return getOpenBook() }
 
 // ── Closed-lots accessor (canonical for all closed / analytics views) ────
-// Source priority: FID_CLOSED.lots (Fidelity Closed-Lots CSV) → legacy
-// CLOSED_TRADES + status='closed' TRADES. Returned rows carry BOTH
-// canonical field names (qty / costBasis / realizedPnl / acquired / sold)
-// and legacy field names (cts / cost / pnl / pnlPct / dateAcq / dateSold /
-// display / ticker) so every existing consumer — renderClosedTrades,
-// renderAnalytics, future exporters — works from the same shape.
+// SINGLE SOURCE OF TRUTH: FID_CLOSED.lots (Fidelity Closed Lots CSV).
+// Legacy CLOSED_TRADES and status='closed' TRADES are preserved in
+// localStorage for notes/metadata but no longer feed any view. When
+// FID_CLOSED is empty, closed/analytics views show an empty state
+// prompting the user to upload the Closed Lots CSV.
+//
+// Returned rows carry BOTH canonical field names (qty / costBasis /
+// realizedPnl / acquired / sold) and legacy field names (cts / cost /
+// pnl / pnlPct / dateAcq / dateSold / display / ticker) so every
+// existing consumer — renderClosedTrades, renderAnalytics — works from
+// the same shape without modification.
 //
 // Filter parameters (all optional):
 //   timeframe: 'today'|'1m'|'3m'|'6m'|'ytd'|'1y'|'3y'|'5y'|'all'|'custom'
@@ -8420,122 +8457,49 @@ function getClosedLotsNormalized(opts) {
   const timeframe  = opts.timeframe  || 'all'
   const instrument = opts.instrument || 'all'
 
-  // ── Resolve source rows ────────────────────────────────────────────────
+  // ── Resolve source rows — FID_CLOSED.lots is the SOLE source. ─────────
   const fromFid = (window.FID_CLOSED && window.FID_CLOSED.lots) || []
-  let rows = []
-  if(fromFid.length) {
-    rows = fromFid.map(l => {
-      const isStock = l.type === 'Stock' || !!l.isStock
-      const qty    = +l.qty || 0
-      const cost   = qty > 0 ? (+l.costBasis||0) / qty / (isStock ? 1 : 100) : 0
-      const pnl    = +l.realizedPnl || 0
-      const pnlPct = l.costBasis > 0 ? (pnl / l.costBasis * 100) : 0
-      const display = isStock
-        ? (l.underlying || '?')
-        : (l.underlying + (l.strike ? ' '+l.strike+(l.type==='Put'?'P':'C') : ''))
-      return {
-        // Canonical
-        position_id: l.position_id,
-        occ:         l.occ,
-        underlying:  l.underlying,
-        ticker:      l.underlying,
-        type:        l.type,
-        strike:      l.strike,
-        expiryISO:   l.expiryISO,
-        isStock:     isStock,
-        // Dual-named qty / pricing
-        qty, cts: qty,
-        cost,
-        costBasis:  +l.costBasis || 0,
-        costTotal:  +l.costBasis || 0,
-        proceeds:   +l.proceeds  || 0,
-        pnl, realizedPnl: pnl, gain: pnl,
-        pnlPct,
-        // Dual-named dates
-        acquired:   l.acquired,
-        sold:       l.sold,
-        dateAcq:    l.acquired,
-        dateSold:   l.sold,
-        dateAcqISO: l.acquired,  // already ISO (Fidelity CSV format)
-        dateSoldISO:l.sold,
-        // Display + meta
-        display,
-        status: 'closed',
-        source: 'fidelity_closed_lots_csv',
-        atr: null, lot_id: l.lot_id
-      }
-    })
-  } else {
-    // Legacy fallback — synthesize from CLOSED_TRADES + TRADES(closed).
-    ;(CLOSED_TRADES||[]).forEach(ct => {
-      const isStock = !!ct.isStock || ct.type === 'Stock'
-      const qty     = +ct.cts || +ct.qty || 0
-      const pnl     = +ct.pnl || +ct.gain || 0
-      const cost    = +ct.cost || 0
-      const costTotal = +ct.costTotal || (cost * (isStock ? qty : qty*100))
-      rows.push({
-        position_id: (typeof getPositionId==='function' ? getPositionId(ct) : ''),
-        occ: ct.occ || '',
-        underlying: ct.ticker || (ct.underlying||'').split(' ')[0],
-        ticker:     ct.ticker || (ct.underlying||'').split(' ')[0],
-        type: ct.type, strike: ct.strike, expiryISO: ct.expiryISO,
-        isStock,
-        qty, cts: qty,
-        cost,
-        costBasis: costTotal,
-        costTotal,
-        proceeds: +ct.proceeds || 0,
-        pnl, realizedPnl: pnl, gain: pnl,
-        pnlPct: +ct.pnlPct || (costTotal > 0 ? (pnl/costTotal*100) : 0),
-        acquired: ct.dateAcq || ct.dateAcquired || ct.date || '',
-        sold:     ct.dateSold || ct.closeDate || '',
-        dateAcq:  ct.dateAcq || ct.dateAcquired || ct.date || '',
-        dateSold: ct.dateSold || ct.closeDate || '',
-        dateAcqISO: ct.dateAcqISO || '',
-        dateSoldISO:ct.dateSoldISO || '',
-        display: ct.display || (ct.ticker || '?'),
-        status: 'closed',
-        source: 'legacy_closed_trades',
-        atr: ct.atr || null
-      })
-    })
-    ;(TRADES||[]).filter(t => t.status === 'closed').forEach(t => {
-      const isStock = !!t.isStock || t.type === 'Stock'
-      const qty     = +t.cts || 0
-      const cost    = +t.cost || 0
-      const costTotal = (isStock ? qty : qty*100) * cost
-      const proceeds  = (+t.closePrice||0) * (isStock ? qty : qty*100)
-      const pnl = +t.pnl || (proceeds - costTotal)
-      const display = isStock
-        ? (t.underlying || t.ticker || '?')
-        : ((t.underlying || (t.ticker||'').split(' ')[0] || '?') + (t.strike ? ' '+t.strike+(t.type==='Put'?'P':'C') : ''))
-      rows.push({
-        position_id: (typeof getPositionId==='function' ? getPositionId(t) : ''),
-        occ: t.occ || '',
-        underlying: t.underlying || (t.ticker||'').split(' ')[0],
-        ticker:     t.underlying || (t.ticker||'').split(' ')[0],
-        type: t.type, strike: t.strike, expiryISO: t.expiryISO,
-        isStock,
-        qty, cts: qty,
-        cost,
-        costBasis: costTotal,
-        costTotal,
-        proceeds,
-        pnl, realizedPnl: pnl, gain: pnl,
-        pnlPct: costTotal > 0 ? (pnl / costTotal * 100) : 0,
-        acquired: t.date || '',
-        sold:     t.closeDate || '',
-        dateAcq:  t.date || '',
-        dateSold: t.closeDate || '',
-        dateAcqISO: '',
-        dateSoldISO: '',
-        display,
-        status: 'closed',
-        source: 'legacy_trades_closed',
-        atr: t.atr || null
-      })
-    })
-  }
+  let rows = fromFid.map(l => {
+    const isStock = l.type === 'Stock' || !!l.isStock
+    const qty    = +l.qty || 0
+    const cost   = qty > 0 ? (+l.costBasis||0) / qty / (isStock ? 1 : 100) : 0
+    const pnl    = +l.realizedPnl || 0
+    const pnlPct = l.costBasis > 0 ? (pnl / l.costBasis * 100) : 0
+    const display = isStock
+      ? (l.underlying || '?')
+      : (l.underlying + (l.strike ? ' '+l.strike+(l.type==='Put'?'P':'C') : ''))
+    return {
+      // Canonical
+      position_id: l.position_id,
+      occ:         l.occ,
+      underlying:  l.underlying,
+      ticker:      l.underlying,
+      type:        l.type,
+      strike:      l.strike,
+      expiryISO:   l.expiryISO,
+      isStock:     isStock,
+      // Dual-named qty / pricing
+      qty, cts: qty,
+      cost,
+      costBasis:  +l.costBasis || 0,
+      costTotal:  +l.costBasis || 0,
+      proceeds:   +l.proceeds  || 0,
+      pnl, realizedPnl: pnl, gain: pnl,
+      pnlPct,
+      // Dual-named dates
+      acquired:   l.acquired,
+      sold:       l.sold,
+      dateAcq:    l.acquired,
+      dateSold:   l.sold,
+      dateAcqISO: l.acquired,   // Fidelity CSV already emits ISO
+      dateSoldISO:l.sold,
+      // Display + meta
+      display,
+      status: 'closed',
+      source: 'fidelity_closed_lots_csv',
+      atr: null, lot_id: l.lot_id
+    }
+  })
 
   // ── Apply filters ──────────────────────────────────────────────────────
   // Instrument filter
@@ -10619,7 +10583,14 @@ function renderAnalytics() {
 
   const ct = getClosedLotsNormalized({ timeframe: period, instrument })
   if(!ct.length) {
-    const empty = '<div style="color:#555c6e;font-size:12px;padding:12px">No closed trades match the current period / instrument filter.</div>'
+    const hasSnapshot = !!(window.FID_CLOSED && window.FID_CLOSED.lots && window.FID_CLOSED.lots.length)
+    const empty = hasSnapshot
+      ? '<div style="color:#555c6e;font-size:12px;padding:12px">No closed trades match the current period / instrument filter.</div>'
+      : '<div style="padding:18px;text-align:center;color:#555c6e;font-size:12px;line-height:1.7">'
+        + '<div style="font-size:28px;margin-bottom:8px">📄</div>'
+        + '<div style="color:#8b91a0;font-weight:600">No Fidelity closed-lots snapshot loaded</div>'
+        + '<div style="font-size:11px;margin-top:4px">Upload Closed Lots CSV in <b style="color:#4da6ff">Trade Manager → Open Trades → Fidelity Sync</b>.</div>'
+        + '</div>'
     ;['an-summary','an-ticker-chart','an-month-chart','an-winloss','an-extremes','an-hold-hist','an-hold-pnl'].forEach(id => {
       const el = document.getElementById(id); if(el) el.innerHTML = empty
     })
