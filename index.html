@@ -4180,12 +4180,14 @@ function sortPortRisk(col) {
 }
 
 // ── PORTFOLIO RISK SUMMARY ────────────────────────────────────────────────────
+// Reads the authoritative open book (Fidelity snapshot when present, legacy
+// TRADES fallback) so risk totals stay consistent with Trade Manager cards.
 function renderPortfolioRisk() {
   const baseRisk = +document.getElementById('risk-budget')?.value || +localStorage.getItem('gt_risk_budget') || 21000
   const delta    = +document.getElementById('delta')?.value || 0.80
   const acct = baseRisk; const rp = 100
 
-  const openTrades = TRADES.filter(t => t.status === 'open')
+  const openTrades = (typeof getOpenBook === 'function') ? getOpenBook() : TRADES.filter(t => t.status === 'open')
 
   const emptyEl = document.getElementById('port-risk-empty')
   const bodyEl  = document.getElementById('port-risk-body')
@@ -5481,7 +5483,8 @@ function updateRiskMeter() {
   var rb=+localStorage.getItem('gt_risk_budget')||+document.getElementById('risk-budget')?.value||21000
   var mult=window.GT_ATR_MULT||1
   var delta=+document.getElementById('delta')?.value||0.80
-  var open=TRADES.filter(function(t){return t.status==='open'})
+  // Open book: Fidelity snapshot authoritative; legacy TRADES fallback.
+  var open = (typeof getOpenBook === 'function') ? getOpenBook() : TRADES.filter(function(t){return t.status==='open'})
   var dep=open.reduce(function(s,t){var d=(t.isStock||t.type==='Stock')?1:delta;return s+(t.atr||0)*mult*d*100*(t.cts||1)},0)
   var avail=Math.max(0,rb-dep),pct=rb>0?Math.min(100,Math.round(dep/rb*100)):0
   var col=pct>90?'#ff4560':pct>70?'#ff8c42':'#00d68f';
@@ -5723,14 +5726,13 @@ function savePlannerCandidates() {
 }
 
 // ── OPEN POSITIONS TABLE ─────────────────────────────────────────────────────
+// Source of truth: Fidelity Open snapshot via getOpenBook() when present,
+// else legacy TRADES.filter(open). Collision/dedupe reconciliation is only
+// applied on the legacy path — the Fidelity snapshot is already one row
+// per position_id by construction.
 function renderOpenTable() {
-  var open = TRADES.filter(function(t){return t.status==="open"})
-  // ─── Reconcile against derived positions ───────────────────────────────
-  // Reject any trade record whose event-derived position is actually
-  // CLOSED (leftover from pre-refactor rolls), and collapse duplicate
-  // open records that share the same position_id (one row per unique
-  // underlying+type+strike+expiry — no symbol-level collisions).
-  if(typeof getOpenPositionIds === 'function') {
+  var open = (typeof getOpenBook === 'function') ? getOpenBook().slice() : TRADES.filter(function(t){return t.status==="open"})
+  if(!isFidSnapshotActive() && typeof getOpenPositionIds === 'function') {
     var _openPids = getOpenPositionIds()
     var _seenPid = {}
     open = open.filter(function(t){
@@ -5744,6 +5746,9 @@ function renderOpenTable() {
   }
   var tbody = document.getElementById("pl-open-body")
   if(!tbody) return
+  // Render / clear the source badge on the Planner Open header.
+  var srcEl = document.getElementById('pl-open-source')
+  if(srcEl) srcEl.innerHTML = (typeof fidSourceBadgeHtml === 'function') ? fidSourceBadgeHtml() : ''
   if(!open.length){tbody.innerHTML="<tr><td colspan='7' style='padding:12px;text-align:center;color:#555c6e'>No open trades\x3C/td>\x3C/tr>";return}
   var defaultDelta = 0.80
   var sectorTotals = {}
@@ -6208,13 +6213,15 @@ async function refreshCandidateATRs() {
 }
 
 // ── PLANNER SUMMARY CALC ─────────────────────────────────────────────────────
+// Reads current-open positions via getOpenBook() so numbers line up with the
+// authoritative source (Fidelity snapshot when present; legacy TRADES fallback).
 function calcDeployed() {
-  var open=TRADES.filter(function(t){return t.status==="open"})
+  var open = (typeof getOpenBook === 'function') ? getOpenBook() : TRADES.filter(function(t){return t.status==="open"})
   return open.reduce(function(s,t){var d=t.delta||0.80;return s+(t.atr||0)*d*100*(t.cts||1)},0)
 }
 function calcSectorRisk(sector) {
   if(!sector||sector==="—") return 0
-  var open=TRADES.filter(function(t){return t.status==="open"})
+  var open = (typeof getOpenBook === 'function') ? getOpenBook() : TRADES.filter(function(t){return t.status==="open"})
   return open.reduce(function(s,t){
     if(getSector(rootTicker(t.ticker))===sector){var d=t.delta||0.80;return s+(t.atr||0)*d*100*(t.cts||1)}
     return s
@@ -6241,7 +6248,7 @@ function plannerCalc() {
     aft.style.color=afterCands>budget?"#ff4560":"#00d68f"
   }
   var bar=document.getElementById("pl-meter");if(bar){bar.style.width=pct+"%";bar.style.background=col}
-  var oc=document.getElementById("pl-open-count");if(oc)oc.textContent=TRADES.filter(function(t){return t.status==="open"}).length
+  var oc=document.getElementById("pl-open-count");if(oc) oc.textContent = (typeof getOpenBook==='function' ? getOpenBook() : TRADES.filter(function(t){return t.status==="open"})).length
   var verd=document.getElementById("pl-verdict");if(verd){
     var over=afterCands-budget
     verd.textContent=over>0?"❌ OVER by $"+Math.round(over).toLocaleString():"✅ Within budget"
@@ -6702,7 +6709,7 @@ function addQuickSizeTradeToManager() {
 var CLUSTER_MAP = {'Tech':'AI/Tech','Communication':'AI/Tech','NVDA':'AI/Tech','AMD':'AI/Tech','AVGO':'AI/Tech','TSM':'AI/Tech','CLS':'AI/Tech','LRCX':'AI/Tech','SMCI':'AI/Tech','VRT':'AI/Tech','GLW':'AI/Tech','Financials':'Rates/Finance','HOOD':'Rates/Finance','BCS':'Rates/Finance','SKM':'Rates/Finance','GS':'Rates/Finance','JPM':'Rates/Finance','Energy':'Oil/Energy','XOM':'Oil/Energy','CVX':'Oil/Energy','Healthcare':'Healthcare','Industrials':'Industrial','EMBJ':'Industrial','Discretionary':'Consumer','AMZN':'Consumer','Space':'Space/Defense','LUNR':'Space/Defense','Staples':'Defensive','Utilities':'Defensive','REIT':'Defensive'}
 function getCluster(sym) { return CLUSTER_MAP[sym] || CLUSTER_MAP[getSector(sym)] || getSector(sym) || "Other" }
 function calcClusterRisk() {
-  var open=TRADES.filter(function(t){return t.status==="open"})
+  var open = (typeof getOpenBook === 'function') ? getOpenBook() : TRADES.filter(function(t){return t.status==="open"})
   var clusters={},total=0
   open.forEach(function(t){var sym=rootTicker(t.ticker);var cl=getCluster(sym);var d=t.delta||0.80;var risk=(t.atr||0)*d*100*(t.cts||1);clusters[cl]=(clusters[cl]||0)+risk;total+=risk})
   return {clusters,total}
@@ -6731,7 +6738,7 @@ function getRiskIntelligence() {
   else if(available<=0) intel.suggestions.push("🔴 No budget remaining — reduce or close positions first")
   // Ticker concentration
   var tickerRisks={}
-  TRADES.filter(function(t){return t.status==="open"}).forEach(function(t){var sym=rootTicker(t.ticker);var d=t.delta||0.80;tickerRisks[sym]=(tickerRisks[sym]||0)+(t.atr||0)*d*100*(t.cts||1)})
+  ((typeof getOpenBook === 'function') ? getOpenBook() : TRADES.filter(function(t){return t.status==="open"})).forEach(function(t){var sym=rootTicker(t.ticker);var d=t.delta||0.80;tickerRisks[sym]=(tickerRisks[sym]||0)+(t.atr||0)*d*100*(t.cts||1)})
   Object.entries(tickerRisks).forEach(function(e){var pct=total>0?Math.round(e[1]/total*100):0;if(pct>=20)intel.warnings.push({level:"medium",msg:"⚠️ "+e[0]+": "+pct+"% single-name concentration"})})
   return intel
 }
@@ -8248,10 +8255,110 @@ function buildTradeShapesFromFidOpen() {
   })
 }
 
-function getOpenTradesForRender() {
+// ── Canonical accessors for "current open positions" ─────────────────────
+// Every view that represents CURRENT open positions (Trade Manager cards,
+// Planner Open table, Planner totals, risk meter, cluster analysis, risk
+// intelligence) reads from getOpenBook(). When a Fidelity Open Positions
+// snapshot exists, that is authoritative; otherwise we fall back to the
+// legacy TRADES-filtered view.
+//
+// Returns an array of trade-shaped objects (id, ticker, underlying, type,
+// strike, expiryISO, desc, cts, cost, atr, isStock, totalGL, etc). Views
+// that already read these fields need no further changes.
+function getOpenBook() {
   const synth = buildTradeShapesFromFidOpen()
   if(synth && synth.length) return synth
   return (TRADES||[]).filter(t => t.status === 'open')
+}
+
+function isFidSnapshotActive() {
+  return !!(window.FID_OPEN && window.FID_OPEN.positions && window.FID_OPEN.positions.length)
+}
+
+// Pretty label for the "Source: …" badge shown on views backed by the
+// open book. Returns '' if no snapshot is active.
+function fidSourceBadgeHtml() {
+  if(!isFidSnapshotActive()) return ''
+  const n = window.FID_OPEN.count || window.FID_OPEN.positions.length
+  const at = window.FID_OPEN.importedAt
+    ? new Date(window.FID_OPEN.importedAt).toLocaleDateString('en-US',{month:'short',day:'numeric'})
+    : ''
+  return '<span title="Open positions sourced from Fidelity Portfolio_Positions CSV (' + (window.FID_OPEN.source||'') + ')" '
+    + 'style="display:inline-flex;align-items:center;gap:4px;font-size:9px;font-weight:700;padding:2px 7px;'
+    + 'border-radius:3px;background:rgba(77,166,255,.12);color:#4da6ff;border:1px solid rgba(77,166,255,.28);'
+    + 'text-transform:uppercase;letter-spacing:.05em;vertical-align:middle">'
+    + '<span style="width:5px;height:5px;border-radius:50%;background:#4da6ff"></span>'
+    + 'Source: Fidelity · '+n+' open'+(at?' · '+at:'')+'</span>'
+}
+
+// Backward-compat alias (renderTrades still calls the old name)
+function getOpenTradesForRender() { return getOpenBook() }
+
+// ── Closed-lots accessor — scaffold for future analytics pivot ───────────
+// When FID_CLOSED has data, this is the authoritative realized log; else
+// falls back to legacy CLOSED_TRADES + status='closed' TRADES. NOT YET
+// wired into renderAnalytics() per product direction — but every future
+// consumer should go through this function so the pivot is a one-line
+// change later.
+function getClosedLotsNormalized() {
+  const fid = (window.FID_CLOSED && window.FID_CLOSED.lots) || []
+  if(fid.length) {
+    return fid.map(l => ({
+      position_id: l.position_id,
+      underlying:  l.underlying,
+      type:        l.type,
+      strike:      l.strike,
+      expiryISO:   l.expiryISO,
+      occ:         l.occ,
+      qty:         l.qty,
+      costBasis:   l.costBasis,
+      proceeds:    l.proceeds,
+      realizedPnl: l.realizedPnl,
+      acquired:    l.acquired,
+      sold:        l.sold,
+      source:      'fidelity_closed_lots_csv'
+    }))
+  }
+  // Legacy fallback — synthesize from TRADES + CLOSED_TRADES.
+  const rows = []
+  ;(CLOSED_TRADES||[]).forEach(ct => {
+    rows.push({
+      position_id: (typeof getPositionId==='function' ? getPositionId(ct) : ''),
+      underlying:  ct.underlying || (ct.ticker||'').split(' ')[0],
+      type:        ct.type, strike: ct.strike, expiryISO: ct.expiryISO,
+      occ:         ct.occ || '',
+      qty:         ct.qty || ct.cts || 0,
+      costBasis:   +ct.cost || 0,
+      proceeds:    +ct.proceeds || 0,
+      realizedPnl: +ct.gain || +ct.pnl || 0,
+      acquired:    ct.dateAcquired || ct.date || '',
+      sold:        ct.dateSold     || ct.closeDate || '',
+      source:      'legacy_closed_trades'
+    })
+  })
+  ;(TRADES||[]).filter(t => t.status==='closed').forEach(t => {
+    rows.push({
+      position_id: (typeof getPositionId==='function' ? getPositionId(t) : ''),
+      underlying:  t.underlying || (t.ticker||'').split(' ')[0],
+      type:        t.type, strike: t.strike, expiryISO: t.expiryISO,
+      occ:         t.occ || '',
+      qty:         t.cts || 0,
+      costBasis:   (+t.cost||0) * 100 * (+t.cts||0),
+      proceeds:    (+t.closePrice||0) * 100 * (+t.cts||0),
+      realizedPnl: +t.pnl || 0,
+      acquired:    t.date || '',
+      sold:        t.closeDate || '',
+      source:      'legacy_trades_closed'
+    })
+  })
+  return rows
+}
+
+if(typeof window !== 'undefined') {
+  window.getOpenBook             = getOpenBook
+  window.isFidSnapshotActive     = isFidSnapshotActive
+  window.fidSourceBadgeHtml      = fidSourceBadgeHtml
+  window.getClosedLotsNormalized = getClosedLotsNormalized
 }
 
 if(typeof window !== 'undefined') {
@@ -8708,7 +8815,14 @@ function renderTrades() {
       })
     }
   }
+  // Closed-trades path intentionally unchanged — analytics/closed migration
+  // to FID_CLOSED is a future step (getClosedLotsNormalized() is the
+  // already-scaffolded accessor for when that pivot happens).
   const closed = TRADES.filter(t => t.status === 'closed').sort(sortFn)
+  // Total P&L pill reflects the SAME open book that renders cards, so the
+  // header sum can never disagree with the cards below it.
+  const _openForTotals = open
+  var _isFid = isFidSnapshotActive()
   // Flag any open trades that are canonical duplicates of another open
   // trade (same underlying+expiry+strike+type). The card's Current value
   // tile shows "Duplicate / unresolved" so the user can spot them and
@@ -8722,8 +8836,13 @@ function renderTrades() {
     if(other) { _dupIds.add(t.id); _dupIds.add(other.id) }
   }
   const isDuplicateOpenTrade = t => _dupIds.has(t.id)
-  document.getElementById('trade-count').textContent = open.length + ' open' + (closed.length ? ' · ' + closed.length + ' closed' : '')
-  const totalGL = TRADES.filter(t=>t.status==='open').reduce((s,t)=>s+(t.totalGL||0),0)
+  const _tcEl = document.getElementById('trade-count')
+  if(_tcEl) {
+    _tcEl.innerHTML = open.length + ' open' + (closed.length ? ' · ' + closed.length + ' closed' : '')
+      + (_isFid ? ' ' + fidSourceBadgeHtml() : '')
+  }
+  // Open-book P&L — same source as the cards, no drift.
+  const totalGL = _openForTotals.reduce((s,t)=>s+(t.totalGL||0),0)
   const pnlEl = document.getElementById('total-pnl-display')
   if(pnlEl && totalGL !== 0) {
     pnlEl.textContent = '| Total P&L: ' + (totalGL>=0?'+':'') + ''
