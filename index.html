@@ -9695,13 +9695,20 @@ window.bulkConfirmHighConfidence = bulkConfirmHighConfidence
 // policy as Confirm High Confidence.
 function bulkConfirmSelected() {
   const filtered = getFilteredRollEvents()
-  const visibleIds = new Set(filtered.map(e => e.roll_id))
+  const totalSelected = (window.__rollReviewSelected && window.__rollReviewSelected.size) || 0
+  // Execution set: intersection of (selected) ∩ (visible under current
+  // filter) ∩ (actionable status). Unchanged semantics — the button's
+  // display count now reflects the full selected set but execution
+  // still targets only currently-visible actionable rows.
   const selectedVisible = filtered.filter(e =>
     window.__rollReviewSelected.has(e.roll_id) &&
     (e.status === 'detected' || e.status === 'historical_candidate')
   )
+  const hiddenSelected = Math.max(0, totalSelected - selectedVisible.length)
   if(!selectedVisible.length) {
-    alert('No selected rows are eligible for bulk confirm.\nSelected rows must be visible, in detected/historical status, and unchecked rows won\'t be touched.')
+    alert(totalSelected === 0
+      ? 'No rows selected.\nCheck the boxes next to detected/historical rows, then click Confirm Selected.'
+      : totalSelected+' row(s) selected but none are visible under the current filter.\nChange the filter or Clear Selection.')
     return
   }
   const withCredit = selectedVisible.filter(e => e.estimatedCredit != null && isFinite(+e.estimatedCredit))
@@ -9709,6 +9716,7 @@ function bulkConfirmSelected() {
   const totalCredit = withCredit.reduce((s, e) => s + (+e.estimatedCredit || 0), 0)
   const msg = 'Confirm '+_plural(withCredit.length, 'selected roll')+'?\n\n'
     + 'Total estimated credit: '+(totalCredit >= 0 ? '+$' : '−$')+Math.abs(totalCredit).toFixed(2)+'\n'
+    + (hiddenSelected > 0 ? hiddenSelected+' additional selected row(s) are hidden under the current filter and WILL NOT be confirmed in this action.\n' : '')
     + (skipped.length ? 'Skipping '+_plural(skipped.length, 'row')+' with no estimated credit — use Adjust on those.\n' : '')
     + '\nThis updates FID_CREDITS and flips affected positions to post-roll. Proceed?'
   if(!confirm(msg)) return
@@ -9986,24 +9994,50 @@ function renderRollReview() {
     (e.status === 'detected' || e.status === 'historical_candidate') &&
     (+e.confidence || 0) < LOW
   ).length
-  const selectedCount = Array.from(window.__rollReviewSelected || []).filter(rid =>
+  // Display count = total selected (size of the Set) — shows the user's
+  // actual selection regardless of the current filter. Previously this
+  // was intersected with the filtered list, which caused "5 selected but
+  // shows (1)" when 4 of the 5 were hidden under the active filter.
+  //
+  // Execution semantics (in bulkConfirmSelected) are unchanged: the
+  // action still operates only on rows that are BOTH selected AND
+  // visible under the current filter. The display count tells the user
+  // how many total rows they've checked; the execution set is the
+  // intersection with what's currently on screen. When selected-but-
+  // hidden > 0, the button is annotated inline so the user can see the
+  // discrepancy without guessing.
+  const totalSelected   = (window.__rollReviewSelected && window.__rollReviewSelected.size) || 0
+  const selectedVisible = Array.from(window.__rollReviewSelected || []).filter(rid =>
     filteredPreview.some(e => e.roll_id === rid &&
       (e.status === 'detected' || e.status === 'historical_candidate'))
   ).length
-  const bulkBtn = (onclick, label, color, disabled) =>
-    '<button onclick="'+onclick+'" '+(disabled?'disabled ':'')+'style="' +
+  const selectedHidden  = Math.max(0, totalSelected - selectedVisible)
+  const selectedLabel = selectedHidden > 0
+    ? 'Confirm Selected ('+totalSelected+', '+selectedVisible+' visible)'
+    : 'Confirm Selected ('+totalSelected+')'
+  const bulkBtn = (onclick, label, color, disabled, title) =>
+    '<button onclick="'+onclick+'" '+(disabled?'disabled ':'')+(title?'title="'+title+'" ':'')+'style="' +
       'background:transparent;color:'+(disabled?'#333a4a':color)+';' +
       'border:1px solid '+(disabled?'rgba(255,255,255,.08)':color)+'4d;' +
       'border-radius:4px;padding:4px 10px;font-size:11px;font-weight:700;' +
       'cursor:'+(disabled?'not-allowed':'pointer')+';font-family:inherit">' +
       label + '</button>'
+  // Disable Confirm Selected when EITHER no selections exist OR none of
+  // the current selections are actionable under the current filter.
+  // Tooltip explains the two-number label pattern.
+  const confirmSelectedDisabled = totalSelected === 0 || selectedVisible === 0
+  const confirmSelectedTitle = totalSelected === 0
+    ? 'No rows selected'
+    : (selectedHidden > 0
+       ? totalSelected+' selected total · '+selectedVisible+' visible under current filter · '+selectedHidden+' hidden (change filter to include them, or Clear Selection)'
+       : 'Confirm all selected rows (all currently visible)')
   const bulkBar =
     '<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;align-items:center;padding:8px 10px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05);border-radius:6px">' +
       '<span style="font-size:9px;color:#555c6e;font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-right:4px">Bulk</span>' +
       bulkBtn('bulkConfirmHighConfidence()', 'Confirm High Confidence ('+bulkHighCount+')', '#00d68f', bulkHighCount === 0) +
-      bulkBtn('bulkConfirmSelected()',       'Confirm Selected ('+selectedCount+')',        '#4da6ff', selectedCount === 0) +
+      bulkBtn('bulkConfirmSelected()',       selectedLabel,                                 '#4da6ff', confirmSelectedDisabled, confirmSelectedTitle) +
       bulkBtn('bulkRejectLowConfidence()',   'Reject Low Confidence ('+bulkLowCount+')',    '#ff8c42', bulkLowCount === 0) +
-      bulkBtn('clearRollSelection()',        'Clear Selection',                             '#8b91a0', (window.__rollReviewSelected && window.__rollReviewSelected.size) === 0) +
+      bulkBtn('clearRollSelection()',        'Clear Selection ('+totalSelected+')',         '#8b91a0', totalSelected === 0) +
       '<span style="font-size:10px;color:#555c6e;margin-left:auto">High ≥ '+HIGH+'% · Low < '+LOW+'% · filter-aware</span>' +
     '</div>'
 
