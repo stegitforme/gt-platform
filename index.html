@@ -915,7 +915,7 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
       <span id="total-pnl-display" style="font-size:12px;color:#555c6e"></span>
       <button id="pnl-refresh-btn" class="btn btn-ghost" style="font-size:11px;padding:4px 10px" onclick="refreshAllPnL()">Refresh P&amp;L</button>
       <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px;color:#4da6ff;border-color:rgba(77,166,255,.3)" onclick="fetchStockPricesForTrades()" title="Fetch live stock prices for all open trades">⟳ Stock Prices</button>
-      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap"><span style="font-size:11px;color:#555c6e;font-weight:600">ATR Stop:</span><button id="atr-btn-half" onclick="setAtrStop(0.5)" class="btn btn-ghost" style="font-size:11px;padding:3px 10px">&#189; ATR</button><button id="atr-btn-1" onclick="setAtrStop(1)" class="btn btn-ghost" style="font-size:11px;padding:3px 10px;background:#1a2332;color:#f0c040;border:1px solid #f0c040">1 ATR</button><button id="atr-btn-2" onclick="setAtrStop(2)" class="btn btn-ghost" style="font-size:11px;padding:3px 10px">2 ATR</button></div><div id="tm-risk-bar" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;padding:8px 12px;background:#0d1117;border-radius:8px;border:1px solid #1e2d3d;font-size:12px;margin-bottom:8px"><span style="color:#555c6e">Budget:</span><span id="tm-budget-total" style="color:#f0c040;font-weight:700">--</span><span style="color:#555c6e">Deployed:</span><span id="tm-deployed" style="color:#ff8c42;font-weight:700">--</span><span style="color:#555c6e">Available:</span><span id="tm-available" style="color:#00d68f;font-weight:700">--</span></div><select id="tm-sort" onchange="renderTrades()" style="background:#0a0c0f;border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:3px 8px;font-size:11px;color:#8b91a0;outline:none;cursor:pointer;position:relative;z-index:10">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap"><span style="font-size:11px;color:#555c6e;font-weight:600">ATR Stop:</span><button id="atr-btn-half" onclick="setAtrStop(0.5)" class="btn btn-ghost" style="font-size:11px;padding:3px 10px">&#189; ATR</button><button id="atr-btn-1" onclick="setAtrStop(1)" class="btn btn-ghost" style="font-size:11px;padding:3px 10px;background:#1a2332;color:#f0c040;border:1px solid #f0c040">1 ATR</button><button id="atr-btn-2" onclick="setAtrStop(2)" class="btn btn-ghost" style="font-size:11px;padding:3px 10px">2 ATR</button><span style="font-size:11px;color:#555c6e;font-weight:600;margin-left:12px" title="Golden Ticket stop multiplier: STOP = entry − (Stop ATR × ATR). Changes propagate to Planner STOP/RPC/Cts + Trade Manager mini-chart immediately.">Stop ATR:</span><select id="gt-stop-mult-select" onchange="setGTStopMult(+this.value)" title="Golden Ticket stop multiplier. Roll markers (+0.5/+1.0/+2.0 ATR) are unaffected." style="background:#0a0c0f;border:1px solid rgba(255,255,255,.12);border-radius:4px;padding:3px 8px;font-size:11px;color:#f0c040;outline:none;cursor:pointer;font-weight:700"><option value="0.5">0.5 ATR</option><option value="1.0">1.0 ATR</option><option value="1.25">1.25 ATR</option><option value="1.5">1.5 ATR</option><option value="2.0">2.0 ATR</option></select></div><div id="tm-risk-bar" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;padding:8px 12px;background:#0d1117;border-radius:8px;border:1px solid #1e2d3d;font-size:12px;margin-bottom:8px"><span style="color:#555c6e">Budget:</span><span id="tm-budget-total" style="color:#f0c040;font-weight:700">--</span><span style="color:#555c6e">Deployed:</span><span id="tm-deployed" style="color:#ff8c42;font-weight:700">--</span><span style="color:#555c6e">Available:</span><span id="tm-available" style="color:#00d68f;font-weight:700">--</span></div><select id="tm-sort" onchange="renderTrades()" style="background:#0a0c0f;border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:3px 8px;font-size:11px;color:#8b91a0;outline:none;cursor:pointer;position:relative;z-index:10">
         <option value="date-desc">Newest first</option>
         <option value="date-asc">Oldest first</option>
         <option value="pnl-desc">P&amp;L: best first</option>
@@ -3730,7 +3730,7 @@ async function saveAllToFirebase() {
     closed_trades: CLOSED_TRADES,
     tenx:        TENX,
     reb_accounts:REB_ACCOUNTS,
-    risk: { acct: localStorage.getItem('gt_acct'), riskpct: localStorage.getItem('gt_riskpct'), budget: localStorage.getItem('gt_risk_budget'), n_trades: localStorage.getItem('gt_risk_n_trades'), delta: localStorage.getItem('gt_risk_delta'), atr_mult: window.GT_ATR_MULT||1 },
+    risk: { acct: localStorage.getItem('gt_acct'), riskpct: localStorage.getItem('gt_riskpct'), budget: localStorage.getItem('gt_risk_budget'), n_trades: localStorage.getItem('gt_risk_n_trades'), delta: localStorage.getItem('gt_risk_delta'), atr_mult: window.GT_ATR_MULT||1, gt_stop_mult: (window.GT && window.GT.STOP_MULT) || 1.25 },
     watchlist: JSON.parse(localStorage.getItem('gt_scr_watchlist') || '[]'),
     planner_candidates: JSON.parse(localStorage.getItem('gt_planner_candidates') || '[]'),
     internal_results: INTERNAL_RESULTS.slice(0,150),
@@ -3819,6 +3819,12 @@ async function loadFromFirebase() {
     if(data.risk.n_trades) { localStorage.setItem('gt_risk_n_trades', data.risk.n_trades); var el2=document.getElementById('risk-n-trades'); if(el2) el2.value=data.risk.n_trades }
     if(data.risk.delta) { localStorage.setItem('gt_risk_delta', data.risk.delta); var el3=document.getElementById('delta'); if(el3) el3.value=data.risk.delta }
     if(data.risk.atr_mult) window.GT_ATR_MULT = data.risk.atr_mult
+    // Stop ATR multiplier — restored through the canonical setter so
+    // the <select>, localStorage, and every downstream surface stay in
+    // sync. Unknown / legacy values fall back to the 1.25 default.
+    if(data.risk.gt_stop_mult && typeof window.setGTStopMult === 'function') {
+      window.setGTStopMult(+data.risk.gt_stop_mult)
+    }
     if(data.risk.acct) { localStorage.setItem('gt_acct', data.risk.acct); var el4=document.getElementById('acct'); if(el4) el4.value=data.risk.acct }
     if(data.risk.riskpct) { localStorage.setItem('gt_riskpct', data.risk.riskpct); var el5=document.getElementById('riskpct'); if(el5) el5.value=data.risk.riskpct }
   }
@@ -7876,10 +7882,49 @@ function saveClosedTrades() {
 // For STOCKS the formula is risk_per_share = STOP_MULT × ATR (delta = 1,
 // no ×100 contract multiplier).
 window.GT = window.GT || {}
-window.GT.STOP_MULT    = 1.25
+// Stop ATR multiplier — USER-CONFIGURABLE via the Stop ATR selector in
+// Trade Manager. Hydrated from localStorage on boot; restored from
+// Firebase on sign-in; persisted on every change. Allowed values are
+// the set below; any other value falls back to the 1.25 default.
+// Roll multipliers are NOT user-configurable; they remain fixed at
+// +0.5 / +1.0 / +2.0 ATR per the Golden Ticket spec.
+window.GT.STOP_MULT_OPTIONS = [0.5, 1.0, 1.25, 1.5, 2.0]
+;(function(){
+  var stored = parseFloat(localStorage.getItem('gt_stop_mult') || '')
+  var ok = isFinite(stored) && window.GT.STOP_MULT_OPTIONS.indexOf(+stored) >= 0
+  window.GT.STOP_MULT = ok ? +stored : 1.25
+})()
 window.GT.ROLL_1_MULT  = 0.5
 window.GT.ROLL_2_MULT  = 1.0
 window.GT.ROLL_3_MULT  = 2.0
+
+// setGTStopMult — canonical setter for the Stop ATR multiplier. Every
+// surface that depends on STOP_MULT (Planner STOP/RPC/sizing, mini-chart
+// STOP line, synthesizer pre-roll stop) reads window.GT.STOP_MULT
+// dynamically, so the re-render calls below propagate the change
+// everywhere without touching per-position state.
+window.setGTStopMult = function(v) {
+  var n = +v
+  if(!isFinite(n) || window.GT.STOP_MULT_OPTIONS.indexOf(n) < 0) {
+    console.warn('[GT] setGTStopMult: invalid value', v, '— ignoring'); return
+  }
+  window.GT.STOP_MULT = n
+  try { localStorage.setItem('gt_stop_mult', String(n)) } catch(e) {}
+  // Sync the <select> so UI reflects truth even when the setter is
+  // called programmatically (Firebase restore, boot hydration, etc.).
+  try {
+    var sel = document.getElementById('gt-stop-mult-select')
+    if(sel && +sel.value !== n) sel.value = String(n)
+  } catch(e) {}
+  // Re-render downstream surfaces. plannerCalc() refreshes the Candidates
+  // table (STOP/RPC/Cts); renderTrades() rebuilds the Trade Manager cards
+  // which re-invokes renderMiniChartForTrade per open row.
+  try { if(typeof plannerCalc === 'function') plannerCalc() } catch(e) {}
+  try { if(typeof renderCandidateTable === 'function') renderCandidateTable() } catch(e) {}
+  try { if(typeof renderTrades === 'function') renderTrades() } catch(e) {}
+  if(typeof fbAutoSave === 'function') fbAutoSave(1500)
+  console.log('[GT] STOP_MULT set to', n)
+}
 window.GT.DELTA        = 0.80
 window.GT.BASE_RISK    = 625     // default per-trade risk $
 window.GT.MAX_RISK     = 2500    // cap per trade
@@ -10156,8 +10201,19 @@ function renderMiniChartForTrade(t) {
   const R2_K   = +G.ROLL_2_MULT || 1.0
   const R3_K   = +G.ROLL_3_MULT || 2.0
   const _haveAtrMath = entry > 0 && entryATR > 0
-  const stopPx = (t.stop125Entry != null) ? +t.stop125Entry
-               : _haveAtrMath ? +(entry - STOP_K * entryATR).toFixed(2) : null
+  // STOP is recomputed dynamically on every render so the user-
+  // configurable Stop ATR selector propagates without requiring a
+  // re-import. The frozen t.stop125Entry field (written by
+  // captureEntrySnapshots at 1.25 ATR import-time) is retained only
+  // as a fallback when entry + entryATR are missing — the live
+  // formula wins whenever we have usable math inputs.
+  //
+  // Roll markers (R1/R2/R3) keep their frozen-first priority because
+  // their multipliers are FIXED (+0.5/+1.0/+2.0 ATR) and must not drift
+  // as ATR updates across re-imports — freezing at entry preserves the
+  // original trigger prices the user was planning against.
+  const stopPx = _haveAtrMath ? +(entry - STOP_K * entryATR).toFixed(2)
+               : (t.stop125Entry != null ? +t.stop125Entry : null)
   const r1Px   = (t.roll05Entry  != null) ? +t.roll05Entry
                : _haveAtrMath ? +(entry + R1_K   * entryATR).toFixed(2) : null
   const r2Px   = (t.roll10Entry  != null) ? +t.roll10Entry
@@ -10290,7 +10346,14 @@ function buildTradeShapesFromFidOpen() {
     const entryUnd   = +p.entryUnderlyingPrice || legacyEntry || curStockPx
     const entryAtr   = +p.entryATR             || legacyAtr   || curAtr
     // ── Golden Ticket levels (frozen, derived if missing) ───────────────
-    const stop125    = (p.stop125Entry != null) ? +p.stop125Entry : ((entryUnd > 0 && entryAtr > 0) ? +(entryUnd - 1.25*entryAtr).toFixed(2) : null)
+    // STOP is recomputed dynamically from the live Stop ATR multiplier
+    // so the user-configurable selector (setGTStopMult) propagates
+    // without requiring a CSV re-import. The frozen p.stop125Entry
+    // (written at import-time using whatever STOP_MULT was active then)
+    // is retained only as a fallback when entry+ATR are missing.
+    const _gtStopK   = (window.GT && +window.GT.STOP_MULT) || 1.25
+    const stop125    = (entryUnd > 0 && entryAtr > 0) ? +(entryUnd - _gtStopK * entryAtr).toFixed(2)
+                     : (p.stop125Entry != null ? +p.stop125Entry : null)
     const roll05     = (p.roll05Entry  != null) ? +p.roll05Entry  : ((entryUnd > 0 && entryAtr > 0) ? +(entryUnd + 0.5 *entryAtr).toFixed(2) : null)
     const roll10     = (p.roll10Entry  != null) ? +p.roll10Entry  : ((entryUnd > 0 && entryAtr > 0) ? +(entryUnd + 1.0 *entryAtr).toFixed(2) : null)
     const roll20     = (p.roll20Entry  != null) ? +p.roll20Entry  : ((entryUnd > 0 && entryAtr > 0) ? +(entryUnd + 2.0 *entryAtr).toFixed(2) : null)
@@ -10583,7 +10646,15 @@ if(typeof window !== 'undefined') {
   window.renderMiniChartForTrade             = renderMiniChartForTrade
 }
 
-setTimeout(() => { renderTrades(); renderPortfolioRisk(); if(typeof updateFidSyncUI==='function') updateFidSyncUI(); if(typeof renderRollReview==='function') renderRollReview() }, 800)
+setTimeout(() => { renderTrades(); renderPortfolioRisk(); if(typeof updateFidSyncUI==='function') updateFidSyncUI(); if(typeof renderRollReview==='function') renderRollReview();
+  // Sync the Stop ATR <select> with the hydrated window.GT.STOP_MULT
+  // value (loaded from localStorage at script parse time, possibly
+  // overwritten by loadFromFirebase between then and now).
+  try {
+    var _ss = document.getElementById('gt-stop-mult-select')
+    if(_ss && window.GT && window.GT.STOP_MULT) _ss.value = String(window.GT.STOP_MULT)
+  } catch(e) {}
+}, 800)
 
 function saveTrades() {
   try { localStorage.setItem('gt_trades', JSON.stringify(TRADES)) } catch(e) {}
