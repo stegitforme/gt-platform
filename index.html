@@ -903,6 +903,21 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
       <div class="card-body" id="roll-review-body" style="padding:12px 14px"></div>
     </div>
 
+    <!-- ── Stop Comparison tracker ──────────────────────────────────────────
+         Analytics-only. Walks the price-history cache to simulate how
+         each alternate stop multiple (0.5 / 1.0 / 1.25 / 1.5 / 2.0 ATR)
+         would have fared on every open trade. Never touches live
+         trading logic — t.stopAnalysis is read only by this panel. -->
+    <div id="stop-comparison-card" class="card" style="margin-bottom:14px;border-color:rgba(77,166,255,.22)">
+      <div class="card-head" style="border-color:rgba(77,166,255,.14)">
+        <span class="card-title" style="color:#4da6ff">Stop Comparison <span style="font-size:10px;color:#8b91a0;font-weight:400;margin-left:6px">simulated performance by stop ATR multiple — analytics only</span></span>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <span id="stop-comp-summary" style="font-size:11px;color:#8b91a0">no data</span>
+        </div>
+      </div>
+      <div class="card-body" id="stop-comp-body" style="padding:12px 14px"></div>
+    </div>
+
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
       <!-- Legacy paste + bulk ingestion retired — Fidelity Sync CSV upload
            is the canonical source of truth for open positions. The + New
@@ -3740,6 +3755,11 @@ async function saveAllToFirebase() {
     // state so a fresh device load reconstitutes pending detections and
     // historical roll events together with FID_OPEN/FID_CLOSED/FID_CREDITS.
     roll_ledger: JSON.parse(localStorage.getItem('gt_roll_ledger') || 'null') || { events: [], schemaVersion: 1 },
+    // Stop Comparison analytics — price-path cache used by
+    // computeStopAnalysis. Rebuilds seamlessly on any device that has
+    // done at least one "↻ Stock Prices" refresh, but syncing accelerates
+    // population (especially useful when moving between browsers).
+    price_history: JSON.parse(localStorage.getItem('gt_price_history') || 'null') || {},
     savedAt:     Date.now()
   }
   const ok = await fbSave('platform', payload)
@@ -3845,6 +3865,34 @@ async function loadFromFirebase() {
     localStorage.setItem('gt_roll_ledger', JSON.stringify(window.ROLL_LEDGER))
     console.log('[ROLL-ENGINE] hydrated from Firebase: '+data.roll_ledger.events.length+' event(s)')
     try { if(typeof renderRollReview === 'function') renderRollReview() } catch(e) {}
+  }
+  // Stop Comparison price history (merge, prefer cloud points since they
+  // can only have been added by live refreshes which always append).
+  if(data.price_history && typeof data.price_history === 'object') {
+    try {
+      const merged = window.PRICE_HISTORY || {}
+      for(const sym of Object.keys(data.price_history)) {
+        const cloudArr = Array.isArray(data.price_history[sym]) ? data.price_history[sym] : []
+        const localArr = Array.isArray(merged[sym]) ? merged[sym] : []
+        // De-dupe by ts (approx second) merging both streams
+        const seen = new Set()
+        const combined = []
+        for(const pt of [...localArr, ...cloudArr]) {
+          if(!pt || typeof pt.ts !== 'number' || typeof pt.px !== 'number') continue
+          const k = Math.floor(pt.ts / 1000)
+          if(seen.has(k)) continue
+          seen.add(k); combined.push({ ts: +pt.ts, px: +pt.px })
+        }
+        combined.sort((a,b) => a.ts - b.ts)
+        const cap = (window.GT && window.GT.PRICE_HISTORY_MAX_PER_SYM) || 500
+        if(combined.length > cap) combined.splice(0, combined.length - cap)
+        merged[sym] = combined
+      }
+      window.PRICE_HISTORY = merged
+      localStorage.setItem('gt_price_history', JSON.stringify(merged))
+      console.log('[STOP-COMP] hydrated price history from Firebase:', Object.keys(merged).length, 'symbol(s)')
+      try { if(typeof renderStopComparison === 'function') renderStopComparison() } catch(e) {}
+    } catch(e) { console.warn('[STOP-COMP] price history merge skipped:', e.message) }
   }
   // Update UI after Firebase restore
   if(typeof updateRiskMeter === 'function') { setTimeout(updateRiskMeter, 100) }
@@ -9300,6 +9348,261 @@ function renderRollReview() {
 }
 window.renderRollReview = renderRollReview
 
+// ═══════════════════════════════════════════════════════════════════════════
+//  STOP COMPARISON TRACKER — analytics-only.
+//  ─────────────────────────────────────────────────────────────────────────
+//  For each open trade we have:
+//      entryUnderlyingPrice  (frozen snapshot)
+//      entryATR              (frozen snapshot)
+//      entryCapturedAt       (timestamp)
+//      current price         (live)
+//  What we LACKED until now: the intraday/inter-day price path between
+//  entry and now. This module adds a lightweight price-history cache
+//  (window.PRICE_HISTORY) populated on every live refresh, and a
+//  computeStopAnalysis(t) function that uses the cached path to simulate
+//  what each alternate stop multiple (0.5 / 1.0 / 1.25 / 1.5 / 2.0 ATR)
+//  would have done on THIS trade.
+//
+//  CRITICAL: this never feeds back into real trade state. t.stopAnalysis
+//  is an analytics field read only by the Stop Comparison panel.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Tunables — exposed on window.GT so Planner / Trade Manager both agree.
+window.GT.STOP_ANALYSIS_MULTS        = [0.5, 1.0, 1.25, 1.5, 2.0]
+window.GT.STOP_ANALYSIS_DELTA        = 0.80
+window.GT.PRICE_HISTORY_KEY          = 'gt_price_history'
+window.GT.PRICE_HISTORY_MAX_PER_SYM  = 500   // drop oldest when exceeded
+
+// ── PRICE_HISTORY storage ──────────────────────────────────────────────
+// Shape: { [symbol]: [ { ts: ms, px: number }, ... ] } sorted by ts asc.
+// Persisted to localStorage; mirrored through saveAllToFirebase (added
+// to the payload below). Populated from recordPriceHistory(sym, px).
+window.PRICE_HISTORY = (function(){
+  try { return JSON.parse(localStorage.getItem(window.GT.PRICE_HISTORY_KEY) || 'null') || {} }
+  catch(e) { return {} }
+})()
+function savePriceHistory() {
+  try { localStorage.setItem(window.GT.PRICE_HISTORY_KEY, JSON.stringify(window.PRICE_HISTORY)) }
+  catch(e) { console.warn('[STOP-COMP] persist price history failed:', e.message) }
+}
+// recordPriceHistory(sym, px, ts?) — append a data point. De-dupes adjacent
+// same-second writes (batch fetches can trigger this helper N times in
+// the same tick). Caps the per-symbol ring at PRICE_HISTORY_MAX_PER_SYM.
+function recordPriceHistory(sym, px, ts) {
+  if(!sym || typeof px !== 'number' || !isFinite(px) || px <= 0) return
+  ts = ts || Date.now()
+  if(!window.PRICE_HISTORY[sym]) window.PRICE_HISTORY[sym] = []
+  const arr = window.PRICE_HISTORY[sym]
+  const last = arr[arr.length - 1]
+  // Skip if same second + same price (no info gained)
+  if(last && Math.abs(last.ts - ts) < 1000 && Math.abs(last.px - px) < 1e-4) return
+  arr.push({ ts: +ts, px: +px })
+  // Ring buffer — drop oldest when we exceed the cap
+  if(arr.length > window.GT.PRICE_HISTORY_MAX_PER_SYM) {
+    arr.splice(0, arr.length - window.GT.PRICE_HISTORY_MAX_PER_SYM)
+  }
+}
+window.recordPriceHistory = recordPriceHistory
+// Debounced save so bulk-refresh (many symbols in one tick) only writes once.
+// The same debounce also triggers a Stop Comparison re-render so the
+// panel reflects fresh price-path data without extra wiring at every
+// fetch call site.
+let _ph_saveTimer = null
+function scheduleSavePriceHistory() {
+  if(_ph_saveTimer) return
+  _ph_saveTimer = setTimeout(function(){
+    _ph_saveTimer = null
+    savePriceHistory()
+    try { if(typeof renderStopComparison === 'function') renderStopComparison() } catch(e) {}
+  }, 1500)
+}
+window.scheduleSavePriceHistory = scheduleSavePriceHistory
+
+// ── computeStopAnalysis(t) ─────────────────────────────────────────────
+// Pure function. Input: a trade object with entryUnderlyingPrice,
+// entryATR, entryCapturedAt, underlying, and an optional currentPx.
+// Output: { perStop: [{ mult, stopPrice, hit, hitAt, hitPrice, barsSeen,
+// pnlUnderlying, pnlOption, stillOpen, winning }], generatedAt, pathLen }
+//
+// Simulation rules:
+//   • stopPrice = entry − k·ATR (long-only; GT strategy is long calls)
+//   • Walk the price path from entryCapturedAt forward. First bar whose
+//     price <= stopPrice marks a STOP HIT. Exit price = stopPrice
+//     (conservative assumption; matches a market-stop order).
+//   • If never hit, mark stillOpen=true and use currentPx for the
+//     unrealized P&L.
+//   • pnlUnderlying = exitPrice − entry     (always ≤ 0 when stopped)
+//   • pnlOption     = pnlUnderlying × DELTA × 100   (per contract)
+//   • winning       = pnlOption > 0
+function computeStopAnalysis(t) {
+  if(!t) return null
+  const entry = +t.entryUnderlyingPrice || +t.entry || 0
+  const atr   = +t.entryATR || +t.atr || 0
+  const entryAt = +t.entryCapturedAt || 0
+  const sym   = t.underlying || (t.ticker||'').split(' ')[0] || ''
+  if(!(entry > 0 && atr > 0)) return null
+  const curPx = (typeof getCurrentUnderlyingPxForTrade === 'function')
+    ? +getCurrentUnderlyingPxForTrade(t) : (+t.stockPrice || 0)
+  const hist = (sym && window.PRICE_HISTORY[sym]) || []
+  // Slice history at-or-after entry. If entryAt is 0 (unknown), use all.
+  const path = entryAt > 0 ? hist.filter(p => p.ts >= entryAt) : hist.slice()
+  const MULTS = window.GT.STOP_ANALYSIS_MULTS
+  const DELTA = window.GT.STOP_ANALYSIS_DELTA
+  const perStop = MULTS.map(function(k){
+    const stopPrice = +(entry - k * atr).toFixed(4)
+    let hit = false, hitAt = null, hitPrice = null
+    for(let i = 0; i < path.length; i++) {
+      if(path[i].px <= stopPrice) {
+        hit = true; hitAt = path[i].ts; hitPrice = path[i].px; break
+      }
+    }
+    const stillOpen = !hit
+    const exitPx = hit ? stopPrice
+                  : (curPx > 0 ? curPx : (path.length ? path[path.length-1].px : entry))
+    const pnlUnderlying = +(exitPx - entry).toFixed(4)
+    const pnlOption     = +(pnlUnderlying * DELTA * 100).toFixed(2)
+    return {
+      mult:      k,
+      stopPrice: stopPrice,
+      hit:       hit,
+      hitAt:     hitAt,
+      hitPrice:  hitPrice,
+      barsSeen:  path.length,
+      pnlUnderlying: pnlUnderlying,
+      pnlOption: pnlOption,
+      stillOpen: stillOpen,
+      winning:   pnlOption > 0
+    }
+  })
+  return {
+    generatedAt: Date.now(),
+    pathLen:     path.length,
+    entryUsed:   entry,
+    atrUsed:     atr,
+    exitCurrent: curPx,
+    perStop:     perStop
+  }
+}
+window.computeStopAnalysis = computeStopAnalysis
+
+// ── Stop Comparison summary panel ──────────────────────────────────────
+// Aggregates window.__OPEN_TRADES (synthesized by buildTradeShapesFromFidOpen)
+// into a per-stop-multiple summary:
+//   trades   — total with a stopAnalysis
+//   stopped  — count whose stop was hit in the historical path
+//   openN    — count not yet hit (still active in the sim)
+//   wins     — count whose pnlOption > 0  (all "stopped" losses count as
+//              losses; stillOpen wins are counted if currently in profit)
+//   winRate  — wins / trades
+//   avgPnl   — arithmetic mean of pnlOption across all trades
+//   avgWin   — mean of winning pnlOptions
+//   avgLoss  — mean of losing/zero pnlOptions
+//   expectancy = winRate·avgWin + (1 − winRate)·avgLoss
+function renderStopComparison() {
+  const body = document.getElementById('stop-comp-body')
+  const sum  = document.getElementById('stop-comp-summary')
+  if(!body) return
+  // Collect trades with analysis. Prefer the synthesizer's output
+  // (t.stopAnalysis attached in buildTradeShapesFromFidOpen); fall back
+  // to TRADES for legacy-only sessions with no FID_OPEN snapshot.
+  let trades = []
+  try {
+    if(typeof buildTradeShapesFromFidOpen === 'function') {
+      const syn = buildTradeShapesFromFidOpen()
+      if(Array.isArray(syn) && syn.length) trades = syn.filter(t => t && t.status === 'open')
+    }
+  } catch(e) {}
+  if(!trades.length && Array.isArray(window.TRADES)) {
+    trades = window.TRADES.filter(t => t && t.status === 'open')
+  }
+  // Ensure every trade has a fresh stopAnalysis snapshot (cheap — pure fn).
+  const analyzed = trades.map(function(t){
+    const a = t.stopAnalysis || computeStopAnalysis(t)
+    return { t: t, a: a }
+  }).filter(function(x){ return x.a && Array.isArray(x.a.perStop) })
+
+  if(sum) sum.textContent = analyzed.length
+    ? (analyzed.length + ' open trade(s) analyzed')
+    : 'no data — need trades with entry snapshots + price history'
+
+  if(!analyzed.length) {
+    body.innerHTML = '<div style="padding:18px;text-align:center;color:#555c6e;font-size:11px;background:#0a0c0f;border:1px dashed rgba(255,255,255,.08);border-radius:6px">No trades with entry snapshots + price history yet. Hit "↻ Stock Prices" a few times over several days to build the path, then check back.</div>'
+    return
+  }
+
+  const MULTS = window.GT.STOP_ANALYSIS_MULTS
+  const activeMult = (window.GT && +window.GT.STOP_MULT) || 1.25
+  // Per-stop aggregate
+  const summary = MULTS.map(function(k){
+    let trades = 0, stopped = 0, openN = 0, wins = 0
+    let sumPnl = 0, sumWin = 0, sumLoss = 0, nWin = 0, nLoss = 0
+    for(const x of analyzed) {
+      const row = x.a.perStop.find(p => Math.abs(p.mult - k) < 1e-9)
+      if(!row) continue
+      trades++
+      if(row.hit) stopped++; else openN++
+      sumPnl += row.pnlOption
+      if(row.pnlOption > 0) { wins++; sumWin += row.pnlOption; nWin++ }
+      else                  { sumLoss += row.pnlOption; nLoss++ }
+    }
+    const winRate = trades > 0 ? wins / trades : 0
+    const avgPnl  = trades > 0 ? sumPnl / trades : 0
+    const avgWin  = nWin  > 0 ? sumWin  / nWin  : 0
+    const avgLoss = nLoss > 0 ? sumLoss / nLoss : 0
+    const expectancy = winRate * avgWin + (1 - winRate) * avgLoss
+    return { mult:k, trades, stopped, openN, wins, winRate, avgPnl, avgWin, avgLoss, expectancy }
+  })
+
+  // HTML helpers
+  const fmt$ = v => (v == null || !isFinite(+v))
+    ? '<span style="color:#555c6e">—</span>'
+    : ((+v >= 0 ? '+$' : '−$') + Math.abs(+v).toFixed(0))
+  const fmtPct = v => (+v * 100).toFixed(0) + '%'
+  const th = s => '<th style="text-align:right;padding:7px 10px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#555c6e;border-bottom:1px solid rgba(255,255,255,.10);background:#0a0c0f;white-space:nowrap">'+s+'</th>'
+  const td = (h, c, extra) => '<td style="padding:6px 10px;font-size:11px;color:'+(c||'#e8eaf0')+';border-bottom:1px solid rgba(255,255,255,.04);text-align:right;font-family:\'SF Mono\',monospace;'+(extra||'')+'">'+h+'</td>'
+
+  let rows = ''
+  for(const s of summary) {
+    const isActive = Math.abs(s.mult - activeMult) < 1e-9
+    const activeMark = isActive
+      ? '<span style="background:rgba(240,192,64,.18);color:#f0c040;padding:1px 6px;border-radius:3px;font-size:9px;font-weight:800;letter-spacing:.06em;margin-left:4px">ACTIVE</span>'
+      : ''
+    const expColor = s.expectancy >= 0 ? '#00d68f' : '#ff4560'
+    rows += '<tr style="'+(isActive ? 'background:rgba(240,192,64,.04);' : '')+'">' +
+      td('<span style="font-weight:700;color:#e8eaf0">'+s.mult.toFixed(2)+' ATR</span>'+activeMark, null, 'text-align:left') +
+      td(String(s.trades),  '#8b91a0') +
+      td(String(s.stopped), s.stopped > 0 ? '#ff8c42' : '#555c6e') +
+      td(String(s.openN),   s.openN > 0 ? '#00d68f' : '#555c6e') +
+      td(fmtPct(s.winRate), s.winRate >= 0.5 ? '#00d68f' : '#ff8c42') +
+      td(fmt$(s.avgPnl),    s.avgPnl  >= 0 ? '#00d68f' : '#ff4560') +
+      td(fmt$(s.avgWin),    '#00d68f') +
+      td(fmt$(s.avgLoss),   '#ff4560') +
+      td('<span style="font-weight:700;color:'+expColor+'">'+fmt$(s.expectancy)+'</span>') +
+    '</tr>'
+  }
+
+  const legendHtml =
+    '<div style="font-size:10px;color:#555c6e;padding:6px 2px 10px 2px;line-height:1.4">' +
+      'Simulated P&L assumes long-call exit at the stop price × DELTA ' + window.GT.STOP_ANALYSIS_DELTA.toFixed(2) + ' × 100 per contract. ' +
+      'Price path sourced from in-browser live-refresh cache (last '+window.GT.PRICE_HISTORY_MAX_PER_SYM+' ticks per symbol). ' +
+      'Stopped = stop would have been touched; Open = still alive at the live price. Analytics only — no live trading impact.' +
+    '</div>'
+
+  body.innerHTML =
+    '<div style="overflow-x:auto;background:#0a0c0f;border:1px solid rgba(255,255,255,.06);border-radius:6px">' +
+      '<table style="width:100%;border-collapse:collapse;min-width:720px">' +
+        '<thead><tr>' +
+          '<th style="text-align:left;padding:7px 10px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#555c6e;border-bottom:1px solid rgba(255,255,255,.10);background:#0a0c0f">Stop</th>' +
+          th('Trades') + th('Stopped') + th('Open') + th('Win Rate') +
+          th('Avg P&amp;L') + th('Avg Win') + th('Avg Loss') + th('Expectancy') +
+        '</tr></thead>' +
+        '<tbody>'+rows+'</tbody>' +
+      '</table>' +
+    '</div>' +
+    legendHtml
+}
+window.renderStopComparison = renderStopComparison
+
 // ── Entry snapshot capture (GOLDEN TICKET) ─────────────────────────────
 // For each FID_OPEN position:
 //   • If the position_id already has an entryCapturedAt, PRESERVE every
@@ -9435,6 +9738,12 @@ async function enrichFidOpenWithStockPrices() {
     if(!window._livePrices) window._livePrices = {}
     for(const tk of Object.keys(prices)) window._livePrices[tk] = prices[tk]
     window._livePricesAt = new Date()
+    // Append to the stop-analysis price-path cache. Analytics only —
+    // never mutates trade state.
+    if(typeof window.recordPriceHistory === 'function') {
+      for(const tk of Object.keys(prices)) window.recordPriceHistory(tk, +prices[tk])
+      if(typeof window.scheduleSavePriceHistory === 'function') window.scheduleSavePriceHistory()
+    }
     setStatus('✓ Underlying prices enriched ('+filled+'/'+window.FID_OPEN.positions.length+')', '#00d68f')
     saveFidOpen()
     try { renderTrades() } catch(e) {}
@@ -9596,6 +9905,12 @@ async function refreshFidOpenLivePrices() {
       if(!window._livePrices) window._livePrices = {}
       for(const tk of Object.keys(byTicker)) window._livePrices[tk] = byTicker[tk].price
       window._livePricesAt = new Date()
+      // Stop-analysis price-path cache (same hook as
+      // enrichFidOpenWithStockPrices). Analytics only.
+      if(typeof window.recordPriceHistory === 'function') {
+        for(const tk of Object.keys(byTicker)) window.recordPriceHistory(tk, +byTicker[tk].price)
+        if(typeof window.scheduleSavePriceHistory === 'function') window.scheduleSavePriceHistory()
+      }
 
       // Write p.liveStockPx on EVERY position (options included) so the
       // synthesized trade shape / debug log / any secondary consumer has
@@ -10525,7 +10840,20 @@ function buildTradeShapesFromFidOpen() {
       date:       legacy && legacy.date || (window.FID_OPEN.importedAt ? new Date(window.FID_OPEN.importedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}).replace(',','') : ''),
       importedAt: window.FID_OPEN.importedAt,
       pnl:        (+p.totalGL) || 0,
-      stockPrice: curStockPx
+      stockPrice: curStockPx,
+      // Analytics: per-trade stop-comparison sim over all 5 mults.
+      // Computed here so the Stop Comparison panel can read t.stopAnalysis
+      // without re-walking the price history. Pure function, no side
+      // effects on live trade state.
+      stopAnalysis: (typeof computeStopAnalysis === 'function')
+        ? computeStopAnalysis({
+            underlying:           p.underlying,
+            entryUnderlyingPrice: entryUnd,
+            entryATR:             entryAtr,
+            entryCapturedAt:      +p.entryCapturedAt || 0,
+            stockPrice:           curStockPx
+          })
+        : null
     }
   })
 }
@@ -10702,6 +11030,9 @@ if(typeof window !== 'undefined') {
 }
 
 setTimeout(() => { renderTrades(); renderPortfolioRisk(); if(typeof updateFidSyncUI==='function') updateFidSyncUI(); if(typeof renderRollReview==='function') renderRollReview();
+  // Stop Comparison panel — cheap to render, keeps in sync with Trade
+  // Manager's open-trades list on every subsequent refresh.
+  try { if(typeof renderStopComparison === 'function') renderStopComparison() } catch(e) {}
   // Sync the Stop ATR <select> with the hydrated window.GT.STOP_MULT
   // value. Uses the CANONICAL string key (via normalizeStopMult) so the
   // <option value="1.0"> match survives String()-drops-trailing-zero.
