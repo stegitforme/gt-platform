@@ -9126,6 +9126,16 @@ window.GT.HIST_ROLL_QTY_TOL      = 0.25  // ±25% qty match still scores (a touc
                                           // looser than live detection because
                                           // historical chains often have partials)
 
+// Bulk-action thresholds used by the Roll Review Confirm-High / Reject-Low
+// buttons. High = auto-confirm floor for bulk confirm; Low = ceiling below
+// which a row is auto-rejectable in bulk. Per-row manual actions ignore
+// these — they're only used by the bulk paths.
+window.GT.ROLL_HIGH_CONF         = 80    // bulk-confirm floor
+window.GT.ROLL_LOW_CONF          = 60    // bulk-reject ceiling
+// Selection state for bulk "Confirm Selected" — stores roll_id strings.
+// Cleared via clearRollSelection() or after any successful bulk action.
+window.__rollReviewSelected      = window.__rollReviewSelected || new Set()
+
 // Parse "MM/DD/YYYY" or "YYYY-MM-DD" or a Date-parseable string into an
 // epoch ms number. Returns null if unparseable.
 function _histParseDate(s) {
@@ -9601,6 +9611,206 @@ function setRollReviewFilter(f) {
 }
 window.setRollReviewFilter = setRollReviewFilter
 
+// ─── Bulk actions + selection + analytics helpers ──────────────────────
+// All bulk actions operate on the CURRENTLY-VISIBLE (filtered) rows only —
+// hidden rows are never touched. Every transition routes through the
+// canonical confirmRollDetection / rejectRollDetection handlers so
+// FID_CREDITS + breakevenUnderlying + trailingActive + Firebase stay in
+// sync with the per-row action path (no bypass of the audit trail).
+
+// Returns the events array after applying the current Roll Review filter.
+// Used by every bulk action so "visible rows only" is guaranteed even if
+// the user has mid-scroll unsaved selections.
+function getFilteredRollEvents() {
+  const events = (window.ROLL_LEDGER && Array.isArray(window.ROLL_LEDGER.events))
+    ? window.ROLL_LEDGER.events.slice() : []
+  events.sort((a,b) => (b.timestamp||0) - (a.timestamp||0))
+  const f = window.__rollReviewFilter || 'all'
+  return (f === 'all') ? events : events.filter(e => e.status === f)
+}
+window.getFilteredRollEvents = getFilteredRollEvents
+
+// Per-row checkbox toggle. Kept on window so the inline onchange handler
+// can call it without a closure hop.
+function toggleRollSelection(rid) {
+  if(!window.__rollReviewSelected) window.__rollReviewSelected = new Set()
+  if(window.__rollReviewSelected.has(rid)) window.__rollReviewSelected.delete(rid)
+  else                                     window.__rollReviewSelected.add(rid)
+  // Lightweight re-render to refresh the "Confirm Selected (N)" counter
+  // in the action bar. The table itself re-renders too but it's cheap
+  // at 50 rows.
+  try { renderRollReview() } catch(e) {}
+}
+window.toggleRollSelection = toggleRollSelection
+
+function clearRollSelection() {
+  window.__rollReviewSelected = new Set()
+  try { renderRollReview() } catch(e) {}
+}
+window.clearRollSelection = clearRollSelection
+
+// Pluralize helper for the confirm/reject dialogs.
+function _plural(n, word) { return n + ' ' + word + (n === 1 ? '' : 's') }
+
+// bulkConfirmHighConfidence — confirms every VISIBLE row whose status
+// is 'detected' or 'historical_candidate', confidence >= ROLL_HIGH_CONF,
+// and estimatedCredit is non-null. Rows missing an estimate are SKIPPED
+// and reported (never silently confirmed). Shows a pre-action dialog
+// with the total credit preview.
+function bulkConfirmHighConfidence() {
+  const HIGH = (window.GT && +window.GT.ROLL_HIGH_CONF) || 80
+  const filtered = getFilteredRollEvents()
+  const eligible = filtered.filter(e =>
+    (e.status === 'detected' || e.status === 'historical_candidate') &&
+    (+e.confidence || 0) >= HIGH
+  )
+  const withCredit = eligible.filter(e => e.estimatedCredit != null && isFinite(+e.estimatedCredit))
+  const skipped    = eligible.filter(e => !(e.estimatedCredit != null && isFinite(+e.estimatedCredit)))
+  if(!eligible.length) {
+    alert('No visible rows match the Confirm High Confidence criteria\n(status = detected/historical, confidence ≥ '+HIGH+'%).')
+    return
+  }
+  const totalCredit = withCredit.reduce((s, e) => s + (+e.estimatedCredit || 0), 0)
+  const msg = 'Confirm '+_plural(withCredit.length, 'roll')+' with confidence ≥ '+HIGH+'%?\n\n'
+    + 'Total estimated credit: '+(totalCredit >= 0 ? '+$' : '−$')+Math.abs(totalCredit).toFixed(2)+'\n'
+    + 'Visible eligible rows: '+eligible.length+'\n'
+    + (skipped.length ? 'Skipping '+_plural(skipped.length, 'row')+' with no estimated credit — adjust those manually.\n' : '')
+    + '\nThis updates FID_CREDITS and flips affected positions to post-roll. Proceed?'
+  if(!confirm(msg)) return
+  let confirmed = 0
+  for(const e of withCredit) {
+    try { confirmRollDetection(e.roll_id); confirmed++ }
+    catch(err) { console.warn('[BULK-CONFIRM] failed for', e.roll_id, err.message) }
+  }
+  window.__rollReviewSelected = new Set()
+  try { renderRollReview() } catch(e) {}
+  alert('Bulk confirm complete.\n\n'
+    + _plural(confirmed, 'roll') + ' confirmed (+$' + Math.abs(totalCredit).toFixed(2) + ').\n'
+    + (skipped.length ? _plural(skipped.length, 'row') + ' skipped (missing estimated credit).' : ''))
+}
+window.bulkConfirmHighConfidence = bulkConfirmHighConfidence
+
+// bulkConfirmSelected — confirms rows whose roll_id is in the
+// __rollReviewSelected set AND currently visible. Same skip-if-no-credit
+// policy as Confirm High Confidence.
+function bulkConfirmSelected() {
+  const filtered = getFilteredRollEvents()
+  const visibleIds = new Set(filtered.map(e => e.roll_id))
+  const selectedVisible = filtered.filter(e =>
+    window.__rollReviewSelected.has(e.roll_id) &&
+    (e.status === 'detected' || e.status === 'historical_candidate')
+  )
+  if(!selectedVisible.length) {
+    alert('No selected rows are eligible for bulk confirm.\nSelected rows must be visible, in detected/historical status, and unchecked rows won\'t be touched.')
+    return
+  }
+  const withCredit = selectedVisible.filter(e => e.estimatedCredit != null && isFinite(+e.estimatedCredit))
+  const skipped    = selectedVisible.filter(e => !(e.estimatedCredit != null && isFinite(+e.estimatedCredit)))
+  const totalCredit = withCredit.reduce((s, e) => s + (+e.estimatedCredit || 0), 0)
+  const msg = 'Confirm '+_plural(withCredit.length, 'selected roll')+'?\n\n'
+    + 'Total estimated credit: '+(totalCredit >= 0 ? '+$' : '−$')+Math.abs(totalCredit).toFixed(2)+'\n'
+    + (skipped.length ? 'Skipping '+_plural(skipped.length, 'row')+' with no estimated credit — use Adjust on those.\n' : '')
+    + '\nThis updates FID_CREDITS and flips affected positions to post-roll. Proceed?'
+  if(!confirm(msg)) return
+  let confirmed = 0
+  for(const e of withCredit) {
+    try { confirmRollDetection(e.roll_id); confirmed++ }
+    catch(err) { console.warn('[BULK-CONFIRM-SEL] failed for', e.roll_id, err.message) }
+  }
+  window.__rollReviewSelected = new Set()
+  try { renderRollReview() } catch(e) {}
+  alert('Bulk confirm complete.\n\n'
+    + _plural(confirmed, 'roll') + ' confirmed.\n'
+    + (skipped.length ? _plural(skipped.length, 'row') + ' skipped (missing estimated credit).' : ''))
+}
+window.bulkConfirmSelected = bulkConfirmSelected
+
+// bulkRejectLowConfidence — rejects every VISIBLE row whose status is
+// 'detected' or 'historical_candidate' and confidence < ROLL_LOW_CONF.
+// Rejected rows can still be reopened later; this path never touches
+// already-rejected rows.
+function bulkRejectLowConfidence() {
+  const LOW = (window.GT && +window.GT.ROLL_LOW_CONF) || 60
+  const filtered = getFilteredRollEvents()
+  const eligible = filtered.filter(e =>
+    (e.status === 'detected' || e.status === 'historical_candidate') &&
+    (+e.confidence || 0) < LOW
+  )
+  if(!eligible.length) {
+    alert('No visible rows match the Reject Low Confidence criteria\n(status = detected/historical, confidence < '+LOW+'%).')
+    return
+  }
+  const msg = 'Reject '+_plural(eligible.length, 'roll')+' with confidence < '+LOW+'%?\n\n'
+    + 'Visible eligible rows: '+eligible.length+'\n\n'
+    + 'Rejected rows can be reopened later via the Reopen button.\nProceed?'
+  if(!confirm(msg)) return
+  let rejected = 0
+  for(const e of eligible) {
+    try { rejectRollDetection(e.roll_id); rejected++ }
+    catch(err) { console.warn('[BULK-REJECT] failed for', e.roll_id, err.message) }
+  }
+  try { renderRollReview() } catch(e) {}
+  alert('Bulk reject complete.\n\n'+_plural(rejected, 'roll')+' rejected.')
+}
+window.bulkRejectLowConfidence = bulkRejectLowConfidence
+
+// computeRollAnalytics — aggregates all CONFIRMED events in the ledger
+// for the dashboard. Pure function, read-only on window.ROLL_LEDGER.
+// Returns {
+//   totalConfirmed, totalCredits, avgCredit, medianCredit, avgConfidence,
+//   creditByUnderlying: { [sym]: totalCredit },
+//   countByUnderlying:  { [sym]: count },
+//   avgCreditByLevel:   { R1|R2|R3|historical|other: avgCredit }
+// }
+function computeRollAnalytics() {
+  const confirmed = ((window.ROLL_LEDGER && window.ROLL_LEDGER.events) || [])
+    .filter(e => e && e.status === 'confirmed')
+  const n = confirmed.length
+  if(!n) {
+    return {
+      totalConfirmed: 0, totalCredits: 0, avgCredit: 0, medianCredit: 0, avgConfidence: 0,
+      creditByUnderlying: {}, countByUnderlying: {}, avgCreditByLevel: {}
+    }
+  }
+  const credits = confirmed.map(e => +e.confirmedCredit || 0)
+  const total   = credits.reduce((a,b) => a+b, 0)
+  const avg     = total / n
+  const sorted  = credits.slice().sort((a,b) => a-b)
+  const mid     = Math.floor(sorted.length / 2)
+  const median  = sorted.length % 2 === 0 ? (sorted[mid-1] + sorted[mid]) / 2 : sorted[mid]
+  const avgConf = confirmed.reduce((s,e) => s + (+e.confidence || 0), 0) / n
+  const creditByUnderlying = {}
+  const countByUnderlying  = {}
+  for(const e of confirmed) {
+    const sym = e.underlying || '?'
+    creditByUnderlying[sym] = (creditByUnderlying[sym] || 0) + (+e.confirmedCredit || 0)
+    countByUnderlying[sym]  = (countByUnderlying[sym]  || 0) + 1
+  }
+  // Bucket by rollLevelHit; 'historical' rolls land in their own bucket
+  // (they have no R1/R2/R3 anchor), and anything else falls into 'other'.
+  const byLevel = {}
+  for(const e of confirmed) {
+    let k = e.rollLevelHit || 'other'
+    if(k !== 'R1' && k !== 'R2' && k !== 'R3' && k !== 'historical') k = 'other'
+    if(!byLevel[k]) byLevel[k] = { sum: 0, n: 0 }
+    byLevel[k].sum += (+e.confirmedCredit || 0)
+    byLevel[k].n++
+  }
+  const avgCreditByLevel = {}
+  for(const k of Object.keys(byLevel)) {
+    avgCreditByLevel[k] = byLevel[k].sum / byLevel[k].n
+  }
+  return {
+    totalConfirmed: n,
+    totalCredits:   +total.toFixed(2),
+    avgCredit:      +avg.toFixed(2),
+    medianCredit:   +median.toFixed(2),
+    avgConfidence:  +avgConf.toFixed(1),
+    creditByUnderlying, countByUnderlying, avgCreditByLevel
+  }
+}
+window.computeRollAnalytics = computeRollAnalytics
+
 function renderRollReview() {
   const body = document.getElementById('roll-review-body')
   const sum  = document.getElementById('roll-review-summary')
@@ -9650,6 +9860,69 @@ function renderRollReview() {
       card('TOTAL CONFIRMED CREDITS', fmt$(totalConfCredit), totalConfCredit >= 0 ? '#00d68f' : '#ff4560') +
     '</div>'
 
+  // ── Roll Analytics mini-dashboard ────────────────────────────────────
+  // Read-only aggregate view of CONFIRMED events. Hidden when there are
+  // zero confirmed rolls (nothing meaningful to display yet). Compact
+  // 2-column layout: numerics on the left, per-underlying + per-level
+  // breakdowns on the right.
+  const analytics = computeRollAnalytics()
+  let analyticsBlock = ''
+  if(analytics.totalConfirmed > 0) {
+    const statBox = (label, val, color) =>
+      '<div style="flex:1;min-width:110px;background:#0a0c0f;border:1px solid rgba(255,255,255,.05);border-radius:5px;padding:8px 10px">' +
+        '<div style="font-size:9px;color:#555c6e;font-weight:700;letter-spacing:.07em;text-transform:uppercase;margin-bottom:3px">'+label+'</div>' +
+        '<div style="font-size:14px;font-weight:700;color:'+color+';font-family:\'SF Mono\',monospace">'+val+'</div>' +
+      '</div>'
+    const a = analytics
+    // Per-underlying breakdown — sort by total credit desc, cap at top 8
+    const byUndRows = Object.keys(a.creditByUnderlying)
+      .map(k => ({ sym:k, total:a.creditByUnderlying[k], n:a.countByUnderlying[k] || 0 }))
+      .sort((x,y) => y.total - x.total)
+      .slice(0, 8)
+    const byUndHtml = byUndRows.length ? (
+      '<div style="flex:1;min-width:200px">' +
+        '<div style="font-size:9px;color:#555c6e;font-weight:700;letter-spacing:.07em;text-transform:uppercase;margin-bottom:4px">Top underlyings</div>' +
+        '<div style="display:grid;grid-template-columns:1fr auto auto;gap:2px 10px;font-size:11px;font-family:\'SF Mono\',monospace">' +
+          byUndRows.map(r =>
+            '<div style="color:#e8eaf0;font-weight:600">'+esc(r.sym)+'</div>' +
+            '<div style="color:#8b91a0;text-align:right">'+_plural(r.n,'roll')+'</div>' +
+            '<div style="color:'+(r.total>=0?'#00d68f':'#ff4560')+';text-align:right;font-weight:700">'+fmt$(r.total)+'</div>'
+          ).join('') +
+        '</div>' +
+      '</div>'
+    ) : ''
+    // By level — R1 / R2 / R3 / historical / other
+    const levelOrder = ['R1','R2','R3','historical','other']
+    const byLevelRows = levelOrder.filter(k => a.avgCreditByLevel[k] != null)
+    const byLevelHtml = byLevelRows.length ? (
+      '<div style="flex:1;min-width:180px">' +
+        '<div style="font-size:9px;color:#555c6e;font-weight:700;letter-spacing:.07em;text-transform:uppercase;margin-bottom:4px">Avg credit by roll level</div>' +
+        '<div style="display:grid;grid-template-columns:1fr auto;gap:2px 10px;font-size:11px;font-family:\'SF Mono\',monospace">' +
+          byLevelRows.map(k =>
+            '<div style="color:#e8eaf0;font-weight:600">'+esc(k)+'</div>' +
+            '<div style="color:'+(a.avgCreditByLevel[k]>=0?'#00d68f':'#ff4560')+';text-align:right;font-weight:700">'+fmt$(a.avgCreditByLevel[k])+'</div>'
+          ).join('') +
+        '</div>' +
+      '</div>'
+    ) : ''
+    analyticsBlock =
+      '<div style="margin-bottom:10px;padding:10px 12px;background:rgba(0,214,143,.04);border:1px solid rgba(0,214,143,.18);border-radius:6px">' +
+        '<div style="color:#00d68f;font-weight:700;letter-spacing:.07em;text-transform:uppercase;font-size:9px;margin-bottom:8px">Roll Analytics — confirmed only</div>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">' +
+          statBox('Total rolls',  String(a.totalConfirmed), '#e8eaf0') +
+          statBox('Total credits', fmt$(a.totalCredits),    a.totalCredits >= 0 ? '#00d68f' : '#ff4560') +
+          statBox('Avg credit',    fmt$(a.avgCredit),       a.avgCredit    >= 0 ? '#00d68f' : '#ff4560') +
+          statBox('Median credit', fmt$(a.medianCredit),    a.medianCredit >= 0 ? '#00d68f' : '#ff4560') +
+          statBox('Avg confidence', a.avgConfidence.toFixed(1)+'%', '#4da6ff') +
+        '</div>' +
+        (byUndHtml || byLevelHtml ?
+          '<div style="display:flex;flex-wrap:wrap;gap:18px;padding-top:8px;border-top:1px solid rgba(255,255,255,.05)">' +
+            byUndHtml + byLevelHtml +
+          '</div>'
+        : '') +
+      '</div>'
+  }
+
   // ── Action bar: scan historical + filter chips ───────────────────────
   const f = window.__rollReviewFilter || 'all'
   const chip = (key, label, count) => {
@@ -9687,7 +9960,7 @@ function renderRollReview() {
     'style="background:#1e2d3d;color:#4da6ff;border:1px solid rgba(77,166,255,.5);border-radius:4px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;margin-right:12px">' +
     '⟳ Scan Historical Rolls</button>'
   const filterRow =
-    '<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;align-items:center">' +
+    '<div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;align-items:center">' +
       scanBtn +
       chip('all',                   'All',         events.length) +
       chip('detected',              'Detected',    cDet) +
@@ -9696,11 +9969,49 @@ function renderRollReview() {
       chip('rejected',              'Rejected',    cRej) +
     '</div>'
 
+  // ── Bulk action bar ──────────────────────────────────────────────────
+  // Operates on currently-visible (filtered) rows only. Each button
+  // dispatches to a window.bulk* helper that handles the pre-action
+  // dialog, per-row dispatch (through the canonical handlers), and
+  // post-action report. Counts shown in each button label reflect the
+  // current filter, giving live feedback on what bulk-clicking will do.
+  const HIGH = (window.GT && +window.GT.ROLL_HIGH_CONF) || 80
+  const LOW  = (window.GT && +window.GT.ROLL_LOW_CONF)  || 60
+  const filteredPreview = (f === 'all') ? events : events.filter(e => e.status === f)
+  const bulkHighCount = filteredPreview.filter(e =>
+    (e.status === 'detected' || e.status === 'historical_candidate') &&
+    (+e.confidence || 0) >= HIGH
+  ).length
+  const bulkLowCount = filteredPreview.filter(e =>
+    (e.status === 'detected' || e.status === 'historical_candidate') &&
+    (+e.confidence || 0) < LOW
+  ).length
+  const selectedCount = Array.from(window.__rollReviewSelected || []).filter(rid =>
+    filteredPreview.some(e => e.roll_id === rid &&
+      (e.status === 'detected' || e.status === 'historical_candidate'))
+  ).length
+  const bulkBtn = (onclick, label, color, disabled) =>
+    '<button onclick="'+onclick+'" '+(disabled?'disabled ':'')+'style="' +
+      'background:transparent;color:'+(disabled?'#333a4a':color)+';' +
+      'border:1px solid '+(disabled?'rgba(255,255,255,.08)':color)+'4d;' +
+      'border-radius:4px;padding:4px 10px;font-size:11px;font-weight:700;' +
+      'cursor:'+(disabled?'not-allowed':'pointer')+';font-family:inherit">' +
+      label + '</button>'
+  const bulkBar =
+    '<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;align-items:center;padding:8px 10px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05);border-radius:6px">' +
+      '<span style="font-size:9px;color:#555c6e;font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-right:4px">Bulk</span>' +
+      bulkBtn('bulkConfirmHighConfidence()', 'Confirm High Confidence ('+bulkHighCount+')', '#00d68f', bulkHighCount === 0) +
+      bulkBtn('bulkConfirmSelected()',       'Confirm Selected ('+selectedCount+')',        '#4da6ff', selectedCount === 0) +
+      bulkBtn('bulkRejectLowConfidence()',   'Reject Low Confidence ('+bulkLowCount+')',    '#ff8c42', bulkLowCount === 0) +
+      bulkBtn('clearRollSelection()',        'Clear Selection',                             '#8b91a0', (window.__rollReviewSelected && window.__rollReviewSelected.size) === 0) +
+      '<span style="font-size:10px;color:#555c6e;margin-left:auto">High ≥ '+HIGH+'% · Low < '+LOW+'% · filter-aware</span>' +
+    '</div>'
+
   // ── Filtered table ───────────────────────────────────────────────────
   const filtered = (f === 'all') ? events : events.filter(e => e.status === f)
 
   if(!filtered.length) {
-    body.innerHTML = summaryGrid + filterRow +
+    body.innerHTML = summaryGrid + analyticsBlock + filterRow + bulkBar +
       '<div style="padding:18px;text-align:center;color:#555c6e;font-size:11px;background:#0a0c0f;border:1px dashed rgba(255,255,255,.08);border-radius:6px">' +
         (events.length ? 'No events match the “'+f+'” filter.' : 'No roll events yet. Detected rolls will appear here after a Fidelity CSV import.') +
       '</div>'
@@ -9732,7 +10043,23 @@ function renderRollReview() {
   const actionsFor = ev => {
     const rid = ridJs(ev.roll_id)
     if(ev.status === 'detected' || ev.status === 'historical_candidate') {
-      return  '<button onclick="confirmRollDetection('+rid+')" style="background:#00d68f;color:#0a0c0f;border:none;border-radius:3px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;margin-right:3px">Confirm</button>' +
+      // Auto-credit button label: when an estimated credit is present,
+      // surface the number in the button itself so the user can confirm
+      // in-place without squinting at the Estimated column. When no
+      // estimate exists, the Confirm button collapses into a single
+      // "Adjust Required" button that routes to the Adjust flow —
+      // clicking it is the only way to supply a credit for this row.
+      const hasEstimate = ev.estimatedCredit != null && isFinite(+ev.estimatedCredit)
+      let confirmHtml
+      if(hasEstimate) {
+        const ec = +ev.estimatedCredit
+        const sign = ec >= 0 ? '+' : '−'
+        const abs  = Math.abs(ec).toFixed(0)
+        confirmHtml = '<button onclick="confirmRollDetection('+rid+')" title="Confirm with estimated credit '+(ec>=0?'+$':'−$')+Math.abs(ec).toFixed(2)+'" style="background:#00d68f;color:#0a0c0f;border:none;border-radius:3px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;margin-right:3px">Confirm '+sign+'$'+abs+'</button>'
+      } else {
+        confirmHtml = '<button onclick="adjustRollDetection('+rid+')" title="No automatic credit estimate — click to enter manually" style="background:rgba(240,192,64,.18);color:#f0c040;border:1px solid rgba(240,192,64,.5);border-radius:3px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;margin-right:3px">Adjust Required</button>'
+      }
+      return  confirmHtml +
               '<button onclick="adjustRollDetection('+rid+')"  style="background:transparent;color:#f0c040;border:1px solid rgba(240,192,64,.5);border-radius:3px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;margin-right:3px">Adjust</button>' +
               '<button onclick="rejectRollDetection('+rid+')"  style="background:transparent;color:#8b91a0;border:1px solid rgba(139,145,160,.35);border-radius:3px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit">Reject</button>'
     }
@@ -9758,11 +10085,24 @@ function renderRollReview() {
   const td = (h, c, extra) => '<td style="padding:6px 8px;font-size:11px;color:'+(c||'#e8eaf0')+';border-bottom:1px solid rgba(255,255,255,.04);'+(extra||'')+'">'+h+'</td>'
 
   let rows = ''
+  // Checkbox column — only selectable for detected/historical rows (the
+  // only statuses that bulkConfirmSelected can act on). Confirmed/
+  // rejected rows get a disabled placeholder to keep column alignment.
+  const selectedSet = window.__rollReviewSelected || new Set()
+  const checkboxFor = ev => {
+    const rid = ridJs(ev.roll_id)
+    if(ev.status !== 'detected' && ev.status !== 'historical_candidate') {
+      return '<span style="color:#333a4a;font-size:11px">·</span>'
+    }
+    const checked = selectedSet.has(ev.roll_id) ? ' checked' : ''
+    return '<input type="checkbox" onchange="toggleRollSelection('+rid+')"'+checked+' style="cursor:pointer;accent-color:#4da6ff">'
+  }
   for(const ev of filtered) {
     const old_d = contractDesc(ev.underlying, ev.old_strike, ev.old_expiry)
     const new_d = contractDesc(ev.underlying, ev.new_strike, ev.new_expiry)
     const dirArrow = (+ev.old_strike < +ev.new_strike) ? '↑' : (+ev.old_strike > +ev.new_strike) ? '↓' : '→'
     rows += '<tr>' +
+      td(checkboxFor(ev), null, 'text-align:center;padding:6px 4px') +
       td(statusPill(ev.status)) +
       td(confChip(ev.confidence)) +
       td('<span style="font-weight:700">'+esc(ev.underlying||'?')+'</span>') +
@@ -9778,10 +10118,28 @@ function renderRollReview() {
       td(actionsFor(ev), null, 'text-align:right;white-space:nowrap') +
     '</tr>'
   }
+  // Header checkbox — toggles select-all on visible detected/historical
+  // rows. Uses an inline IIFE so the logic stays contained without
+  // polluting the global namespace further.
+  const eligibleVisible = filtered.filter(e =>
+    e.status === 'detected' || e.status === 'historical_candidate')
+  const allSelected = eligibleVisible.length > 0 &&
+    eligibleVisible.every(e => selectedSet.has(e.roll_id))
+  const someSelected = !allSelected && eligibleVisible.some(e => selectedSet.has(e.roll_id))
+  const headCheckbox = eligibleVisible.length === 0
+    ? '<span style="color:#333a4a">·</span>'
+    : '<input type="checkbox" onchange="(function(cb){' +
+        'var set=window.__rollReviewSelected||(window.__rollReviewSelected=new Set());' +
+        'var rids='+JSON.stringify(eligibleVisible.map(e => e.roll_id))+';' +
+        'if(cb.checked){rids.forEach(function(r){set.add(r)})}else{rids.forEach(function(r){set.delete(r)})}' +
+        'renderRollReview();' +
+      '})(this)"'+(allSelected?' checked':'')+(someSelected?' data-indeterminate="1"':'')+
+      ' title="Select all visible detected/historical rows" style="cursor:pointer;accent-color:#4da6ff">'
   const table =
     '<div style="overflow-x:auto;background:#0a0c0f;border:1px solid rgba(255,255,255,.06);border-radius:6px">' +
-      '<table style="width:100%;border-collapse:collapse;min-width:1100px">' +
+      '<table style="width:100%;border-collapse:collapse;min-width:1140px">' +
         '<thead><tr>' +
+          th(headCheckbox) +
           th('Status') + th('Conf') + th('Underlying') + th('Old contract') +
           th('') + th('New contract') + th('Qty') + th('Hit') +
           th('Estimated') + th('Confirmed') + th('Method') + th('Detected') + th('Actions') +
@@ -9805,7 +10163,7 @@ function renderRollReview() {
     '</div>'
   ) : ''
 
-  body.innerHTML = summaryGrid + filterRow + table + limitationsBlock
+  body.innerHTML = summaryGrid + analyticsBlock + filterRow + bulkBar + table + limitationsBlock
 }
 window.renderRollReview = renderRollReview
 
