@@ -9739,18 +9739,25 @@ function drawMiniChart(canvas, levels, current, sym, t) {
       if(current > 0) {
         // Inline % chip just left of the price — only when there's space.
         // Skipped on merged multi-kind pills (label is already long).
+        // R1/R2 deliberately omit the chip ("R1 23.11" reads cleaner at a
+        // glance than "R1 +1.5% 23.11"); STOP / BE / BASE / NEXT ROLL /
+        // ENTRY keep the chip because their distance-from-NOW is the
+        // actionable cue, not just the absolute price.
         if(p.items.length === 1) {
-          const dist = p.items[0].price - current
-          const pct  = current > 0 ? (dist / current * 100) : 0
-          const chip = (pct >= 0 ? '+' : '') + pct.toFixed(1) + '%'
-          const labelW = ctx.measureText(labelText).width
-          const priceW = ctx.measureText(priceText).width
-          const slack  = pillW - labelW - priceW - 14
-          if(slack >= 22) {
-            ctx.font = '8px "SF Mono", monospace'
-            const dimS = kindStyles[p.items[0].kind] || kindStyles.entry
-            ctx.fillStyle = dimS.dim
-            ctx.fillText(chip, pillX + pillW - 5 - priceW - 5, pillY)
+          const itemKind = p.items[0].kind
+          if(itemKind !== 'r1' && itemKind !== 'r2') {
+            const dist = p.items[0].price - current
+            const pct  = current > 0 ? (dist / current * 100) : 0
+            const chip = (pct >= 0 ? '+' : '') + pct.toFixed(1) + '%'
+            const labelW = ctx.measureText(labelText).width
+            const priceW = ctx.measureText(priceText).width
+            const slack  = pillW - labelW - priceW - 14
+            if(slack >= 22) {
+              ctx.font = '8px "SF Mono", monospace'
+              const dimS = kindStyles[itemKind] || kindStyles.entry
+              ctx.fillStyle = dimS.dim
+              ctx.fillText(chip, pillX + pillW - 5 - priceW - 5, pillY)
+            }
           }
         }
       }
