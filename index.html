@@ -754,7 +754,7 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
           <th title="Current stock price — same live / last-fetched value used by Trade Manager + mini-chart (LIVE_PRICES[sym].price → candidate fallback). Non-sortable; display only." style="padding:6px 4px;text-align:right">Stock Px</th>
           <th style="padding:6px 4px;text-align:right">ATR</th>
           <th data-sort-key="gt" title="GT Score — 0–10 scale (same as Screener). Weighted: trend 30% + momentum 25% + RS 20% + structure 15% + volume 10%. Color: ≥8 green, ≥6 amber, ≥4 orange, <4 red." style="padding:6px 4px;text-align:right;cursor:pointer;user-select:none">GT<span class="pl-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
-          <th data-sort-key="stop125" title="Golden Ticket hard stop = entry − 1.25 · ATR (mechanical, no exceptions)" style="padding:6px 4px;text-align:right;cursor:pointer;user-select:none;color:#ff4560">STOP<span style="font-size:9px;color:#555c6e;margin-left:2px">−1.25</span><span class="pl-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
+          <th id="pl-stop-th" data-sort-key="stop125" title="Golden Ticket hard stop = entry − 1.25 · ATR (mechanical, no exceptions)" style="padding:6px 4px;text-align:right;cursor:pointer;user-select:none;color:#ff4560">STOP<span id="pl-stop-mult-lbl" style="font-size:9px;color:#555c6e;margin-left:2px">−1.25</span><span class="pl-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
           <th data-sort-key="roll05" title="Roll 1 marker = entry + 0.5 · ATR" style="padding:6px 4px;text-align:right;cursor:pointer;user-select:none;color:#00d68f">R1<span style="font-size:9px;color:#555c6e;margin-left:2px">+½</span><span class="pl-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
           <th data-sort-key="roll10" title="Roll 2 marker = entry + 1.0 · ATR" style="padding:6px 4px;text-align:right;cursor:pointer;user-select:none;color:#00b080">R2<span style="font-size:9px;color:#555c6e;margin-left:2px">+1</span><span class="pl-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
           <th data-sort-key="roll20" title="Roll 3 marker = entry + 2.0 · ATR" style="padding:6px 4px;text-align:right;cursor:pointer;user-select:none;color:#008c60">R3<span style="font-size:9px;color:#555c6e;margin-left:2px">+2</span><span class="pl-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
@@ -6081,7 +6081,7 @@ function renderCandidateTable() {
       "<td style='padding:5px 4px;text-align:right;font-family:\"SF Mono\",monospace;font-size:11px;color:"+(stockPx>0?"#e8eaf0":"#555c6e")+"' title='Live stock price (LIVE_PRICES → candidate fallback)'>"+(stockPx>0?"$"+stockPx.toFixed(2):"—")+"\x3C/td>"+
       "<td style='padding:5px 4px;text-align:right'>"+(atr>0?"$"+atr.toFixed(2):"—")+"\x3C/td>"+
       "<td style='padding:5px 4px;text-align:right;font-weight:700;color:"+gtCol+"' title='GT Score'>"+(gtScore==null?"—":gtScore)+"\x3C/td>"+
-      "<td style='padding:5px 4px;text-align:right;color:#ff4560;font-family:\"SF Mono\",monospace;font-size:11px;font-weight:600' title='Golden Ticket hard stop = entry − 1.25·ATR (" + (stockPx>0?"based on $"+stockPx.toFixed(2):"need price") + ")'>"+(stop125>0?"$"+stop125.toFixed(2):"—")+"\x3C/td>"+
+      "<td style='padding:5px 4px;text-align:right;color:#ff4560;font-family:\"SF Mono\",monospace;font-size:11px;font-weight:600' title='Golden Ticket hard stop = entry − "+stopMult+"·ATR (" + (stockPx>0?"based on $"+stockPx.toFixed(2):"need price") + ")'>"+(stop125>0?"$"+stop125.toFixed(2):"—")+"\x3C/td>"+
       "<td style='padding:5px 4px;text-align:right;color:#00d68f;font-family:\"SF Mono\",monospace;font-size:11px' title='Roll 1 marker = entry + 0.5·ATR'>"+(roll05>0?"$"+roll05.toFixed(2):"—")+"\x3C/td>"+
       "<td style='padding:5px 4px;text-align:right;color:#00b080;font-family:\"SF Mono\",monospace;font-size:11px' title='Roll 2 marker = entry + 1.0·ATR'>"+(roll10>0?"$"+roll10.toFixed(2):"—")+"\x3C/td>"+
       "<td style='padding:5px 4px;text-align:right;color:#008c60;font-family:\"SF Mono\",monospace;font-size:11px' title='Roll 3 marker = entry + 2.0·ATR'>"+(roll20>0?"$"+roll20.toFixed(2):"—")+"\x3C/td>"+
@@ -7888,34 +7888,69 @@ window.GT = window.GT || {}
 // the set below; any other value falls back to the 1.25 default.
 // Roll multipliers are NOT user-configurable; they remain fixed at
 // +0.5 / +1.0 / +2.0 ATR per the Golden Ticket spec.
-window.GT.STOP_MULT_OPTIONS = [0.5, 1.0, 1.25, 1.5, 2.0]
+// CANONICAL keys are STRINGS that match the <option value="..."> entries
+// verbatim. Storing "1" instead of "1.0" caused the dropdown to render
+// blank after reload because String(1.0) === "1" (JS drops trailing .0)
+// while the <option value="1.0"> — also a string — couldn't match.
+// Fix: every read/write of gt_stop_mult goes through the string-key
+// layer; the numeric value on window.GT.STOP_MULT is derived via
+// parseFloat for math.
+window.GT.STOP_MULT_KEYS    = ['0.5', '1.0', '1.25', '1.5', '2.0']
+window.GT.STOP_MULT_OPTIONS = window.GT.STOP_MULT_KEYS.map(parseFloat)   // back-compat
+
+// normalizeStopMult(v) — accept number ("1", 1, 1.0, "1.00") or string
+// ("1.0", "1.25") and return the canonical string key, or null if the
+// value doesn't match any allowed option within a tiny epsilon. Used by
+// the setter, by boot hydration, and by the Firebase restore path.
+window.normalizeStopMult = function(v) {
+  if(v == null || v === '') return null
+  var n = parseFloat(v)
+  if(!isFinite(n)) return null
+  for(var i = 0; i < window.GT.STOP_MULT_KEYS.length; i++) {
+    var k = window.GT.STOP_MULT_KEYS[i]
+    if(Math.abs(parseFloat(k) - n) < 1e-9) return k
+  }
+  return null
+}
+
 ;(function(){
-  var stored = parseFloat(localStorage.getItem('gt_stop_mult') || '')
-  var ok = isFinite(stored) && window.GT.STOP_MULT_OPTIONS.indexOf(+stored) >= 0
-  window.GT.STOP_MULT = ok ? +stored : 1.25
+  // Boot hydration. If the stored value is a legacy numeric string
+  // ("1" from the previous build), normalize it to the canonical key
+  // ("1.0") and rewrite localStorage so subsequent reads are stable.
+  var raw = null
+  try { raw = localStorage.getItem('gt_stop_mult') } catch(e) {}
+  var key = window.normalizeStopMult(raw) || '1.25'
+  if(raw !== key) {
+    try { localStorage.setItem('gt_stop_mult', key) } catch(e) {}
+  }
+  window.GT.STOP_MULT = parseFloat(key)
 })()
 window.GT.ROLL_1_MULT  = 0.5
 window.GT.ROLL_2_MULT  = 1.0
 window.GT.ROLL_3_MULT  = 2.0
 
-// setGTStopMult — canonical setter for the Stop ATR multiplier. Every
-// surface that depends on STOP_MULT (Planner STOP/RPC/sizing, mini-chart
-// STOP line, synthesizer pre-roll stop) reads window.GT.STOP_MULT
-// dynamically, so the re-render calls below propagate the change
-// everywhere without touching per-position state.
+// setGTStopMult — canonical setter for the Stop ATR multiplier. Accepts
+// number or string; normalizes to the canonical STRING key; writes the
+// KEY to localStorage; sets window.GT.STOP_MULT to the parsed numeric
+// value for math. Downstream surfaces (Planner STOP/RPC/sizing,
+// mini-chart STOP line, synthesizer pre-roll stop) read
+// window.GT.STOP_MULT dynamically, so the re-render calls below
+// propagate the change everywhere without touching per-position state.
 window.setGTStopMult = function(v) {
-  var n = +v
-  if(!isFinite(n) || window.GT.STOP_MULT_OPTIONS.indexOf(n) < 0) {
+  var key = window.normalizeStopMult(v)
+  if(!key) {
     console.warn('[GT] setGTStopMult: invalid value', v, '— ignoring'); return
   }
+  var n = parseFloat(key)
   window.GT.STOP_MULT = n
-  try { localStorage.setItem('gt_stop_mult', String(n)) } catch(e) {}
-  // Sync the <select> so UI reflects truth even when the setter is
-  // called programmatically (Firebase restore, boot hydration, etc.).
+  try { localStorage.setItem('gt_stop_mult', key) } catch(e) {}
+  // Sync the <select> using the exact string key so the option matches.
   try {
     var sel = document.getElementById('gt-stop-mult-select')
-    if(sel && +sel.value !== n) sel.value = String(n)
+    if(sel && sel.value !== key) sel.value = key
   } catch(e) {}
+  // Update any dynamic STOP label (Planner header "−1.25" pill, etc.).
+  try { if(typeof window.updateStopMultLabels === 'function') window.updateStopMultLabels() } catch(e) {}
   // Re-render downstream surfaces. plannerCalc() refreshes the Candidates
   // table (STOP/RPC/Cts); renderTrades() rebuilds the Trade Manager cards
   // which re-invokes renderMiniChartForTrade per open row.
@@ -7923,7 +7958,27 @@ window.setGTStopMult = function(v) {
   try { if(typeof renderCandidateTable === 'function') renderCandidateTable() } catch(e) {}
   try { if(typeof renderTrades === 'function') renderTrades() } catch(e) {}
   if(typeof fbAutoSave === 'function') fbAutoSave(1500)
-  console.log('[GT] STOP_MULT set to', n)
+  console.log('[GT] STOP_MULT set to', n, '(key "'+key+'")')
+}
+
+// updateStopMultLabels — refreshes every visible "−1.25" style label to
+// match the current window.GT.STOP_MULT. Called by setGTStopMult AND by
+// the render passes that rebuild the table head (so a sort click, a
+// filter change, etc. never leaves a stale "−1.25" behind when the
+// active multiplier is different).
+window.updateStopMultLabels = function() {
+  var n = (window.GT && window.GT.STOP_MULT) || 1.25
+  var txt = '−' + n
+  try {
+    var el = document.getElementById('pl-stop-mult-lbl')
+    if(el) el.textContent = txt
+  } catch(e) {}
+  // Refresh the Planner header <th> tooltip ("entry − 1.25 · ATR" →
+  // "entry − 1.0 · ATR") so the hover reads the same as the label.
+  try {
+    var th = document.getElementById('pl-stop-th')
+    if(th) th.title = 'Golden Ticket hard stop = entry − ' + n + ' · ATR (mechanical, no exceptions)'
+  } catch(e) {}
 }
 window.GT.DELTA        = 0.80
 window.GT.BASE_RISK    = 625     // default per-trade risk $
@@ -10648,12 +10703,20 @@ if(typeof window !== 'undefined') {
 
 setTimeout(() => { renderTrades(); renderPortfolioRisk(); if(typeof updateFidSyncUI==='function') updateFidSyncUI(); if(typeof renderRollReview==='function') renderRollReview();
   // Sync the Stop ATR <select> with the hydrated window.GT.STOP_MULT
-  // value (loaded from localStorage at script parse time, possibly
-  // overwritten by loadFromFirebase between then and now).
+  // value. Uses the CANONICAL string key (via normalizeStopMult) so the
+  // <option value="1.0"> match survives String()-drops-trailing-zero.
   try {
     var _ss = document.getElementById('gt-stop-mult-select')
-    if(_ss && window.GT && window.GT.STOP_MULT) _ss.value = String(window.GT.STOP_MULT)
+    if(_ss && window.GT) {
+      var _k = (typeof window.normalizeStopMult === 'function')
+        ? window.normalizeStopMult(window.GT.STOP_MULT) : String(window.GT.STOP_MULT)
+      if(_k) _ss.value = _k
+    }
   } catch(e) {}
+  // Refresh any "−1.25" style label so it reflects the active
+  // multiplier after hard-reload (e.g. header shows "STOP −1.0" when
+  // the persisted value is 1.0).
+  try { if(typeof window.updateStopMultLabels === 'function') window.updateStopMultLabels() } catch(e) {}
 }, 800)
 
 function saveTrades() {
