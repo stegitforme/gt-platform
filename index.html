@@ -649,10 +649,24 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
     <span id="int-progress" style="font-size:11px;color:#555c6e"></span>
     <span style="margin-left:auto;font-size:10px;color:#555c6e" id="int-last-run"></span>
   </div>
-  <!-- Internal Filters (compact) -->
+  <!-- Internal Filters (compact) — price / volume / spread / trend / earnings / sector / score -->
   <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:8px 14px;background:#090d13;border-radius:6px;border:1px solid #1e2d3d;margin-bottom:10px;font-size:11px">
     <span style="color:#555c6e">Min Score:</span>
-    <input type="number" id="int-f-score" value="0" step="5" min="0" max="100" style="width:50px;padding:3px 5px;font-size:11px" title="Default 0 shows every scored ticker; raise to filter by quality">
+    <input type="number" id="int-f-score" value="0" step="5" min="0" max="100" style="width:50px;padding:3px 5px;font-size:11px" title="GT Score threshold (0–100). Raise to filter by quality.">
+    <span style="color:#555c6e">Price:</span>
+    <input type="number" id="int-f-price-min" value="" placeholder="min" step="1" min="0" style="width:55px;padding:3px 5px;font-size:11px" title="Minimum last price (blank = no floor)">
+    <span style="color:#555c6e">–</span>
+    <input type="number" id="int-f-price-max" value="" placeholder="max" step="1" min="0" style="width:55px;padding:3px 5px;font-size:11px" title="Maximum last price (blank = no cap)">
+    <span style="color:#555c6e">Min Vol (M):</span>
+    <input type="number" id="int-f-vol" value="3" step="0.5" min="0" style="width:50px;padding:3px 5px;font-size:11px" title="Minimum 20d average daily volume in millions. Default 3M.">
+    <span style="color:#555c6e">Max Spread %:</span>
+    <input type="number" id="int-f-spread" value="10" step="0.5" min="0" max="100" style="width:50px;padding:3px 5px;font-size:11px" title="Maximum bid/ask spread % (uses LIVE_PRICES when available; null-spread rows pass through). Default 10.">
+    <span style="color:#555c6e">Trend:</span>
+    <select id="int-f-trend" style="font-size:11px;padding:3px 5px;background:#0d1117;color:#e8eaf0;border:1px solid #1e2d3d" title="Simple trend gate based on the trend subscore (0–25). ‘Up’ = trend ≥ 15, ‘Down’ = trend < 10.">
+      <option value="">All</option>
+      <option value="up">Uptrend (trend ≥ 15)</option>
+      <option value="down">Downtrend (trend &lt; 10)</option>
+    </select>
     <span style="color:#555c6e">Sector:</span>
     <select id="int-f-sector" style="font-size:11px;padding:3px 5px;background:#0d1117;color:#e8eaf0;border:1px solid #1e2d3d">
       <option value="">All</option>
@@ -660,10 +674,11 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
       <option>Healthcare</option><option>Industrials</option><option>Consumer</option>
       <option>Energy</option><option>Communication</option>
     </select>
-    <label style="display:flex;align-items:center;gap:4px;color:#8b91a0;cursor:pointer">
+    <label style="display:flex;align-items:center;gap:4px;color:#8b91a0;cursor:pointer" title="Exclude tickers with an earnings date flagged on LIVE_EARNINGS / OV.earn.">
       <input type="checkbox" id="int-f-earn"> No earnings
     </label>
     <button onclick="runInternalFilter()" class="btn btn-ghost" style="font-size:10px;padding:3px 8px">Apply</button>
+    <button onclick="resetInternalFilters()" class="btn btn-ghost" style="font-size:10px;padding:3px 8px;color:#8b91a0" title="Clear all filters">Reset</button>
   </div>
   <!-- Internal Results Table -->
   <div style="background:#0d1117;border-radius:8px;border:1px solid #1e2d3d;overflow:hidden">
@@ -672,20 +687,26 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
       <span id="int-top-chips" style="display:inline-flex;gap:6px;flex-wrap:wrap"></span>
     </div>
     <table style="width:100%;border-collapse:collapse;font-size:12px">
-      <thead><tr style="color:#555c6e;font-size:10px;text-transform:uppercase;border-bottom:1px solid #1e2d3d">
+      <thead id="int-head" onclick="(function(e){var th=e.target.closest('th[data-sort-key]');if(th)setIntSort(th.getAttribute('data-sort-key'))})(event)">
+        <tr style="color:#555c6e;font-size:10px;text-transform:uppercase;border-bottom:1px solid #1e2d3d">
         <th style="padding:6px 10px;text-align:left;width:24px">#</th>
-        <th style="padding:6px 6px;text-align:left">Ticker</th>
-        <th style="padding:6px 6px;text-align:left">Score</th>
+        <th data-sort-key="sym"      style="padding:6px 6px;text-align:left;cursor:pointer;user-select:none">Ticker<span class="int-sort-ind" style="margin-left:4px;color:#333a4a"></span></th>
+        <th data-sort-key="gtScore"  style="padding:6px 6px;text-align:left;cursor:pointer;user-select:none;color:#4da6ff">GT Score<span class="int-sort-ind" style="margin-left:4px;color:#333a4a"></span></th>
+        <th data-sort-key="price"    style="padding:6px 6px;text-align:right;cursor:pointer;user-select:none" title="Last price (close of most recent bar)">Price<span class="int-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
+        <th data-sort-key="volume"   style="padding:6px 6px;text-align:right;cursor:pointer;user-select:none" title="20d average daily volume (millions)">Vol<span class="int-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
+        <th data-sort-key="atr"      style="padding:6px 6px;text-align:right;cursor:pointer;user-select:none" title="14-period ATR">ATR<span class="int-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
+        <th data-sort-key="spreadPct" style="padding:6px 6px;text-align:right;cursor:pointer;user-select:none" title="Bid/ask spread % — from LIVE_PRICES; em-dash when unknown">Spr%<span class="int-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
+        <th data-sort-key="trendScore" style="padding:6px 6px;text-align:right;cursor:pointer;user-select:none" title="Trend subscore (0-25)">Trend<span class="int-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
         <th style="padding:6px 6px;text-align:right" title="Momentum (0-40)">Mom</th>
-        <th style="padding:6px 6px;text-align:right" title="Trend structure (0-25)">Trend</th>
         <th style="padding:6px 6px;text-align:right" title="RSI sentiment (0-15)">Sent</th>
         <th style="padding:6px 6px;text-align:right" title="Sector strength (0-10)">Sect</th>
         <th style="padding:6px 6px;text-align:right" title="Execution quality (0-10)">Exec</th>
-        <th style="padding:6px 6px;text-align:left">Sector</th>
-        <th style="padding:6px 6px;text-align:right">20d Ret</th>
-        <th style="padding:6px 6px"></th>
+        <th data-sort-key="sector"   style="padding:6px 6px;text-align:left;cursor:pointer;user-select:none">Sector<span class="int-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
+        <th data-sort-key="returnPct" style="padding:6px 6px;text-align:right;cursor:pointer;user-select:none">20d Ret<span class="int-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
+        <th data-sort-key="earningsDate" style="padding:6px 6px;text-align:center;cursor:pointer;user-select:none" title="Earnings within window — click to sort flagged-first">Earn<span class="int-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
+        <th style="padding:6px 6px;text-align:right">Actions</th>
       </tr></thead>
-      <tbody id="int-body"><tr><td colspan="11" style="padding:20px;text-align:center;color:#555c6e">Click "Run Screen" to score the internal universe</td></tr></tbody>
+      <tbody id="int-body"><tr><td colspan="15" style="padding:20px;text-align:center;color:#555c6e">Click "Run Screen" to score the internal universe</td></tr></tbody>
     </table>
     <div id="int-load-bar" style="display:none;padding:12px;text-align:center">
       <div style="background:#1e2d3d;border-radius:4px;height:6px;overflow:hidden;margin-bottom:6px">
@@ -7501,12 +7522,76 @@ async function runInternalScreen() {
       }
       if(!score) { diag.scoreNull++; rejReason(sym, 'score-null'); return null }
       diag.scored++
+      // ── Standardized data shape per internal-screener spec ───────────
+      // Each result object exposes top-level fields used by the filter
+      // pipeline, the sortable table columns, and the Quick Add Trade
+      // button (which needs price + atr to prefill stop = entry -
+      // STOP_MULT × atr and R1/R2 = entry + 0.5/1.0 × atr).
+      //
+      // Price & volume come from the last bar — always available when
+      // the score is not null. ATR is computed from the last 14 true-
+      // range values from the same bar series (cheap, no extra fetch).
+      // Spread% comes from the LIVE_PRICES cache populated by the
+      // OVTLYR screener's Fetch Prices action when available; null
+      // otherwise (and the filter passes null-spread rows through so
+      // a fresh internal run isn't blocked when prices aren't cached).
+      // Earnings date comes from LIVE_EARNINGS_DATE cache; null when
+      // not known.
+      var lastBar = bars[bars.length - 1]
+      var price   = (+score.price) || (+lastBar.c) || 0
+      // 20d average volume — more stable than a single day
+      var vStart = Math.max(0, bars.length - 20)
+      var vSum = 0, vN = 0
+      for(var vi = vStart; vi < bars.length; vi++) { vSum += (+bars[vi].v || 0); vN++ }
+      var volume = vN > 0 ? Math.round(vSum / vN) : 0
+      // 14-period ATR
+      var atrPeriod = 14
+      var atr = 0
+      if(bars.length > atrPeriod) {
+        var trSum = 0
+        for(var ai = bars.length - atrPeriod; ai < bars.length; ai++) {
+          var cur = bars[ai], prev = bars[ai-1]
+          var tr = Math.max((cur.h||0) - (cur.l||0), Math.abs((cur.h||0) - (prev.c||0)), Math.abs((cur.l||0) - (prev.c||0)))
+          trSum += tr
+        }
+        atr = +(trSum / atrPeriod).toFixed(2)
+      }
+      // Spread % from LIVE_PRICES (OVTLYR-side cache). Null when unknown.
+      var spreadPct = null
+      try {
+        var lp = (typeof LIVE_PRICES !== 'undefined') ? LIVE_PRICES[sym] : null
+        if(lp && lp.bid > 0 && lp.ask > 0) {
+          var mid = (lp.bid + lp.ask) / 2
+          if(mid > 0) spreadPct = +((lp.ask - lp.bid) / mid * 100).toFixed(2)
+        }
+      } catch(e) {}
+      // Earnings date (string) from LIVE_EARNINGS_DATE cache when set.
+      var earningsDate = null
+      try {
+        if(typeof LIVE_EARNINGS_DATE !== 'undefined' && LIVE_EARNINGS_DATE[sym]) {
+          earningsDate = String(LIVE_EARNINGS_DATE[sym])
+        }
+      } catch(e) {}
       return {
-        sym: sym,
-        sector: sec,
-        cluster: (typeof getCluster === 'function' ? getCluster(sym) : sec),
-        score: score,
-        barCount: bars.length
+        // Identity
+        sym:        sym,
+        symbol:     sym,
+        sector:     sec,
+        cluster:    (typeof getCluster === 'function' ? getCluster(sym) : sec),
+        // Standardized scalar fields
+        price:      price,
+        volume:     volume,
+        bid:        (function(){ try { var l=LIVE_PRICES[sym]; return (l && +l.bid) || null } catch(e) { return null } })(),
+        ask:        (function(){ try { var l=LIVE_PRICES[sym]; return (l && +l.ask) || null } catch(e) { return null } })(),
+        spreadPct:  spreadPct,
+        atr:        atr,
+        returnPct:  +score.ret20 || 0,
+        earningsDate: earningsDate,
+        trendScore: +score.trend || 0,
+        gtScore:    +score.total || 0,
+        // Full score block retained for back-compat with existing renderer
+        score:      score,
+        barCount:   bars.length
       }
     }))
     done += batch.length
@@ -7562,64 +7647,198 @@ async function runInternalScreen() {
 }
 if(typeof window !== 'undefined') window.runInternalScreen = runInternalScreen
 
+// Internal Screener client-side filter pipeline.
+//   gtScore   ≥ minScore                 (default 0)
+//   price     within [min, max]          (blank = no bound)
+//   volume    ≥ minVolM × 1e6            (default 3M)
+//   spreadPct ≤ maxSpreadPct  OR null   (null passes through — not yet
+//                                         fetched when running internal
+//                                         without an OVTLYR price pass)
+//   trend     'up'  → trendScore ≥ 15
+//             'down'→ trendScore < 10
+//   sector    r.sector === sector OR r.cluster === sector
+//   noEarn    exclude rows with a flagged earnings date
+// All gates applied top-to-bottom; first-fail short-circuits. A single
+// entry point so the Apply button, the sort click handler, and any
+// programmatic caller all produce identical visible sets.
 function runInternalFilter() {
-  var minScore = +document.getElementById('int-f-score')?.value || 0
-  var sector = document.getElementById('int-f-sector')?.value || '';
-  var noEarn = document.getElementById('int-f-earn')?.checked || false
-  var filtered = INTERNAL_RESULTS.filter(function(r) {
-    if(r.score.total < minScore) return false
+  var minScore     = +document.getElementById('int-f-score')?.value     || 0
+  var priceMinStr  = document.getElementById('int-f-price-min')?.value
+  var priceMaxStr  = document.getElementById('int-f-price-max')?.value
+  var priceMin     = priceMinStr !== '' && priceMinStr != null ? +priceMinStr : null
+  var priceMax     = priceMaxStr !== '' && priceMaxStr != null ? +priceMaxStr : null
+  var minVolM      = +document.getElementById('int-f-vol')?.value        || 0
+  var maxSpreadPct = +document.getElementById('int-f-spread')?.value     || 100
+  var trendSel     = document.getElementById('int-f-trend')?.value       || ''
+  var sector       = document.getElementById('int-f-sector')?.value      || ''
+  var noEarn       = document.getElementById('int-f-earn')?.checked      || false
+  var filtered = (INTERNAL_RESULTS || []).filter(function(r) {
+    if(!r) return false
+    var gt    = +r.gtScore    || +(r.score && r.score.total) || 0
+    var px    = +r.price      || +(r.score && r.score.price) || 0
+    var vol   = +r.volume     || 0
+    var sp    = (r.spreadPct == null) ? null : +r.spreadPct
+    var trd   = +r.trendScore || +(r.score && r.score.trend) || 0
+    if(gt < minScore) return false
+    if(priceMin != null && isFinite(priceMin) && px < priceMin) return false
+    if(priceMax != null && isFinite(priceMax) && px > priceMax) return false
+    if(minVolM > 0 && vol < minVolM * 1e6) return false
+    if(sp != null && sp > maxSpreadPct) return false   // null-spread rows pass
+    if(trendSel === 'up'   && trd < 15) return false
+    if(trendSel === 'down' && trd >= 10) return false
     if(sector && r.sector !== sector && r.cluster !== sector) return false
+    if(noEarn && r.earningsDate) return false
     return true
   })
   renderInternalResults(filtered, true)
 }
+// Clear every filter input to its default, then re-render full list.
+function resetInternalFilters() {
+  var ids = ['int-f-score','int-f-price-min','int-f-price-max','int-f-vol','int-f-spread','int-f-trend','int-f-sector']
+  ids.forEach(function(id){ var el=document.getElementById(id); if(el) el.value = (id==='int-f-vol'?'3':id==='int-f-spread'?'10':id==='int-f-score'?'0':'') })
+  var ec = document.getElementById('int-f-earn'); if(ec) ec.checked = false
+  renderInternalResults(INTERNAL_RESULTS)
+}
+window.resetInternalFilters = resetInternalFilters
+
+// Sort state for the internal results table. Default is gtScore desc
+// (the canonical ranking; matches runInternalScreen's persisted order).
+window.__intSort = window.__intSort || { key: 'gtScore', dir: -1 }
+function setIntSort(key) {
+  if(!key) return
+  var s = window.__intSort
+  if(s.key === key) s.dir = -s.dir
+  else { s.key = key; s.dir = (key === 'sym' || key === 'sector' || key === 'earningsDate') ? 1 : -1 }
+  // Re-apply filter so the sort runs over the currently-visible subset.
+  runInternalFilter()
+}
+window.setIntSort = setIntSort
+
+// Quick Add Trade for an internal result row. Calls sendToPlanner (which
+// stamps price, gtScore, and auto-fetches ATR if missing), then jumps
+// to the Planner sizer via goSize so the user can confirm/execute.
+// Stop / R1 / R2 prices are computed by the Planner's own row renderer
+// using the LIVE window.GT.STOP_MULT value — no per-row math duplicated
+// here, so changing Stop ATR on Trade Manager immediately reflects in
+// the Planner STOP column for the just-added candidate.
+function quickAddInternalTrade(sym) {
+  if(!sym) return
+  try { if(typeof sendToPlanner === 'function') sendToPlanner(sym) }
+  catch(e) { console.warn('[INT-SCREEN] sendToPlanner failed for', sym, e && e.message) }
+  try { if(typeof goSize === 'function') goSize(sym) }
+  catch(e) { console.warn('[INT-SCREEN] goSize failed for', sym, e && e.message) }
+}
+window.quickAddInternalTrade = quickAddInternalTrade
 
 function renderInternalResults(results, filtered) {
   var tbody = document.getElementById('int-body')
   if(!tbody) return
   if(!results || !results.length) {
     var msg = filtered
-      ? 'No candidates match the current filter — try lowering Min Score or clearing the sector filter. The raw results are still in <code>INTERNAL_RESULTS</code>.'
+      ? 'No candidates match the current filter — try lowering Min Score or clearing the sector/trend filter. The raw results are still in <code>INTERNAL_RESULTS</code>.'
       : 'No results yet. Click <b>▶ Run Screen</b> to score the universe. Check DevTools console for <code>[INT-SCREEN]</code> stage counts if results come back empty.'
-    tbody.innerHTML = '<tr><td colspan="11" style="padding:20px;text-align:center;color:#555c6e;font-size:12px;line-height:1.8">'+msg+'</td></tr>'
+    tbody.innerHTML = '<tr><td colspan="15" style="padding:20px;text-align:center;color:#555c6e;font-size:12px;line-height:1.8">'+msg+'</td></tr>'
+    _updateIntSortIndicators()
     return
   }
-  var display = results.slice(0, 100)
+  // Sort by current window.__intSort state. gtScore desc is the default.
+  // Sortable keys: sym, gtScore, price, volume, atr, spreadPct,
+  // trendScore, sector, returnPct, earningsDate.
+  var sort = window.__intSort || { key: 'gtScore', dir: -1 }
+  var sorted = results.slice().sort(function(a, b) {
+    var av, bv
+    switch(sort.key) {
+      case 'sym':          av = String(a.sym||''); bv = String(b.sym||''); break
+      case 'sector':       av = String(a.sector||''); bv = String(b.sector||''); break
+      case 'earningsDate': av = String(a.earningsDate||'~'); bv = String(b.earningsDate||'~'); break   // '~' sorts last
+      case 'price':        av = +a.price||0; bv = +b.price||0; break
+      case 'volume':       av = +a.volume||0; bv = +b.volume||0; break
+      case 'atr':          av = +a.atr||0; bv = +b.atr||0; break
+      case 'spreadPct':    av = (a.spreadPct==null ? 999 : +a.spreadPct); bv = (b.spreadPct==null ? 999 : +b.spreadPct); break
+      case 'trendScore':   av = +a.trendScore||+(a.score&&a.score.trend)||0; bv = +b.trendScore||+(b.score&&b.score.trend)||0; break
+      case 'returnPct':    av = +a.returnPct||+(a.score&&a.score.ret20)||0; bv = +b.returnPct||+(b.score&&b.score.ret20)||0; break
+      case 'gtScore':
+      default:             av = +a.gtScore||+(a.score&&a.score.total)||0; bv = +b.gtScore||+(b.score&&b.score.total)||0; break
+    }
+    if(typeof av === 'string') { return sort.dir * av.localeCompare(bv) }
+    return sort.dir * (av - bv)
+  })
+
+  var display = sorted.slice(0, 100)
   tbody.innerHTML = display.map(function(r, i) {
-    var sc = r.score.total
+    var sc = +r.gtScore || +(r.score && r.score.total) || 0
     var scCol = sc>=80?'#00d68f':sc>=60?'#f0c040':sc>=40?'#ff8c42':'#ff4560';
     var scBar = '<div style="display:flex;align-items:center;gap:5px"><span style="font-size:14px;font-weight:700;color:'+scCol+'">'+sc+'\x3C/span><div style="flex:1;background:#1e2d3d;border-radius:2px;height:4px;width:36px"><div style="width:'+sc+'%;height:100%;background:'+scCol+';border-radius:2px">\x3C/div>\x3C/div>\x3C/div>';
     var ovMatch = OV[r.sym] ? '<span style="font-size:9px;color:#4da6ff;background:#0d1117;padding:1px 4px;border-radius:3px;margin-left:4px" title="Also in OVTLYR">OV\x3C/span>' : '';
-    var ret20Col = +r.score.ret20>=10?'#00d68f':+r.score.ret20>=0?'#f0c040':'#ff4560';
+    var ret20 = +r.returnPct || +(r.score && r.score.ret20) || 0
+    var ret20Col = ret20>=10?'#00d68f':ret20>=0?'#f0c040':'#ff4560';
+    var priceStr = (+r.price > 0) ? '$'+(+r.price).toFixed(2) : '<span style="color:#555c6e">—</span>'
+    var volM = (+r.volume > 0) ? ((+r.volume) / 1e6).toFixed(1) + 'M' : '<span style="color:#555c6e">—</span>'
+    var atrStr = (+r.atr > 0) ? (+r.atr).toFixed(2) : '<span style="color:#555c6e">—</span>'
+    var spStr  = (r.spreadPct == null) ? '<span style="color:#555c6e">—</span>'
+                 : (+r.spreadPct).toFixed(1)+'%'
+    var spCol  = (r.spreadPct == null) ? '#555c6e' : (+r.spreadPct > 10 ? '#ff4560' : +r.spreadPct > 5 ? '#ff8c42' : '#8b91a0')
+    var earnStr = r.earningsDate ? '<span title="'+r.earningsDate+'" style="color:#ff8c42;font-size:10px">⚠</span>' : '<span style="color:#333a4a;font-size:10px">·</span>'
+    // Check Planner membership so the Star button reflects "already sent".
+    var sentAlready = (typeof PLANNER_CANDIDATES !== 'undefined' && Array.isArray(PLANNER_CANDIDATES))
+      ? PLANNER_CANDIDATES.some(function(c){ return c && c.sym === r.sym })
+      : false
+    var starBtn = sentAlready
+      ? '<span title="Already in Planner" style="display:inline-block;color:#00d68f;font-size:11px;padding:2px 6px;margin-right:3px">★</span>'
+      : '<button onclick="event.stopPropagation();sendToPlanner(\''+r.sym+'\');this.blur()" title="Send to Planner (adds to PLANNER_CANDIDATES with price + gtScore + auto-fetch ATR)" style="background:transparent;color:#f0c040;border:1px solid rgba(240,192,64,.45);border-radius:3px;padding:2px 7px;font-size:11px;font-weight:700;cursor:pointer;margin-right:3px;font-family:inherit">☆ Star</button>'
+    var quickBtn = '<button onclick="event.stopPropagation();quickAddInternalTrade(\''+r.sym+'\')" title="Send to Planner + jump to Quick Size sizer (stop/R1/R2 use current Stop ATR setting)" style="background:#00d68f;color:#0a0c0f;border:none;border-radius:3px;padding:2px 8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">⚡ Quick Add</button>'
     return '<tr style="border-bottom:1px solid #0d1117;cursor:pointer" onclick="goSize(\''+r.sym+'\')">'+
       '<td style="padding:4px 10px;color:#555c6e;font-size:10px">'+(i+1)+'\x3C/td>'+
       '<td style="padding:4px 6px"><b>'+r.sym+'\x3C/b>'+ovMatch+'\x3C/td>'+
       '<td style="padding:4px 6px">'+scBar+'\x3C/td>'+
-      '<td style="padding:4px 6px;text-align:right;color:#8b91a0;font-size:11px">'+r.score.mom+'\x3C/td>'+
-      '<td style="padding:4px 6px;text-align:right;color:#8b91a0;font-size:11px">'+r.score.trend+'\x3C/td>'+
-      '<td style="padding:4px 6px;text-align:right;color:#8b91a0;font-size:11px">'+r.score.sent+'\x3C/td>'+
-      '<td style="padding:4px 6px;text-align:right;color:#8b91a0;font-size:11px">'+r.score.sect+'\x3C/td>'+
-      '<td style="padding:4px 6px;text-align:right;color:#8b91a0;font-size:11px">'+r.score.exec+'\x3C/td>'+
+      '<td style="padding:4px 6px;text-align:right;font-size:11px;font-family:\'SF Mono\',monospace;color:#e8eaf0">'+priceStr+'\x3C/td>'+
+      '<td style="padding:4px 6px;text-align:right;font-size:11px;color:#8b91a0">'+volM+'\x3C/td>'+
+      '<td style="padding:4px 6px;text-align:right;font-size:11px;font-family:\'SF Mono\',monospace;color:#8b91a0">'+atrStr+'\x3C/td>'+
+      '<td style="padding:4px 6px;text-align:right;font-size:11px;color:'+spCol+'">'+spStr+'\x3C/td>'+
+      '<td style="padding:4px 6px;text-align:right;color:#8b91a0;font-size:11px">'+(+r.trendScore||+(r.score&&r.score.trend)||0)+'\x3C/td>'+
+      '<td style="padding:4px 6px;text-align:right;color:#8b91a0;font-size:11px">'+(r.score?r.score.mom:'')+'\x3C/td>'+
+      '<td style="padding:4px 6px;text-align:right;color:#8b91a0;font-size:11px">'+(r.score?r.score.sent:'')+'\x3C/td>'+
+      '<td style="padding:4px 6px;text-align:right;color:#8b91a0;font-size:11px">'+(r.score?r.score.sect:'')+'\x3C/td>'+
+      '<td style="padding:4px 6px;text-align:right;color:#8b91a0;font-size:11px">'+(r.score?r.score.exec:'')+'\x3C/td>'+
       '<td style="padding:4px 6px;font-size:11px;color:#555c6e">'+r.sector+'\x3C/td>'+
-      '<td style="padding:4px 6px;text-align:right;font-size:11px;color:'+ret20Col+'">'+r.score.ret20+'%\x3C/td>'+
-      '<td style="padding:4px 6px"><button onclick="event.stopPropagation();goSize(\''+r.sym+'\')" class="btn btn-gold" style="font-size:10px;padding:2px 8px">Plan →\x3C/button>\x3C/td>'+
+      '<td style="padding:4px 6px;text-align:right;font-size:11px;color:'+ret20Col+'">'+ret20+'%\x3C/td>'+
+      '<td style="padding:4px 6px;text-align:center">'+earnStr+'\x3C/td>'+
+      '<td style="padding:4px 6px;text-align:right;white-space:nowrap">'+starBtn+quickBtn+'\x3C/td>'+
       '\x3C/tr>'
   }).join('')
+
+  _updateIntSortIndicators()
 
   // Top strip
   var topChips = document.getElementById('int-top-chips')
   var topStrip = document.getElementById('int-top-strip')
-  if(topChips && results.length) {
-    topChips.innerHTML = results.slice(0,5).map(function(r) {
-      var col = r.score.total>=80?'#00d68f':r.score.total>=60?'#f0c040':'#ff8c42';
+  if(topChips && sorted.length) {
+    topChips.innerHTML = sorted.slice(0,5).map(function(r) {
+      var tot = +r.gtScore || +(r.score && r.score.total) || 0
+      var col = tot>=80?'#00d68f':tot>=60?'#f0c040':'#ff8c42';
+      var ret = +r.returnPct || +(r.score && r.score.ret20) || 0
       return '<span onclick="goSize(\''+r.sym+'\')" style="cursor:pointer;background:#0d1117;border:1px solid '+col+';border-radius:4px;padding:3px 8px;font-size:11px;display:inline-flex;gap:6px;align-items:center">'+
         '<b style="color:'+col+'">'+r.sym+'\x3C/b>'+
-        '<span style="color:#555c6e">'+r.score.total+'\x3C/span>'+
-        '<span style="color:#8b91a0;font-size:10px">'+r.score.ret20+'%\x3C/span>'+
+        '<span style="color:#555c6e">'+tot+'\x3C/span>'+
+        '<span style="color:#8b91a0;font-size:10px">'+ret+'%\x3C/span>'+
         '\x3C/span>'
     }).join('')
     if(topStrip) topStrip.style.display = 'block'
   }
+}
+// Refresh the sort arrows in the table head after each render.
+function _updateIntSortIndicators() {
+  var sort = window.__intSort || { key: 'gtScore', dir: -1 }
+  var head = document.getElementById('int-head')
+  if(!head) return
+  var ths = head.querySelectorAll('th[data-sort-key]')
+  ths.forEach(function(th) {
+    var ind = th.querySelector('.int-sort-ind')
+    if(!ind) return
+    var k = th.getAttribute('data-sort-key')
+    if(k === sort.key) { ind.textContent = sort.dir === -1 ? '▼' : '▲'; ind.style.color = '#f0c040' }
+    else               { ind.textContent = '';                            ind.style.color = '#333a4a' }
+  })
 }
 
 // ── LOAD INTERNAL RESULTS FROM FIREBASE ──────────────────────────────────────
