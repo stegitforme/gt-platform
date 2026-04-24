@@ -830,10 +830,11 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 <!-- &#9552;&#9552;&#9552; TRADE MANAGER &#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552; -->
 <div id="trades" class="trades-page">
 
-  <!-- Sub-tabs: Open / Closed -->
+  <!-- Sub-tabs: Open / Closed / Roll Review -->
   <div style="display:flex;gap:0;margin-bottom:14px;border-bottom:1px solid rgba(255,255,255,.07)">
     <button id="tm-tab-open" onclick="tmShowTab('open')" style="padding:8px 18px;background:transparent;border:none;border-bottom:2px solid #f0c040;color:#f0c040;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;margin-bottom:-1px">Open Trades</button>
     <button id="tm-tab-closed" onclick="tmShowTab('closed')" style="padding:8px 18px;background:transparent;border:none;border-bottom:2px solid transparent;color:#555c6e;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;margin-bottom:-1px">Closed Trades</button>
+    <button id="tm-tab-rollreview" onclick="tmShowTab('rollreview')" title="Detected and historical roll candidates — secondary to daily Open Trades workflow" style="padding:8px 18px;background:transparent;border:none;border-bottom:2px solid transparent;color:#555c6e;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;margin-bottom:-1px">Roll Review <span id="tm-tab-rollreview-badge" style="display:none;margin-left:6px;background:rgba(240,192,64,.18);color:#f0c040;border:1px solid rgba(240,192,64,.45);font-size:10px;font-weight:700;padding:1px 6px;border-radius:3px">0</span></button>
   </div>
 
   <!-- ── OPEN TRADES PANEL ───────────────────────────────────────── -->
@@ -882,25 +883,6 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
         <div id="fid-sync-status" style="font-size:11px;color:#8b91a0;margin-top:8px;min-height:16px"></div>
         <div id="fid-reconcile-body" style="display:none;margin-top:10px;padding:10px 12px;background:#0a0c0f;border:1px solid rgba(255,255,255,.07);border-radius:6px"></div>
       </div>
-    </div>
-
-    <!-- ── Roll Review panel ──────────────────────────────────────────────
-         Centralized table of every event in window.ROLL_LEDGER. Per-card
-         amber prompts continue to function unchanged; this panel is a
-         second surface that uses the SAME confirmRollDetection /
-         rejectRollDetection / adjustRollDetection handlers so behavior
-         stays consistent. Two new handlers (reopenRollDetection,
-         editConfirmedRollCredit) live alongside them in the Roll Engine
-         block. Body is rendered by window.renderRollReview() — called
-         after CSV import, after every confirm/reject, and once at boot. -->
-    <div id="roll-review-card" class="card" style="margin-bottom:14px;border-color:rgba(240,192,64,.22)">
-      <div class="card-head" style="border-color:rgba(240,192,64,.14)">
-        <span class="card-title" style="color:#f0c040">Roll Review <span style="font-size:10px;color:#8b91a0;font-weight:400;margin-left:6px">centralized roll ledger — confirm / adjust / reject</span></span>
-        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-          <span id="roll-review-summary" style="font-size:11px;color:#8b91a0">no events</span>
-        </div>
-      </div>
-      <div class="card-body" id="roll-review-body" style="padding:12px 14px"></div>
     </div>
 
     <!-- ── Stop Comparison tracker ──────────────────────────────────────────
@@ -1069,6 +1051,26 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 
     <div id="closed-trades-list"></div>
   </div><!-- end tm-closed-panel -->
+
+  <!-- ── ROLL REVIEW PANEL (secondary sub-tab) ─────────────────────────
+       Moved out of Open Trades so the daily workflow (mini-charts,
+       stops, cards, Rolls/Credits inputs) stays clean. Renders the
+       same window.ROLL_LEDGER events via the unchanged
+       window.renderRollReview() function. Hidden by default; opens
+       on click of the Roll Review sub-tab in the switcher above.
+       Visibility-only change — no Roll Engine / ledger / bulk /
+       analytics / historical-scan logic touched. -->
+  <div id="tm-rollreview-panel" style="display:none">
+    <div id="roll-review-card" class="card" style="margin-bottom:14px;border-color:rgba(240,192,64,.22)">
+      <div class="card-head" style="border-color:rgba(240,192,64,.14)">
+        <span class="card-title" style="color:#f0c040">Roll Review <span style="font-size:10px;color:#8b91a0;font-weight:400;margin-left:6px">centralized roll ledger — confirm / adjust / reject</span></span>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <span id="roll-review-summary" style="font-size:11px;color:#8b91a0">no events</span>
+        </div>
+      </div>
+      <div class="card-body" id="roll-review-body" style="padding:12px 14px"></div>
+    </div>
+  </div><!-- end tm-rollreview-panel -->
 
 </div>
 
@@ -4037,24 +4039,54 @@ function loadRiskSettings() {
   if(r)  { var el5=document.getElementById('riskpct'); if(el5) el5.value=r }
 }
 // ── TRADE MANAGER TAB SWITCHING ───────────────────────────────────────────────
+// Three sub-tabs: Open Trades (daily workflow, default), Closed Trades,
+// and Roll Review (detected + historical roll candidates — secondary).
+// Roll Review was moved off the Open Trades panel so the daily view
+// stays focused on cards, mini-charts, and manual Rolls/Credits input.
 function tmShowTab(tab) {
   const open   = document.getElementById('tm-open-panel')
   const closed = document.getElementById('tm-closed-panel')
+  const roll   = document.getElementById('tm-rollreview-panel')
   const btnO   = document.getElementById('tm-tab-open')
   const btnC   = document.getElementById('tm-tab-closed')
-  if(tab === 'open') {
-    open.style.display   = 'block'
-    closed.style.display = 'none'
-    btnO.style.color = '#f0c040'; btnO.style.borderBottomColor = '#f0c040'
-    btnC.style.color = '#555c6e'; btnC.style.borderBottomColor = 'transparent'
+  const btnR   = document.getElementById('tm-tab-rollreview')
+  const reset = (b) => { if(b) { b.style.color = '#555c6e'; b.style.borderBottomColor = 'transparent' } }
+  const activ = (b) => { if(b) { b.style.color = '#f0c040'; b.style.borderBottomColor = '#f0c040' } }
+  if(open)   open.style.display   = 'none'
+  if(closed) closed.style.display = 'none'
+  if(roll)   roll.style.display   = 'none'
+  reset(btnO); reset(btnC); reset(btnR)
+  if(tab === 'closed') {
+    if(closed) closed.style.display = 'block'
+    activ(btnC)
+    if(typeof renderClosedTrades === 'function') renderClosedTrades()
+  } else if(tab === 'rollreview') {
+    if(roll) roll.style.display = 'block'
+    activ(btnR)
+    // Re-render so the panel reflects the latest ledger state on every
+    // tab activation (catches changes made from another tab or from a
+    // Firebase sync that landed while Open Trades was visible).
+    if(typeof renderRollReview === 'function') renderRollReview()
   } else {
-    open.style.display   = 'none'
-    closed.style.display = 'block'
-    btnO.style.color = '#555c6e'; btnO.style.borderBottomColor = 'transparent'
-    btnC.style.color = '#f0c040'; btnC.style.borderBottomColor = '#f0c040'
-    renderClosedTrades()
+    if(open) open.style.display = 'block'
+    activ(btnO)
   }
 }
+// Keep the Roll Review sub-tab badge in sync with pending-review count.
+// Badge shows only when there is at least one detected or
+// historical_candidate event in the ledger; hidden otherwise so the
+// nav chrome stays quiet for users who don't use the feature.
+function updateRollReviewTabBadge() {
+  const el = document.getElementById('tm-tab-rollreview-badge')
+  if(!el) return
+  const evs = (window.ROLL_LEDGER && Array.isArray(window.ROLL_LEDGER.events))
+    ? window.ROLL_LEDGER.events : []
+  let n = 0
+  for(const e of evs) if(e && (e.status === 'detected' || e.status === 'historical_candidate')) n++
+  if(n > 0) { el.style.display = 'inline-block'; el.textContent = String(n) }
+  else      { el.style.display = 'none' }
+}
+window.updateRollReviewTabBadge = updateRollReviewTabBadge
 
 // ── FIDELITY OPEN SYNC RUNNER ─────────────────────────────────────────────────
 async function runFidelityOpenSync() {
@@ -10198,6 +10230,9 @@ function renderRollReview() {
   ) : ''
 
   body.innerHTML = summaryGrid + analyticsBlock + filterRow + bulkBar + table + limitationsBlock
+  // Refresh the sub-tab badge so the nav reflects pending-review count
+  // even when the user has Roll Review hidden behind Open Trades.
+  try { if(typeof updateRollReviewTabBadge === 'function') updateRollReviewTabBadge() } catch(e) {}
 }
 window.renderRollReview = renderRollReview
 
