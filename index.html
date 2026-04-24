@@ -751,6 +751,7 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
           <tr style="color:#555c6e;font-size:10px;text-transform:uppercase;border-bottom:1px solid #1e2d3d">
           <th data-sort-key="ticker" style="padding:6px 10px;text-align:left;cursor:pointer;user-select:none">Ticker<span class="pl-sort-ind" style="margin-left:4px;color:#333a4a"></span></th>
           <th data-sort-key="sector" style="padding:6px 4px;text-align:left;cursor:pointer;user-select:none">Sector<span class="pl-sort-ind" style="margin-left:4px;color:#333a4a"></span></th>
+          <th title="Current stock price — same live / last-fetched value used by Trade Manager + mini-chart (LIVE_PRICES[sym].price → candidate fallback). Non-sortable; display only." style="padding:6px 4px;text-align:right">Stock Px</th>
           <th style="padding:6px 4px;text-align:right">ATR</th>
           <th data-sort-key="gt" title="GT Score — 0–10 scale (same as Screener). Weighted: trend 30% + momentum 25% + RS 20% + structure 15% + volume 10%. Color: ≥8 green, ≥6 amber, ≥4 orange, <4 red." style="padding:6px 4px;text-align:right;cursor:pointer;user-select:none">GT<span class="pl-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
           <th data-sort-key="stop125" title="Golden Ticket hard stop = entry − 1.25 · ATR (mechanical, no exceptions)" style="padding:6px 4px;text-align:right;cursor:pointer;user-select:none;color:#ff4560">STOP<span style="font-size:9px;color:#555c6e;margin-left:2px">−1.25</span><span class="pl-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
@@ -6071,6 +6072,7 @@ function renderCandidateTable() {
     return "<tr class='cand-row"+(sym===window._SELECTED_CAND_SYM?' active':'')+"' data-cand-idx='"+idx+"' style='border-bottom:1px solid #0d1117;cursor:pointer'>"+
       "<td style='padding:5px 10px;font-weight:600'>"+sym+" <span style='font-size:10px;font-weight:400;color:"+eData.col+";margin-left:4px' title='"+eData.title+"'>"+eData.txt+"\x3C/span>\x3C/td>"+
       "<td style='padding:5px 4px;color:#8b91a0;font-size:11px'>"+sector+"\x3C/td>"+
+      "<td style='padding:5px 4px;text-align:right;font-family:\"SF Mono\",monospace;font-size:11px;color:"+(stockPx>0?"#e8eaf0":"#555c6e")+"' title='Live stock price (LIVE_PRICES → candidate fallback)'>"+(stockPx>0?"$"+stockPx.toFixed(2):"—")+"\x3C/td>"+
       "<td style='padding:5px 4px;text-align:right'>"+(atr>0?"$"+atr.toFixed(2):"—")+"\x3C/td>"+
       "<td style='padding:5px 4px;text-align:right;font-weight:700;color:"+gtCol+"' title='GT Score'>"+(gtScore==null?"—":gtScore)+"\x3C/td>"+
       "<td style='padding:5px 4px;text-align:right;color:#ff4560;font-family:\"SF Mono\",monospace;font-size:11px;font-weight:600' title='Golden Ticket hard stop = entry − 1.25·ATR (" + (stockPx>0?"based on $"+stockPx.toFixed(2):"need price") + ")'>"+(stop125>0?"$"+stop125.toFixed(2):"—")+"\x3C/td>"+
