@@ -6532,17 +6532,44 @@ async function refreshCandidateATRs() {
 // the existing Array.isArray coercions by also surviving the case
 // where a dependency itself is not callable (a stale override, a
 // browser extension shadow, or an early pre-parse Firebase callback).
+//
+// Dedupe semantics: both the "not callable" and the "threw" branches
+// log ONCE per label for the lifetime of the page (or until
+// clearRiskIntelFlags() is called). Before this dedupe, a broken
+// dependency that throws INSIDE a per-trade loop (e.g. getCluster
+// calling getSector calling a broken rootTicker) would flood the
+// console with one warning per open trade.
 var __riMissingLogged = window.__riMissingLogged || (window.__riMissingLogged = {})
 function __riSafeCall(fn, args, fallback, label) {
   if(typeof fn === 'function') {
     try { return fn.apply(null, args || []) }
-    catch(e) { console.warn('[RISK-INTEL] '+label+' threw:', e && e.message); return fallback }
+    catch(e) {
+      // Dedupe the "threw" branch on a distinct key so a function that
+      // is callable but throws (e.g. because one of ITS dependencies
+      // is broken) doesn't spam the console once per loop iteration.
+      // Also records the un-suffixed label so degraded-mode detection
+      // in getRiskIntelligence catches this failure mode too.
+      var threwKey = label + ':threw'
+      if(!__riMissingLogged[threwKey]) {
+        console.warn('[RISK-INTEL] '+label+' threw (logging once per page load):', e && e.message)
+        __riMissingLogged[threwKey] = true
+      }
+      __riMissingLogged[label] = __riMissingLogged[label] || true
+      return fallback
+    }
   }
   if(fn !== undefined && !__riMissingLogged[label]) {
     console.warn('[RISK-INTEL] dependency "'+label+'" is not callable (typeof='+(typeof fn)+') — using safe fallback')
     __riMissingLogged[label] = true
   }
   return fallback
+}
+// Manual reset — exposed so a power user can clear the one-shot warning
+// flags after hot-patching a broken global in the console without
+// having to reload the whole page. Not wired to any UI by default.
+window.clearRiskIntelFlags = function() {
+  for(var k in __riMissingLogged) { delete __riMissingLogged[k] }
+  console.log('[RISK-INTEL] flags cleared — next call will re-emit warnings if dependencies are still broken')
 }
 function calcDeployed() {
   // getOpenBook is the preferred source — already guarded in-line +
@@ -7140,6 +7167,22 @@ function getRiskIntelligence() {
       if(pct >= 20) intel.warnings.push({ level:"medium", msg:"⚠️ "+e[0]+": "+pct+"% single-name concentration" })
     })
   } catch(e) { console.warn('[RISK-INTEL] ticker concentration build failed:', e && e.message) }
+
+  // ── Degraded-mode banner ────────────────────────────────────────────
+  // Surfaces in the Risk Intelligence panel whenever any dependency has
+  // been flagged as missing-or-throwing (via __riSafeCall). Unshifted so
+  // it's the first row the user sees. Single canonical line regardless
+  // of how many dependencies are broken — console has the detail.
+  // Guard against the (trivially small) per-tick cost of Object.keys
+  // when the map is empty by short-circuiting on the length check first.
+  try {
+    if(__riMissingLogged && Object.keys(__riMissingLogged).length > 0) {
+      intel.warnings.unshift({
+        level: 'high',
+        msg:   '⚠️ Risk model degraded — results may be inaccurate. Check console for details.'
+      })
+    }
+  } catch(e) { /* __riMissingLogged is a plain object literal — Object.keys is safe */ }
 
   return intel
 }
