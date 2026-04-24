@@ -9259,8 +9259,33 @@ function estimateHistoricalRollCredit(closeLeg, newLeg, newLegSource) {
 // a roll target. Emits events with status 'historical_candidate' into
 // ROLL_LEDGER, de-duped by roll_id so re-runs are idempotent.
 //
-// Returns { emitted, skipped, examined, dupe }.
-function reconstructHistoricalRolls() {
+// Returns a Promise<{ emitted, skipped, examined, dupe, details }>.
+// ASYNC + CHUNKED so a large scan (hundreds of closed lots) doesn't
+// block the main thread for seconds at a time. The detection logic
+// below — scoring, confidence threshold, credit estimation,
+// de-dupe, consumed-set — is unchanged from the original synchronous
+// version; only the iteration yields back to the browser every CHUNK
+// lots so the "Scanning…" button label can paint and click/scroll
+// events still dispatch.
+//
+// options:
+//   chunkSize  — number of outer-loop iterations per chunk before
+//                yielding. Default 25. Larger = faster total wall
+//                time, smaller = smoother UI.
+//   onProgress — optional callback invoked after each chunk with
+//                { examined, emitted, skipped, dupe, progress, total }.
+//                Used by the Scan Historical button to update its
+//                label in flight.
+async function reconstructHistoricalRolls(options) {
+  options = options || {}
+  const CHUNK      = Math.max(1, +options.chunkSize || 25)
+  const onProgress = (typeof options.onProgress === 'function') ? options.onProgress : null
+  // Yield helper: setTimeout(0) is the most compatible "give the
+  // browser a tick" primitive. requestIdleCallback would be ideal but
+  // isn't universally available; setTimeout + a small delay is good
+  // enough for a scan the user explicitly triggered.
+  const _yield = () => new Promise(resolve => setTimeout(resolve, 0))
+
   const result = { emitted: 0, skipped: 0, examined: 0, dupe: 0, details: [] }
   const closedLots = ((window.FID_CLOSED && window.FID_CLOSED.lots) || [])
     .filter(l => l && l.type && l.type !== 'Stock' && l.occ && (+l.qty || 0) > 0)
@@ -9296,7 +9321,12 @@ function reconstructHistoricalRolls() {
   const consumedAsNewLeg = new Set()
   const existingRollIds = new Set((window.ROLL_LEDGER.events||[]).map(e => e && e.roll_id).filter(Boolean))
 
-  for(const closeLeg of closedLots) {
+  // One-tick yield before the first chunk so the "Scanning…" label
+  // paints before we start crunching.
+  await _yield()
+
+  for(let _i = 0; _i < closedLots.length; _i++) {
+    const closeLeg = closedLots[_i]
     result.examined++
     const key = closeLeg.underlying + '|' + closeLeg.type
     const isCall = closeLeg.type === 'Call'
@@ -9400,10 +9430,46 @@ function reconstructHistoricalRolls() {
       dayDiff:    winner.score.dayDiff,
       credit:     credit.amount
     })
+
+    // Chunk boundary — yield back to the browser every CHUNK iterations
+    // so UI events dispatch and the Scanning… label animates. Progress
+    // callback (if provided) fires on the same cadence for a cheap
+    // "X/Y" readout on the button.
+    if((_i + 1) % CHUNK === 0 && _i + 1 < closedLots.length) {
+      if(onProgress) {
+        try { onProgress({
+          examined: result.examined,
+          emitted:  result.emitted,
+          skipped:  result.skipped,
+          dupe:     result.dupe,
+          progress: _i + 1,
+          total:    closedLots.length
+        }) } catch(e) {}
+      }
+      await _yield()
+    }
+  }
+
+  // Final progress tick (covers the tail chunk that didn't hit a
+  // boundary cleanly).
+  if(onProgress) {
+    try { onProgress({
+      examined: result.examined,
+      emitted:  result.emitted,
+      skipped:  result.skipped,
+      dupe:     result.dupe,
+      progress: closedLots.length,
+      total:    closedLots.length
+    }) } catch(e) {}
   }
 
   if(result.emitted > 0) {
     saveRollLedger()
+    // Yield before the heavy renderTrades() pass — rebuilding every
+    // trade card + canvas is the most expensive single step at the
+    // end of a big scan. Letting the browser paint "Scanning… done"
+    // first keeps the UI perceptibly responsive.
+    await _yield()
     try { if(typeof renderRollReview === 'function') renderRollReview() } catch(e) {}
     try { if(typeof renderTrades === 'function') renderTrades() } catch(e) {}
     if(typeof fbAutoSave === 'function') fbAutoSave(2000)
@@ -9595,9 +9661,29 @@ function renderRollReview() {
       'border-radius:4px;padding:4px 10px;font-size:11px;font-weight:'+(active?700:500)+
       ';cursor:pointer;font-family:inherit">' + label + ' (' + count + ')</button>'
   }
+  // Button handler runs the scan ASYNC + CHUNKED. While in flight:
+  //   • button is disabled so re-clicks don't stack scans
+  //   • label cycles to "Scanning… X/Y" via the onProgress callback
+  //   • browser stays responsive between chunks (setTimeout(0) yields)
+  // When done:
+  //   • alert shows the same counts as before
+  //   • button label + disabled state are restored in a finally block
+  //     so a thrown error from the scan can't leave the UI stuck.
   const scanBtn =
-    '<button onclick="(function(){var r=window.reconstructHistoricalRolls();if(r){alert(\'Historical scan done: \'+r.emitted+\' new candidate(s), \'+r.dupe+\' duplicate(s), \'+r.skipped+\' skipped (out of \'+r.examined+\' closed lots examined).\\\\n\\\\nSee the Roll Review table — new rows have the HISTORICAL pill and require manual confirmation.\');}})()" ' +
-    'title="Scan FID_CLOSED + FID_OPEN for retroactive roll candidates. Analytics only — never auto-confirms. See limitations below." ' +
+    '<button id="roll-review-scan-hist-btn" onclick="(async function(btn){' +
+      'if(!btn||btn.disabled)return;' +
+      'var origLabel=btn.textContent;' +
+      'btn.disabled=true;btn.style.opacity=\'0.6\';btn.style.cursor=\'wait\';' +
+      'btn.textContent=\'Scanning…\';' +
+      'try{' +
+        'var r=await window.reconstructHistoricalRolls({onProgress:function(p){' +
+          'btn.textContent=\'Scanning… \'+p.progress+\'/\'+p.total+\' (\'+p.emitted+\' found)\';' +
+        '}});' +
+        'if(r){alert(\'Historical scan done: \'+r.emitted+\' new candidate(s), \'+r.dupe+\' duplicate(s), \'+r.skipped+\' skipped (out of \'+r.examined+\' closed lots examined).\\\\n\\\\nSee the Roll Review table — new rows have the HISTORICAL pill and require manual confirmation.\');}' +
+      '}catch(e){console.error(\'[HIST-ROLLS] scan failed:\',e);alert(\'Scan failed: \'+e.message);}' +
+      'finally{btn.disabled=false;btn.style.opacity=\'\';btn.style.cursor=\'pointer\';btn.textContent=origLabel;}' +
+    '})(this)" ' +
+    'title="Scan FID_CLOSED + FID_OPEN for retroactive roll candidates. Runs in chunks so the UI stays responsive. Analytics only — never auto-confirms. See limitations below." ' +
     'style="background:#1e2d3d;color:#4da6ff;border:1px solid rgba(77,166,255,.5);border-radius:4px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;margin-right:12px">' +
     '⟳ Scan Historical Rolls</button>'
   const filterRow =
