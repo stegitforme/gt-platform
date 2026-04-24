@@ -8989,7 +8989,9 @@ function estimateRollCredit(oldP, newP, closedLotsForOld) {
 function confirmRollDetection(rollId, confirmedCreditOverride) {
   const ev = (window.ROLL_LEDGER.events||[]).find(e => e && e.roll_id === rollId)
   if(!ev) { console.warn('[ROLL-ENGINE] confirm: no event with roll_id', rollId); return }
-  if(ev.status !== 'detected') {
+  // Both live-detected and historical-reconstructed events can be confirmed
+  // through this path. Anything already confirmed / rejected is rejected.
+  if(ev.status !== 'detected' && ev.status !== 'historical_candidate') {
     console.warn('[ROLL-ENGINE] confirm: event already in status', ev.status)
     return
   }
@@ -9020,7 +9022,8 @@ window.confirmRollDetection = confirmRollDetection
 function rejectRollDetection(rollId) {
   const ev = (window.ROLL_LEDGER.events||[]).find(e => e && e.roll_id === rollId)
   if(!ev) { console.warn('[ROLL-ENGINE] reject: no event with roll_id', rollId); return }
-  if(ev.status !== 'detected') return
+  // Reject works for both live-detected and historical candidates.
+  if(ev.status !== 'detected' && ev.status !== 'historical_candidate') return
   ev.status = 'rejected'
   ev.rejectedAt = new Date().toISOString()
   saveRollLedger()
@@ -9076,6 +9079,346 @@ window.pendingDetectionForPositionId = pendingDetectionForPositionId
 window.rollEventsForPositionId       = rollEventsForPositionId
 window.runRollDetection              = runRollDetection
 
+// ═══════════════════════════════════════════════════════════════════════════
+//  HISTORICAL ROLL RECONSTRUCTION — retroactive scan of FID_CLOSED + FID_OPEN
+//  ─────────────────────────────────────────────────────────────────────────
+//  The live Roll Engine only sees rolls that happen AFTER the first CSV
+//  import (it needs a prev snapshot to diff). Rolls executed before
+//  snapshot-tracking started (or before the user started using the app)
+//  are invisible — until this module.
+//
+//  Given a large enough Closed Lots CSV upload (ideally the full year),
+//  we can reconstruct older rolls by pairing each closed option lot
+//  with whichever subsequent leg (another closed lot OR a currently
+//  open position) looks like its roll target.
+//
+//  Candidates get status = 'historical_candidate' and a separate
+//  confidence scale. They NEVER auto-confirm — the user must review
+//  each one in the Roll Review panel. Confirmation routes through the
+//  existing confirmRollDetection flow so behavior stays identical.
+//
+//  LIMITATIONS (surfaced in the panel + logged on each run):
+//    • Partial fills look like separate rolls. If a 10-contract
+//      position was rolled in two 5-contract tranches, we'll flag
+//      two candidate rolls with lower qty-match confidence.
+//    • When the new leg is still in FID_OPEN we can't see its actual
+//      open date (Fidelity's open-positions CSV omits it). We use
+//      entryCapturedAt as a weak proxy, which can mis-match for
+//      positions opened before the first app import.
+//    • If the Closed Lots CSV doesn't cover the full roll history
+//      (e.g. only YTD uploaded but rolls began 18 months ago),
+//      early chain nodes are missing and the reconstruction shows a
+//      roll starting mid-chain.
+//    • Stock roll-outs / non-option legs are skipped entirely.
+//    • Credit estimation via close_proceeds − open_cost_basis assumes
+//      both legs' CSV rows made it through. When the new leg is
+//      currently open we use costBasisTotal from FID_OPEN; that value
+//      is Fidelity's current cost basis which already reflects any
+//      adjustments — for a roll target that's the original opening
+//      cost, which is what we want.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Tunables — exposed so the Roll Review panel can reference them in the
+// limitations callout and users can tweak them if needed.
+window.GT.HIST_ROLL_DAY_WINDOW   = 5     // ± trading days between close and new open
+window.GT.HIST_ROLL_CONF_MIN     = 50    // threshold to emit an event (historical)
+window.GT.HIST_ROLL_QTY_TOL      = 0.25  // ±25% qty match still scores (a touch
+                                          // looser than live detection because
+                                          // historical chains often have partials)
+
+// Parse "MM/DD/YYYY" or "YYYY-MM-DD" or a Date-parseable string into an
+// epoch ms number. Returns null if unparseable.
+function _histParseDate(s) {
+  if(!s) return null
+  const str = String(s).trim()
+  if(!str) return null
+  // MM/DD/YYYY
+  let m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+  if(m) return new Date(+m[3], +m[1]-1, +m[2]).getTime()
+  // YYYY-MM-DD
+  m = str.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if(m) return new Date(+m[1], +m[2]-1, +m[3]).getTime()
+  const t = Date.parse(str)
+  return isFinite(t) ? t : null
+}
+
+// Score a historical roll pair (close-leg + new-leg). Confidence scale
+// is separate from live detection and capped at 100. Required filters
+// (same underlying + same option type) are checked by the caller.
+function scoreHistoricalRollPair(closeLeg, newLeg, newLegSource) {
+  // newLegSource: 'closed' (found in FID_CLOSED) or 'open' (FID_OPEN).
+  const breakdown = {}
+  let conf = 0
+
+  // Date proximity — the strongest signal we have for historical.
+  const closeTs = _histParseDate(closeLeg.sold)
+  const openTs = (newLegSource === 'closed')
+    ? _histParseDate(newLeg.acquired)
+    : (+newLeg.entryCapturedAt || 0)
+  let dayDiff = null
+  if(closeTs && openTs) {
+    dayDiff = Math.abs(openTs - closeTs) / 864e5
+    if(dayDiff <= 1)                         { conf += 30; breakdown.dateVeryNear = 30 }
+    else if(dayDiff <= 3)                    { conf += 22; breakdown.dateNear    = 22 }
+    else if(dayDiff <= window.GT.HIST_ROLL_DAY_WINDOW) { conf += 12; breakdown.dateOk     = 12 }
+    else if(dayDiff <= 14)                   { conf += 4;  breakdown.dateFar     = 4 }
+    // else: no credit; probably not a roll pair
+  } else {
+    // Couldn't parse a date on one side — neutral, don't penalize.
+    breakdown.dateUnknown = 0
+  }
+
+  // Strike direction (calls: up; puts: down). Required directional
+  // logic for a legitimate Golden Ticket roll.
+  const isCall = closeLeg.type === 'Call'
+  const dk = (+newLeg.strike || 0) - (+closeLeg.strike || 0)
+  if(isCall) {
+    if(dk > 0)      { conf += 22; breakdown.strikeDir = 22 }
+    else if(dk === 0) { breakdown.strikeDir = 0 }
+    else            { conf -= 15; breakdown.strikeDir = -15 }
+  } else {
+    if(dk < 0)      { conf += 22; breakdown.strikeDir = 22 }
+    else if(dk === 0) { breakdown.strikeDir = 0 }
+    else            { conf -= 15; breakdown.strikeDir = -15 }
+  }
+
+  // Expiry direction (new expiry ≥ old).
+  const closeExp = closeLeg.expiryISO || ''
+  const newExp   = newLeg.expiryISO || ''
+  if(closeExp && newExp) {
+    if(newExp > closeExp)       { conf += 18; breakdown.expiryFwd = 18 }
+    else if(newExp === closeExp) { conf += 6;  breakdown.expirySame = 6 }
+    else                         { conf -= 10; breakdown.expiryBack = -10 }
+  }
+
+  // Quantity match
+  const closeQ = +closeLeg.qty || 0
+  const newQ   = +newLeg.qty   || 0
+  if(closeQ > 0 && newQ === closeQ) {
+    conf += 15; breakdown.qtyExact = 15
+  } else if(closeQ > 0 && Math.abs(newQ - closeQ) / closeQ <= window.GT.HIST_ROLL_QTY_TOL) {
+    conf += 5;  breakdown.qtyClose = 5
+  } else if(closeQ > 0 && newQ > 0 && newQ < closeQ) {
+    // Partial — the new leg covers only part of the close. Still could
+    // be a roll (half sold for profit + half rolled), so don't penalize
+    // but give no credit either.
+    breakdown.qtyPartial = 0
+  }
+
+  // Credit data available (strong signal — means we can verify the roll
+  // economically, not just structurally).
+  const hasProceeds = (+closeLeg.proceeds || 0) > 0
+  const hasNewCost  = (newLegSource === 'closed')
+    ? (+newLeg.costBasis || 0) > 0
+    : (+newLeg.costBasisTotal || 0) > 0
+  if(hasProceeds && hasNewCost) { conf += 10; breakdown.creditData = 10 }
+
+  // Historical base bonus — if we got here, it's at least a plausible
+  // chain link. Avoids "everything reads ~30%" floor.
+  conf += 5; breakdown.historicalBase = 5
+
+  // New-leg source penalty for FID_OPEN pairs (date is weaker).
+  if(newLegSource === 'open') { conf -= 5; breakdown.openLegPenalty = -5 }
+
+  return {
+    confidence: Math.max(0, Math.min(100, Math.round(conf))),
+    breakdown,
+    dayDiff
+  }
+}
+
+// Estimate credit on a historical pair. Same priority ladder as live
+// but uses the close lot's proceeds directly (the close IS the realized
+// side — no mid-refresh mark needed).
+function estimateHistoricalRollCredit(closeLeg, newLeg, newLegSource) {
+  const proceeds = +closeLeg.proceeds || 0
+  const newCost  = (newLegSource === 'closed')
+    ? (+newLeg.costBasis || 0)
+    : (+newLeg.costBasisTotal || 0)
+  if(proceeds > 0 && newCost > 0) {
+    return {
+      amount: +(proceeds - newCost).toFixed(2),
+      method: 'closed_lot_proceeds',
+      note:   'proceeds $' + proceeds.toFixed(2) + ' − new leg cost $' + newCost.toFixed(2)
+    }
+  }
+  if(proceeds > 0) {
+    return {
+      amount: +proceeds.toFixed(2),
+      method: 'proceeds_only',
+      note:   'new-leg cost basis unavailable — credit shown is gross proceeds'
+    }
+  }
+  return { amount: null, method: 'manual_required', note: 'close lot has no proceeds field populated' }
+}
+
+// reconstructHistoricalRolls() — main entry point.
+// Walks FID_CLOSED option lots in chronological order. For each closed
+// lot, finds the best subsequent new-leg candidate (either another
+// closed lot or a currently open position) that plausibly constitutes
+// a roll target. Emits events with status 'historical_candidate' into
+// ROLL_LEDGER, de-duped by roll_id so re-runs are idempotent.
+//
+// Returns { emitted, skipped, examined, dupe }.
+function reconstructHistoricalRolls() {
+  const result = { emitted: 0, skipped: 0, examined: 0, dupe: 0, details: [] }
+  const closedLots = ((window.FID_CLOSED && window.FID_CLOSED.lots) || [])
+    .filter(l => l && l.type && l.type !== 'Stock' && l.occ && (+l.qty || 0) > 0)
+  const openPositions = ((window.FID_OPEN && window.FID_OPEN.positions) || [])
+    .filter(p => p && p.type && p.type !== 'Stock' && p.occ)
+  if(!closedLots.length) {
+    console.log('[HIST-ROLLS] no closed option lots — nothing to reconstruct')
+    return result
+  }
+
+  // Sort closed lots by sold-date ascending so chain walks are stable.
+  closedLots.sort((a,b) => {
+    const ta = _histParseDate(a.sold) || 0
+    const tb = _histParseDate(b.sold) || 0
+    return ta - tb
+  })
+
+  // Pre-index closed lots by underlying+type for fast candidate lookup.
+  const closedByKey = {}
+  for(const l of closedLots) {
+    const k = l.underlying + '|' + l.type
+    if(!closedByKey[k]) closedByKey[k] = []
+    closedByKey[k].push(l)
+  }
+  const openByKey = {}
+  for(const p of openPositions) {
+    const k = p.underlying + '|' + p.type
+    if(!openByKey[k]) openByKey[k] = []
+    openByKey[k].push(p)
+  }
+  // Track which lots have been consumed as a "new leg" so we don't
+  // emit the same pairing twice when walking a chain.
+  const consumedAsNewLeg = new Set()
+  const existingRollIds = new Set((window.ROLL_LEDGER.events||[]).map(e => e && e.roll_id).filter(Boolean))
+
+  for(const closeLeg of closedLots) {
+    result.examined++
+    const key = closeLeg.underlying + '|' + closeLeg.type
+    const isCall = closeLeg.type === 'Call'
+    const closeK = +closeLeg.strike || 0
+    const closeTs = _histParseDate(closeLeg.sold)
+
+    // Candidate pool: other closed lots with acquired-date after closeLeg.sold,
+    // plus any currently open position matching underlying+type.
+    const closedCandidates = (closedByKey[key] || []).filter(other => {
+      if(other === closeLeg) return false
+      if(consumedAsNewLeg.has(other.lot_id)) return false
+      const acqTs = _histParseDate(other.acquired)
+      if(!closeTs || !acqTs) return true  // can still score partial
+      return acqTs >= closeTs - 864e5     // allow same-day or later
+    }).map(c => ({ leg: c, src: 'closed' }))
+    const openCandidates = (openByKey[key] || []).map(p => ({ leg: p, src: 'open' }))
+    const all = [...closedCandidates, ...openCandidates]
+    if(!all.length) { result.skipped++; continue }
+
+    // Strike-direction filter — we still allow same-strike (roll-out
+    // only), but reject wrong-direction outright. Keeps the candidate
+    // pool focused.
+    const directional = all.filter(c => {
+      const dk = (+c.leg.strike || 0) - closeK
+      if(isCall) return dk >= 0
+      return dk <= 0
+    })
+    if(!directional.length) { result.skipped++; continue }
+
+    // Score each; keep the best above the historical threshold.
+    const scored = directional.map(c => ({
+      ...c,
+      score: scoreHistoricalRollPair(closeLeg, c.leg, c.src)
+    }))
+    scored.sort((a, b) => {
+      if(b.score.confidence !== a.score.confidence) return b.score.confidence - a.score.confidence
+      // Prefer nearer date
+      return (a.score.dayDiff || 999) - (b.score.dayDiff || 999)
+    })
+    const winner = scored[0]
+    if(winner.score.confidence < window.GT.HIST_ROLL_CONF_MIN) {
+      result.skipped++; continue
+    }
+
+    const newOcc = winner.leg.occ || ''
+    const rid = rollIdFor(closeLeg.occ || '', newOcc)
+    if(existingRollIds.has(rid)) { result.dupe++; continue }
+
+    // Prevent cascading double-counting: mark the winning new-leg lot
+    // as consumed so it doesn't show up as a close-leg for the next
+    // scan iteration's hop (that would over-chain aggressively).
+    if(winner.src === 'closed' && winner.leg.lot_id) {
+      consumedAsNewLeg.add(winner.leg.lot_id)
+    }
+
+    const credit = estimateHistoricalRollCredit(closeLeg, winner.leg, winner.src)
+    const newPid = (winner.src === 'closed') ? winner.leg.position_id : winner.leg.position_id
+    const newExpiryISO = winner.leg.expiryISO || ''
+    const newStrike    = +winner.leg.strike || 0
+    const newQty       = +winner.leg.qty || 0
+
+    const ev = {
+      roll_id:           rid,
+      underlying:        closeLeg.underlying,
+      old_occ:           closeLeg.occ || '',
+      new_occ:           newOcc,
+      old_position_id:   closeLeg.position_id,
+      new_position_id:   newPid,
+      old_strike:        closeK,
+      new_strike:        newStrike,
+      old_expiry:        closeLeg.expiryISO || '',
+      new_expiry:        newExpiryISO,
+      old_qty:           +closeLeg.qty || 0,
+      new_qty:           newQty,
+      qty:               newQty || (+closeLeg.qty || 0),
+      estimatedCredit:   credit.amount,
+      creditMethod:      credit.method,
+      creditNote:        credit.note || '',
+      confirmedCredit:   null,
+      confidence:        winner.score.confidence,
+      confidenceBreakdown: winner.score.breakdown,
+      rollLevelHit:      'historical',   // no live anchor to reference
+      timestamp:         Date.now(),
+      detectedAt:        new Date().toISOString(),
+      status:            'historical_candidate',
+      source:            'historical_reconstruction',
+      newLegSource:      winner.src,     // 'closed' | 'open'
+      dayDiff:           winner.score.dayDiff,
+      closeSoldOn:       closeLeg.sold || '',
+      newAcquiredOn:     (winner.src === 'closed' ? (winner.leg.acquired || '') : null)
+    }
+    window.ROLL_LEDGER.events.push(ev)
+    existingRollIds.add(rid)
+    result.emitted++
+    result.details.push({
+      underlying: closeLeg.underlying,
+      old_strike: closeK,
+      new_strike: newStrike,
+      confidence: winner.score.confidence,
+      src:        winner.src,
+      dayDiff:    winner.score.dayDiff,
+      credit:     credit.amount
+    })
+  }
+
+  if(result.emitted > 0) {
+    saveRollLedger()
+    try { if(typeof renderRollReview === 'function') renderRollReview() } catch(e) {}
+    try { if(typeof renderTrades === 'function') renderTrades() } catch(e) {}
+    if(typeof fbAutoSave === 'function') fbAutoSave(2000)
+  }
+  console.log('[HIST-ROLLS] reconstruction done:', {
+    examined: result.examined,
+    emitted:  result.emitted,
+    skipped:  result.skipped,
+    dupe:     result.dupe,
+    sample:   result.details.slice(0, 5)
+  })
+  return result
+}
+window.reconstructHistoricalRolls = reconstructHistoricalRolls
+
 // ── Reopen / Edit handlers + FID_CREDITS recompute ─────────────────────
 // reopenRollDetection: move a 'rejected' event back to 'detected' so it
 // surfaces on the card again and shows up in the Roll Review filter.
@@ -9086,7 +9429,11 @@ function reopenRollDetection(rollId) {
     console.warn('[ROLL-ENGINE] reopen: event is not rejected (status:', ev.status, ')')
     return
   }
-  ev.status = 'detected'
+  // Restore the correct "open" status based on the event's origin —
+  // historical candidates reopen to 'historical_candidate', live
+  // detections reopen to 'detected'. This preserves the confidence
+  // semantics + the Roll Review filter chip.
+  ev.status = (ev.source === 'historical_reconstruction') ? 'historical_candidate' : 'detected'
   delete ev.rejectedAt
   ev.reopenedAt = new Date().toISOString()
   saveRollLedger()
@@ -9197,15 +9544,16 @@ function renderRollReview() {
   // Newest first
   events.sort((a,b) => (b.timestamp||0) - (a.timestamp||0))
   // Counts
-  const cDet = events.filter(e => e.status === 'detected').length
-  const cCon = events.filter(e => e.status === 'confirmed').length
-  const cRej = events.filter(e => e.status === 'rejected').length
+  const cDet  = events.filter(e => e.status === 'detected').length
+  const cHist = events.filter(e => e.status === 'historical_candidate').length
+  const cCon  = events.filter(e => e.status === 'confirmed').length
+  const cRej  = events.filter(e => e.status === 'rejected').length
   let totalConfCredit = 0
   for(const e of events) if(e.status === 'confirmed') totalConfCredit += (+e.confirmedCredit || 0)
   // Header summary line
   if(sum) {
     sum.textContent = events.length
-      ? (events.length+' event(s) · '+cDet+' detected · '+cCon+' confirmed · '+cRej+' rejected')
+      ? (events.length+' event(s) · '+cDet+' detected · '+cHist+' historical · '+cCon+' confirmed · '+cRej+' rejected')
       : 'no events'
   }
   // Inline HTML escape for safe interpolation
@@ -9221,21 +9569,22 @@ function renderRollReview() {
   // Date formatter
   const fmtT = ts => ts ? new Date(ts).toLocaleString() : '<span style="color:#555c6e">—</span>'
 
-  // ── Summary cards (4-up grid) ────────────────────────────────────────
+  // ── Summary cards (5-up grid) ────────────────────────────────────────
   const card = (label, val, color) =>
       '<div style="background:#0a0c0f;border:1px solid rgba(255,255,255,.06);border-radius:6px;padding:10px 12px">' +
         '<div style="font-size:9px;color:#555c6e;font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-bottom:4px">'+label+'</div>' +
         '<div style="font-size:18px;font-weight:700;color:'+color+';font-family:\'SF Mono\',monospace">'+val+'</div>' +
       '</div>'
   const summaryGrid =
-    '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px">' +
-      card('DETECTED',  String(cDet), '#f0c040') +
-      card('CONFIRMED', String(cCon), '#00d68f') +
-      card('REJECTED',  String(cRej), '#8b91a0') +
+    '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:10px">' +
+      card('DETECTED',    String(cDet),  '#f0c040') +
+      card('HISTORICAL',  String(cHist), '#4da6ff') +
+      card('CONFIRMED',   String(cCon),  '#00d68f') +
+      card('REJECTED',    String(cRej),  '#8b91a0') +
       card('TOTAL CONFIRMED CREDITS', fmt$(totalConfCredit), totalConfCredit >= 0 ? '#00d68f' : '#ff4560') +
     '</div>'
 
-  // ── Filter chips ─────────────────────────────────────────────────────
+  // ── Action bar: scan historical + filter chips ───────────────────────
   const f = window.__rollReviewFilter || 'all'
   const chip = (key, label, count) => {
     const active = (f === key)
@@ -9246,12 +9595,19 @@ function renderRollReview() {
       'border-radius:4px;padding:4px 10px;font-size:11px;font-weight:'+(active?700:500)+
       ';cursor:pointer;font-family:inherit">' + label + ' (' + count + ')</button>'
   }
+  const scanBtn =
+    '<button onclick="(function(){var r=window.reconstructHistoricalRolls();if(r){alert(\'Historical scan done: \'+r.emitted+\' new candidate(s), \'+r.dupe+\' duplicate(s), \'+r.skipped+\' skipped (out of \'+r.examined+\' closed lots examined).\\\\n\\\\nSee the Roll Review table — new rows have the HISTORICAL pill and require manual confirmation.\');}})()" ' +
+    'title="Scan FID_CLOSED + FID_OPEN for retroactive roll candidates. Analytics only — never auto-confirms. See limitations below." ' +
+    'style="background:#1e2d3d;color:#4da6ff;border:1px solid rgba(77,166,255,.5);border-radius:4px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;margin-right:12px">' +
+    '⟳ Scan Historical Rolls</button>'
   const filterRow =
-    '<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">' +
-      chip('all',       'All',       events.length) +
-      chip('detected',  'Detected',  cDet) +
-      chip('confirmed', 'Confirmed', cCon) +
-      chip('rejected',  'Rejected',  cRej) +
+    '<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;align-items:center">' +
+      scanBtn +
+      chip('all',                   'All',         events.length) +
+      chip('detected',              'Detected',    cDet) +
+      chip('historical_candidate',  'Historical',  cHist) +
+      chip('confirmed',             'Confirmed',   cCon) +
+      chip('rejected',              'Rejected',    cRej) +
     '</div>'
 
   // ── Filtered table ───────────────────────────────────────────────────
@@ -9268,9 +9624,10 @@ function renderRollReview() {
   // Status pill helper
   const statusPill = s => {
     const map = {
-      detected:  { bg:'rgba(240,192,64,.18)',  fg:'#f0c040', bd:'rgba(240,192,64,.5)',  lbl:'DETECTED' },
-      confirmed: { bg:'rgba(0,214,143,.18)',   fg:'#00d68f', bd:'rgba(0,214,143,.5)',   lbl:'CONFIRMED' },
-      rejected:  { bg:'rgba(139,145,160,.14)', fg:'#8b91a0', bd:'rgba(139,145,160,.35)',lbl:'REJECTED' }
+      detected:             { bg:'rgba(240,192,64,.18)',  fg:'#f0c040', bd:'rgba(240,192,64,.5)',  lbl:'DETECTED' },
+      historical_candidate: { bg:'rgba(77,166,255,.16)',  fg:'#4da6ff', bd:'rgba(77,166,255,.5)',  lbl:'HISTORICAL' },
+      confirmed:            { bg:'rgba(0,214,143,.18)',   fg:'#00d68f', bd:'rgba(0,214,143,.5)',   lbl:'CONFIRMED' },
+      rejected:             { bg:'rgba(139,145,160,.14)', fg:'#8b91a0', bd:'rgba(139,145,160,.35)',lbl:'REJECTED' }
     }
     const x = map[s] || map.detected
     return '<span style="background:'+x.bg+';color:'+x.fg+';border:1px solid '+x.bd+';padding:2px 6px;border-radius:3px;font-size:9px;font-weight:800;letter-spacing:.07em">'+x.lbl+'</span>'
@@ -9283,10 +9640,12 @@ function renderRollReview() {
     const col = v >= HIGH ? '#00d68f' : v >= MED ? '#f0c040' : '#8b91a0'
     return '<span style="color:'+col+';font-weight:700">'+v+'%</span>'
   }
-  // Action buttons per row, dispatching by status
+  // Action buttons per row, dispatching by status. Historical candidates
+  // route through the same confirm/adjust/reject handlers as live
+  // detections; the handlers were updated to accept either status.
   const actionsFor = ev => {
     const rid = ridJs(ev.roll_id)
-    if(ev.status === 'detected') {
+    if(ev.status === 'detected' || ev.status === 'historical_candidate') {
       return  '<button onclick="confirmRollDetection('+rid+')" style="background:#00d68f;color:#0a0c0f;border:none;border-radius:3px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;margin-right:3px">Confirm</button>' +
               '<button onclick="adjustRollDetection('+rid+')"  style="background:transparent;color:#f0c040;border:1px solid rgba(240,192,64,.5);border-radius:3px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;margin-right:3px">Adjust</button>' +
               '<button onclick="rejectRollDetection('+rid+')"  style="background:transparent;color:#8b91a0;border:1px solid rgba(139,145,160,.35);border-radius:3px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit">Reject</button>'
@@ -9302,6 +9661,7 @@ function renderRollReview() {
   // Method badge — abbreviated source label
   const methodLbl = m => m === 'closed_lot_proceeds' ? 'closed-lot'
                       : m === 'mark_diff'           ? 'mark-diff'
+                      : m === 'proceeds_only'       ? 'proceeds-only'
                       : m === 'manual_required'     ? 'manual'
                       : (m || '—')
   // Contract description "UBS 42.5 May-15-2026"
@@ -9344,7 +9704,22 @@ function renderRollReview() {
       '</table>' +
     '</div>'
 
-  body.innerHTML = summaryGrid + filterRow + table
+  // Historical-reconstruction limitations callout. Shown only when the
+  // table currently contains at least one historical candidate so it
+  // doesn't clutter the panel for users who aren't using the feature.
+  const hasHistorical = events.some(e => e && e.status === 'historical_candidate')
+  const limitationsBlock = hasHistorical ? (
+    '<div style="margin-top:10px;padding:10px 12px;background:rgba(77,166,255,.06);border:1px solid rgba(77,166,255,.25);border-radius:6px;font-size:10.5px;color:#8b91a0;line-height:1.55">' +
+      '<div style="color:#4da6ff;font-weight:700;letter-spacing:.07em;text-transform:uppercase;font-size:9px;margin-bottom:5px">Historical reconstruction — limitations</div>' +
+      '• <b>Partial fills</b> show as separate candidates when a roll was executed in tranches (e.g. 10-contract roll split into two 5s surfaces two rows with lower qty-match confidence).<br>' +
+      '• <b>Open-leg date is approximate.</b> When the new leg is still in FID_OPEN, Fidelity\'s Portfolio Positions CSV omits the real open date — we use <code>entryCapturedAt</code> (first-seen-by-this-app), which can mis-date positions opened before your first CSV import.<br>' +
+      '• <b>Chain history coverage.</b> If your Closed Lots CSV doesn\'t span the full roll history for a position (e.g. YTD only, but rolls began 18 months ago), earlier chain links are invisible and the reconstruction starts mid-chain.<br>' +
+      '• <b>Credit estimate.</b> Uses <code>close proceeds − new leg cost basis</code>. When only proceeds are available (open-leg cost basis missing from the CSV snapshot), credit is shown as gross proceeds and flagged <code>proceeds-only</code> — adjust manually before confirming.<br>' +
+      '• <b>Never auto-confirms.</b> Historical candidates always require explicit Confirm / Adjust / Reject action, same as live detections. Low-confidence matches (< '+(window.GT.HIST_ROLL_CONF_MIN||50)+'%) aren\'t emitted.' +
+    '</div>'
+  ) : ''
+
+  body.innerHTML = summaryGrid + filterRow + table + limitationsBlock
 }
 window.renderRollReview = renderRollReview
 
