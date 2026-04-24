@@ -6528,6 +6528,7 @@ async function refreshCandidateATRs() {
 // authoritative source (Fidelity snapshot when present; legacy TRADES fallback).
 function calcDeployed() {
   var open = (typeof getOpenBook === 'function') ? getOpenBook() : TRADES.filter(function(t){return t.status==="open"})
+  if(!Array.isArray(open)) open = []
   return open.reduce(function(s,t){var d=t.delta||0.80;return s+(t.atr||0)*d*100*(t.cts||1)},0)
 }
 function calcSectorRisk(sector) {
@@ -7022,6 +7023,7 @@ var CLUSTER_MAP = {'Tech':'AI/Tech','Communication':'AI/Tech','NVDA':'AI/Tech','
 function getCluster(sym) { return CLUSTER_MAP[sym] || CLUSTER_MAP[getSector(sym)] || getSector(sym) || "Other" }
 function calcClusterRisk() {
   var open = (typeof getOpenBook === 'function') ? getOpenBook() : TRADES.filter(function(t){return t.status==="open"})
+  if(!Array.isArray(open)) open = []
   var clusters={},total=0
   open.forEach(function(t){var sym=rootTicker(t.ticker);var cl=getCluster(sym);var d=t.delta||0.80;var risk=(t.atr||0)*d*100*(t.cts||1);clusters[cl]=(clusters[cl]||0)+risk;total+=risk})
   return {clusters,total}
@@ -7050,7 +7052,9 @@ function getRiskIntelligence() {
   else if(available<=0) intel.suggestions.push("🔴 No budget remaining — reduce or close positions first")
   // Ticker concentration
   var tickerRisks={}
-  ((typeof getOpenBook === 'function') ? getOpenBook() : TRADES.filter(function(t){return t.status==="open"})).forEach(function(t){var sym=rootTicker(t.ticker);var d=t.delta||0.80;tickerRisks[sym]=(tickerRisks[sym]||0)+(t.atr||0)*d*100*(t.cts||1)})
+  var _openForRisk=(typeof getOpenBook==='function')?getOpenBook():TRADES.filter(function(t){return t.status==="open"})
+  if(!Array.isArray(_openForRisk)) _openForRisk=[]
+  _openForRisk.forEach(function(t){var sym=rootTicker(t.ticker);var d=t.delta||0.80;tickerRisks[sym]=(tickerRisks[sym]||0)+(t.atr||0)*d*100*(t.cts||1)})
   Object.entries(tickerRisks).forEach(function(e){var pct=total>0?Math.round(e[1]/total*100):0;if(pct>=20)intel.warnings.push({level:"medium",msg:"⚠️ "+e[0]+": "+pct+"% single-name concentration"})})
   return intel
 }
