@@ -9844,6 +9844,34 @@ function renderMiniChartForTrade(t) {
   //
   // ENTRY is rendered with a muted gold so STOP and the rolls dominate;
   // NOW remains the most prominent element via solid line + glowing dot.
+  // ── Source-agnostic level resolver ────────────────────────────────────
+  // The mini-chart must work in BOTH modes:
+  //   (A) FID_OPEN snapshot present → use the FROZEN stop125Entry /
+  //       roll05Entry / roll10Entry / roll20Entry fields written by
+  //       captureEntrySnapshots() (these are authoritative because they
+  //       lock the levels at entry-time and survive ATR drift).
+  //   (B) Legacy TRADES only (no Fidelity import yet, e.g. fresh
+  //       browser session restoring from Firebase) → derive the levels
+  //       on the fly from entry ± k·ATR using the canonical multipliers.
+  // The ladder must NOT silently degrade to "ENTRY + NOW only" just
+  // because no FID_OPEN snapshot exists. Same math, same constants —
+  // we just compute when the frozen fields are absent.
+  const G = (window.GT || {})
+  const STOP_K = +G.STOP_MULT   || 1.25
+  const R1_K   = +G.ROLL_1_MULT || 0.5
+  const R2_K   = +G.ROLL_2_MULT || 1.0
+  const R3_K   = +G.ROLL_3_MULT || 2.0
+  const _haveAtrMath = entry > 0 && entryATR > 0
+  const stopPx = (t.stop125Entry != null) ? +t.stop125Entry
+               : _haveAtrMath ? +(entry - STOP_K * entryATR).toFixed(2) : null
+  const r1Px   = (t.roll05Entry  != null) ? +t.roll05Entry
+               : _haveAtrMath ? +(entry + R1_K   * entryATR).toFixed(2) : null
+  const r2Px   = (t.roll10Entry  != null) ? +t.roll10Entry
+               : _haveAtrMath ? +(entry + R2_K   * entryATR).toFixed(2) : null
+  // r3 derived for post-roll NEXT-ROLL fallback below; not drawn pre-roll.
+  const r3Px   = (t.roll20Entry  != null) ? +t.roll20Entry
+               : _haveAtrMath ? +(entry + R3_K   * entryATR).toFixed(2) : null
+
   const levels = []
   if(phase === 'pre-roll') {
     // yieldOrder marks WHICH labels can be hidden when the chart gets
@@ -9852,10 +9880,10 @@ function renderMiniChartForTrade(t) {
     // R2 is informational). STOP / R1 / NOW are never yielded — they
     // remain visible regardless of overlap. drawMiniChart performs the
     // actual hide + collision resolution after measuring pixel positions.
-    if(t.stop125Entry != null) levels.push({ kind:'stop', price:+t.stop125Entry, label:'STOP',  color:'#ff4560', yieldOrder: 0 })
-    if(entry > 0)              levels.push({ kind:'entry',price:entry,            label:'ENTRY', color:'#a6884c', yieldOrder: 1 })
-    if(t.roll05Entry != null)  levels.push({ kind:'r1',   price:+t.roll05Entry,   label:'R1',    color:'#00d68f', yieldOrder: 0 })
-    if(t.roll10Entry != null)  levels.push({ kind:'r2',   price:+t.roll10Entry,   label:'R2',    color:'#00a878', yieldOrder: 2 })
+    if(stopPx != null) levels.push({ kind:'stop', price:stopPx, label:'STOP',  color:'#ff4560', yieldOrder: 0 })
+    if(entry > 0)      levels.push({ kind:'entry',price:entry,  label:'ENTRY', color:'#a6884c', yieldOrder: 1 })
+    if(r1Px   != null) levels.push({ kind:'r1',   price:r1Px,   label:'R1',    color:'#00d68f', yieldOrder: 0 })
+    if(r2Px   != null) levels.push({ kind:'r2',   price:r2Px,   label:'R2',    color:'#00a878', yieldOrder: 2 })
     // R3 intentionally omitted from Trade Manager mini-chart per design.
     // Planner candidate table still shows R3 (entry + 2.0·ATR).
   } else {
@@ -9872,7 +9900,9 @@ function renderMiniChartForTrade(t) {
     }
     if(t.newBase != null) levels.push({ kind:'base', price:+t.newBase, label:'BASE', color:'#a6884c', yieldOrder: 1 })
     if(rc < 3) {
-      const nextRoll = rc === 1 ? t.roll10Entry : rc === 2 ? t.roll20Entry : null
+      // Use the source-agnostic r2Px/r3Px resolved above so post-roll
+      // also works for legacy trades without FID_OPEN snapshot fields.
+      const nextRoll = rc === 1 ? r2Px : rc === 2 ? r3Px : null
       if(nextRoll != null) levels.push({ kind:'nr', price:+nextRoll, label:'NEXT ROLL', color:'#00d68f', yieldOrder: 0 })
     }
   }
