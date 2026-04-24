@@ -883,6 +883,25 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
       </div>
     </div>
 
+    <!-- ── Roll Review panel ──────────────────────────────────────────────
+         Centralized table of every event in window.ROLL_LEDGER. Per-card
+         amber prompts continue to function unchanged; this panel is a
+         second surface that uses the SAME confirmRollDetection /
+         rejectRollDetection / adjustRollDetection handlers so behavior
+         stays consistent. Two new handlers (reopenRollDetection,
+         editConfirmedRollCredit) live alongside them in the Roll Engine
+         block. Body is rendered by window.renderRollReview() — called
+         after CSV import, after every confirm/reject, and once at boot. -->
+    <div id="roll-review-card" class="card" style="margin-bottom:14px;border-color:rgba(240,192,64,.22)">
+      <div class="card-head" style="border-color:rgba(240,192,64,.14)">
+        <span class="card-title" style="color:#f0c040">Roll Review <span style="font-size:10px;color:#8b91a0;font-weight:400;margin-left:6px">centralized roll ledger — confirm / adjust / reject</span></span>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <span id="roll-review-summary" style="font-size:11px;color:#8b91a0">no events</span>
+        </div>
+      </div>
+      <div class="card-body" id="roll-review-body" style="padding:12px 14px"></div>
+    </div>
+
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
       <!-- Legacy paste + bulk ingestion retired — Fidelity Sync CSV upload
            is the canonical source of truth for open positions. The + New
@@ -3810,6 +3829,7 @@ async function loadFromFirebase() {
     window.ROLL_LEDGER = data.roll_ledger
     localStorage.setItem('gt_roll_ledger', JSON.stringify(window.ROLL_LEDGER))
     console.log('[ROLL-ENGINE] hydrated from Firebase: '+data.roll_ledger.events.length+' event(s)')
+    try { if(typeof renderRollReview === 'function') renderRollReview() } catch(e) {}
   }
   // Update UI after Firebase restore
   if(typeof updateRiskMeter === 'function') { setTimeout(updateRiskMeter, 100) }
@@ -8461,9 +8481,10 @@ async function importFidelityOpenPositionsFromFile(file) {
       if(typeof runRollDetection === 'function') {
         const det = runRollDetection(rollPrev)
         if(det && det.detected && det.detected.length) {
-          setStatus('✓ '+positions.length+' positions imported · '+det.detected.length+' roll(s) detected — review on the cards', '#f0c040')
+          setStatus('✓ '+positions.length+' positions imported · '+det.detected.length+' roll(s) detected — review on the cards or in Roll Review', '#f0c040')
         }
       }
+      if(typeof renderRollReview === 'function') renderRollReview()
     } catch(e) { console.warn('[FID-IMPORT] roll detection skipped:', e.message) }
     // Persist + re-render with all enrichments applied
     saveFidOpen()
@@ -8844,6 +8865,7 @@ function confirmRollDetection(rollId, confirmedCreditOverride) {
   const newRolls   = Math.max(0, Math.min(window.GT.MAX_ROLLS, (+cur.rollCount || 0) + 1))
   const newCredits = (+cur.cumulativeCredits || 0) + (+credit)
   setPositionCredits(pid, newCredits, newRolls)
+  try { if(typeof renderRollReview === 'function') renderRollReview() } catch(e) {}
   console.log('[ROLL-ENGINE] confirmed', rollId, 'credit', credit, '→ FID_CREDITS', pid, '=', { rollCount: newRolls, cumulativeCredits: newCredits })
 }
 window.confirmRollDetection = confirmRollDetection
@@ -8856,6 +8878,7 @@ function rejectRollDetection(rollId) {
   ev.rejectedAt = new Date().toISOString()
   saveRollLedger()
   try { renderTrades() } catch(e) {}
+  try { if(typeof renderRollReview === 'function') renderRollReview() } catch(e) {}
   if(typeof fbAutoSave === 'function') fbAutoSave(1500)
   console.log('[ROLL-ENGINE] rejected', rollId)
 }
@@ -8905,6 +8928,278 @@ window.getRollState = getRollState
 window.pendingDetectionForPositionId = pendingDetectionForPositionId
 window.rollEventsForPositionId       = rollEventsForPositionId
 window.runRollDetection              = runRollDetection
+
+// ── Reopen / Edit handlers + FID_CREDITS recompute ─────────────────────
+// reopenRollDetection: move a 'rejected' event back to 'detected' so it
+// surfaces on the card again and shows up in the Roll Review filter.
+function reopenRollDetection(rollId) {
+  const ev = (window.ROLL_LEDGER.events||[]).find(e => e && e.roll_id === rollId)
+  if(!ev) { console.warn('[ROLL-ENGINE] reopen: no event with roll_id', rollId); return }
+  if(ev.status !== 'rejected') {
+    console.warn('[ROLL-ENGINE] reopen: event is not rejected (status:', ev.status, ')')
+    return
+  }
+  ev.status = 'detected'
+  delete ev.rejectedAt
+  ev.reopenedAt = new Date().toISOString()
+  saveRollLedger()
+  try { renderTrades() } catch(e) {}
+  try { if(typeof renderRollReview === 'function') renderRollReview() } catch(e) {}
+  if(typeof fbAutoSave === 'function') fbAutoSave(1500)
+  console.log('[ROLL-ENGINE] reopened', rollId)
+}
+window.reopenRollDetection = reopenRollDetection
+
+// editConfirmedRollCredit: change the credit on an already-confirmed
+// event. Recomputes FID_CREDITS for the destination position so
+// cumulativeCredits + breakeven + trailing state stay consistent.
+// Confirmed → confirmed (status doesn't change); only confirmedCredit
+// + the derived FID_CREDITS update.
+function editConfirmedRollCredit(rollId, newCreditOverride) {
+  const ev = (window.ROLL_LEDGER.events||[]).find(e => e && e.roll_id === rollId)
+  if(!ev) { console.warn('[ROLL-ENGINE] edit: no event with roll_id', rollId); return }
+  if(ev.status !== 'confirmed') {
+    console.warn('[ROLL-ENGINE] edit: event is not confirmed (status:', ev.status, ')')
+    return
+  }
+  let credit
+  if(newCreditOverride != null && isFinite(+newCreditOverride)) {
+    credit = +newCreditOverride
+  } else {
+    const raw = prompt(
+      'Edit confirmed credit for ' + ev.underlying + ' ' + ev.old_strike + '→' + ev.new_strike + '\n\n' +
+      'Current confirmed credit: $' + (+ev.confirmedCredit).toFixed(2) + '\n' +
+      'Original estimated:       $' + (ev.estimatedCredit != null ? (+ev.estimatedCredit).toFixed(2) : 'n/a') + '\n\n' +
+      'Enter new credit (positive = received, negative = paid):',
+      String(ev.confirmedCredit)
+    )
+    if(raw == null) return
+    const v = parseFloat(raw)
+    if(!isFinite(v)) { alert('Invalid number — leaving credit unchanged.'); return }
+    credit = v
+  }
+  ev.confirmedCredit = +credit.toFixed(2)
+  ev.editedAt = new Date().toISOString()
+  saveRollLedger()
+  // Now recompute FID_CREDITS for THIS position from scratch using all
+  // confirmed ledger events for the position. This makes edits to one
+  // event correctly cascade through cumulativeCredits + breakeven without
+  // double-counting.
+  recomputeFidCreditsFromLedger(ev.new_position_id)
+  try { renderTrades() } catch(e) {}
+  try { if(typeof renderRollReview === 'function') renderRollReview() } catch(e) {}
+  if(typeof fbAutoSave === 'function') fbAutoSave(1500)
+  console.log('[ROLL-ENGINE] edited credit for', rollId, '→', credit)
+}
+window.editConfirmedRollCredit = editConfirmedRollCredit
+
+// recomputeFidCreditsFromLedger(pid): reconstruct FID_CREDITS[pid] from
+// the ledger as the single source of truth. Uses every CONFIRMED event
+// whose new_position_id matches `pid`. Never touches FID_OPEN /
+// FID_CLOSED. If `pid` is omitted, recomputes for ALL position_ids that
+// have at least one confirmed event.
+//
+// Manual rollCount/credits set via the per-card legacy inputs are
+// PRESERVED when there are zero confirmed ledger events for that pid
+// (the legacy override path stays intact). When at least one ledger
+// event exists we rebuild from ledger because it is now authoritative.
+function recomputeFidCreditsFromLedger(pid) {
+  if(!window.ROLL_LEDGER || !Array.isArray(window.ROLL_LEDGER.events)) return
+  const targetPids = pid ? [pid] : Array.from(new Set(window.ROLL_LEDGER.events
+    .filter(e => e && e.status === 'confirmed' && e.new_position_id)
+    .map(e => e.new_position_id)))
+  for(const tpid of targetPids) {
+    const events = window.ROLL_LEDGER.events.filter(e =>
+      e && e.status === 'confirmed' && e.new_position_id === tpid
+    )
+    if(!events.length) continue
+    let totalCredit = 0
+    for(const ev of events) totalCredit += (+ev.confirmedCredit || 0)
+    const newRollCount = Math.min((window.GT && window.GT.MAX_ROLLS) || 3, events.length)
+    if(!window.FID_CREDITS) window.FID_CREDITS = {}
+    if(!window.FID_CREDITS[tpid]) window.FID_CREDITS[tpid] = {}
+    window.FID_CREDITS[tpid].cumulativeCredits = +totalCredit.toFixed(2)
+    window.FID_CREDITS[tpid].rollCount         = newRollCount
+    window.FID_CREDITS[tpid].updatedAt         = Date.now()
+    window.FID_CREDITS[tpid].source            = 'ledger-recompute'
+  }
+  if(typeof saveFidCredits === 'function') saveFidCredits()
+}
+window.recomputeFidCreditsFromLedger = recomputeFidCreditsFromLedger
+
+// ── Roll Review panel renderer ─────────────────────────────────────────
+// Renders into #roll-review-body inside the Roll Review .card. Single
+// pass: summary cards on top, filter chips below them, then the events
+// table. Filter state is kept on window.__rollReviewFilter so re-renders
+// triggered by other surfaces (renderTrades after confirm, fbAutoSave on
+// import) preserve the user's filter selection.
+window.__rollReviewFilter = window.__rollReviewFilter || 'all'
+
+function setRollReviewFilter(f) {
+  window.__rollReviewFilter = String(f || 'all')
+  renderRollReview()
+}
+window.setRollReviewFilter = setRollReviewFilter
+
+function renderRollReview() {
+  const body = document.getElementById('roll-review-body')
+  const sum  = document.getElementById('roll-review-summary')
+  if(!body) return
+  const events = (window.ROLL_LEDGER && Array.isArray(window.ROLL_LEDGER.events))
+    ? window.ROLL_LEDGER.events.slice() : []
+  // Newest first
+  events.sort((a,b) => (b.timestamp||0) - (a.timestamp||0))
+  // Counts
+  const cDet = events.filter(e => e.status === 'detected').length
+  const cCon = events.filter(e => e.status === 'confirmed').length
+  const cRej = events.filter(e => e.status === 'rejected').length
+  let totalConfCredit = 0
+  for(const e of events) if(e.status === 'confirmed') totalConfCredit += (+e.confirmedCredit || 0)
+  // Header summary line
+  if(sum) {
+    sum.textContent = events.length
+      ? (events.length+' event(s) · '+cDet+' detected · '+cCon+' confirmed · '+cRej+' rejected')
+      : 'no events'
+  }
+  // Inline HTML escape for safe interpolation
+  const esc = s => String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;')
+  // Inline-onclick safe escape for roll_id
+  const ridJs = rid => "'" + String(rid).replace(/\\/g,'\\\\').replace(/'/g,"\\'") + "'"
+  // Currency formatter — accepts null and renders em-dash
+  const fmt$ = v => (v == null || !isFinite(+v))
+    ? '<span style="color:#555c6e">—</span>'
+    : ((+v >= 0 ? '$' : '−$') + Math.abs(+v).toFixed(2))
+  // Date formatter
+  const fmtT = ts => ts ? new Date(ts).toLocaleString() : '<span style="color:#555c6e">—</span>'
+
+  // ── Summary cards (4-up grid) ────────────────────────────────────────
+  const card = (label, val, color) =>
+      '<div style="background:#0a0c0f;border:1px solid rgba(255,255,255,.06);border-radius:6px;padding:10px 12px">' +
+        '<div style="font-size:9px;color:#555c6e;font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-bottom:4px">'+label+'</div>' +
+        '<div style="font-size:18px;font-weight:700;color:'+color+';font-family:\'SF Mono\',monospace">'+val+'</div>' +
+      '</div>'
+  const summaryGrid =
+    '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px">' +
+      card('DETECTED',  String(cDet), '#f0c040') +
+      card('CONFIRMED', String(cCon), '#00d68f') +
+      card('REJECTED',  String(cRej), '#8b91a0') +
+      card('TOTAL CONFIRMED CREDITS', fmt$(totalConfCredit), totalConfCredit >= 0 ? '#00d68f' : '#ff4560') +
+    '</div>'
+
+  // ── Filter chips ─────────────────────────────────────────────────────
+  const f = window.__rollReviewFilter || 'all'
+  const chip = (key, label, count) => {
+    const active = (f === key)
+    return '<button onclick="setRollReviewFilter(\''+key+'\')" style="' +
+      'background:'+(active?'rgba(240,192,64,.18)':'transparent')+';' +
+      'color:'+(active?'#f0c040':'#8b91a0')+';' +
+      'border:1px solid '+(active?'rgba(240,192,64,.5)':'rgba(255,255,255,.10)')+';' +
+      'border-radius:4px;padding:4px 10px;font-size:11px;font-weight:'+(active?700:500)+
+      ';cursor:pointer;font-family:inherit">' + label + ' (' + count + ')</button>'
+  }
+  const filterRow =
+    '<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">' +
+      chip('all',       'All',       events.length) +
+      chip('detected',  'Detected',  cDet) +
+      chip('confirmed', 'Confirmed', cCon) +
+      chip('rejected',  'Rejected',  cRej) +
+    '</div>'
+
+  // ── Filtered table ───────────────────────────────────────────────────
+  const filtered = (f === 'all') ? events : events.filter(e => e.status === f)
+
+  if(!filtered.length) {
+    body.innerHTML = summaryGrid + filterRow +
+      '<div style="padding:18px;text-align:center;color:#555c6e;font-size:11px;background:#0a0c0f;border:1px dashed rgba(255,255,255,.08);border-radius:6px">' +
+        (events.length ? 'No events match the “'+f+'” filter.' : 'No roll events yet. Detected rolls will appear here after a Fidelity CSV import.') +
+      '</div>'
+    return
+  }
+
+  // Status pill helper
+  const statusPill = s => {
+    const map = {
+      detected:  { bg:'rgba(240,192,64,.18)',  fg:'#f0c040', bd:'rgba(240,192,64,.5)',  lbl:'DETECTED' },
+      confirmed: { bg:'rgba(0,214,143,.18)',   fg:'#00d68f', bd:'rgba(0,214,143,.5)',   lbl:'CONFIRMED' },
+      rejected:  { bg:'rgba(139,145,160,.14)', fg:'#8b91a0', bd:'rgba(139,145,160,.35)',lbl:'REJECTED' }
+    }
+    const x = map[s] || map.detected
+    return '<span style="background:'+x.bg+';color:'+x.fg+';border:1px solid '+x.bd+';padding:2px 6px;border-radius:3px;font-size:9px;font-weight:800;letter-spacing:.07em">'+x.lbl+'</span>'
+  }
+  // Confidence chip (color-coded against thresholds)
+  const confChip = c => {
+    const v = +c || 0
+    const HIGH = (window.GT && window.GT.ROLL_CONF_HIGH) || 70
+    const MED  = (window.GT && window.GT.ROLL_CONF_MEDIUM) || 50
+    const col = v >= HIGH ? '#00d68f' : v >= MED ? '#f0c040' : '#8b91a0'
+    return '<span style="color:'+col+';font-weight:700">'+v+'%</span>'
+  }
+  // Action buttons per row, dispatching by status
+  const actionsFor = ev => {
+    const rid = ridJs(ev.roll_id)
+    if(ev.status === 'detected') {
+      return  '<button onclick="confirmRollDetection('+rid+')" style="background:#00d68f;color:#0a0c0f;border:none;border-radius:3px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;margin-right:3px">Confirm</button>' +
+              '<button onclick="adjustRollDetection('+rid+')"  style="background:transparent;color:#f0c040;border:1px solid rgba(240,192,64,.5);border-radius:3px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;margin-right:3px">Adjust</button>' +
+              '<button onclick="rejectRollDetection('+rid+')"  style="background:transparent;color:#8b91a0;border:1px solid rgba(139,145,160,.35);border-radius:3px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit">Reject</button>'
+    }
+    if(ev.status === 'confirmed') {
+      return  '<button onclick="editConfirmedRollCredit('+rid+')" style="background:transparent;color:#4da6ff;border:1px solid rgba(77,166,255,.45);border-radius:3px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit">Edit credit</button>'
+    }
+    if(ev.status === 'rejected') {
+      return  '<button onclick="reopenRollDetection('+rid+')" style="background:transparent;color:#f0c040;border:1px solid rgba(240,192,64,.5);border-radius:3px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit">Reopen</button>'
+    }
+    return ''
+  }
+  // Method badge — abbreviated source label
+  const methodLbl = m => m === 'closed_lot_proceeds' ? 'closed-lot'
+                      : m === 'mark_diff'           ? 'mark-diff'
+                      : m === 'manual_required'     ? 'manual'
+                      : (m || '—')
+  // Contract description "UBS 42.5 May-15-2026"
+  const contractDesc = (sym, k, exp) => esc(sym)+' '+(+k).toFixed(2)+(exp ? ' '+esc(exp) : '')
+
+  // Table header (single-row sticky-ish; flex grid for compact dense data)
+  const th = s => '<th style="text-align:left;padding:6px 8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#555c6e;border-bottom:1px solid rgba(255,255,255,.10);background:#0a0c0f;white-space:nowrap">'+s+'</th>'
+  const td = (h, c, extra) => '<td style="padding:6px 8px;font-size:11px;color:'+(c||'#e8eaf0')+';border-bottom:1px solid rgba(255,255,255,.04);'+(extra||'')+'">'+h+'</td>'
+
+  let rows = ''
+  for(const ev of filtered) {
+    const old_d = contractDesc(ev.underlying, ev.old_strike, ev.old_expiry)
+    const new_d = contractDesc(ev.underlying, ev.new_strike, ev.new_expiry)
+    const dirArrow = (+ev.old_strike < +ev.new_strike) ? '↑' : (+ev.old_strike > +ev.new_strike) ? '↓' : '→'
+    rows += '<tr>' +
+      td(statusPill(ev.status)) +
+      td(confChip(ev.confidence)) +
+      td('<span style="font-weight:700">'+esc(ev.underlying||'?')+'</span>') +
+      td('<span style="font-family:\'SF Mono\',monospace;font-size:10px;color:#8b91a0">'+old_d+'</span>') +
+      td('<span style="color:#f0c040;font-weight:700">'+dirArrow+'</span>', null, 'text-align:center;padding:6px 4px') +
+      td('<span style="font-family:\'SF Mono\',monospace;font-size:10px;color:#e8eaf0">'+new_d+'</span>') +
+      td(String(ev.qty || ev.new_qty || ''), '#8b91a0', 'text-align:right;font-family:\'SF Mono\',monospace') +
+      td('<span style="color:#8b91a0">'+esc(ev.rollLevelHit || '?')+'</span>', null, 'text-align:center') +
+      td(fmt$(ev.estimatedCredit), null, 'text-align:right;font-family:\'SF Mono\',monospace') +
+      td(fmt$(ev.confirmedCredit), ev.status === 'confirmed' ? '#00d68f' : null, 'text-align:right;font-family:\'SF Mono\',monospace') +
+      td('<span title="'+esc(ev.creditNote||'')+'" style="color:#8b91a0;font-size:10px">'+esc(methodLbl(ev.creditMethod))+'</span>', null, 'text-align:center') +
+      td('<span style="color:#555c6e;font-size:10px">'+fmtT(ev.timestamp)+'</span>') +
+      td(actionsFor(ev), null, 'text-align:right;white-space:nowrap') +
+    '</tr>'
+  }
+  const table =
+    '<div style="overflow-x:auto;background:#0a0c0f;border:1px solid rgba(255,255,255,.06);border-radius:6px">' +
+      '<table style="width:100%;border-collapse:collapse;min-width:1100px">' +
+        '<thead><tr>' +
+          th('Status') + th('Conf') + th('Underlying') + th('Old contract') +
+          th('') + th('New contract') + th('Qty') + th('Hit') +
+          th('Estimated') + th('Confirmed') + th('Method') + th('Detected') + th('Actions') +
+        '</tr></thead>' +
+        '<tbody>'+rows+'</tbody>' +
+      '</table>' +
+    '</div>'
+
+  body.innerHTML = summaryGrid + filterRow + table
+}
+window.renderRollReview = renderRollReview
 
 // ── Entry snapshot capture (GOLDEN TICKET) ─────────────────────────────
 // For each FID_OPEN position:
@@ -10289,7 +10584,7 @@ if(typeof window !== 'undefined') {
   window.renderMiniChartForTrade             = renderMiniChartForTrade
 }
 
-setTimeout(() => { renderTrades(); renderPortfolioRisk(); if(typeof updateFidSyncUI==='function') updateFidSyncUI() }, 800)
+setTimeout(() => { renderTrades(); renderPortfolioRisk(); if(typeof updateFidSyncUI==='function') updateFidSyncUI(); if(typeof renderRollReview==='function') renderRollReview() }, 800)
 
 function saveTrades() {
   try { localStorage.setItem('gt_trades', JSON.stringify(TRADES)) } catch(e) {}
