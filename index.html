@@ -9369,6 +9369,61 @@ function drawMiniChart(canvas, levels, current, sym, t) {
   ctx.clearRect(0, 0, W, H)
 
   levels = Array.isArray(levels) ? levels.filter(l => l && typeof l.price === 'number' && isFinite(l.price) && l.price > 0) : []
+
+  // ── Crowding-driven LABEL HIDING (cascade by yieldOrder) ─────────────
+  // After the renderer has built the level list, decide which yieldable
+  // labels (ENTRY → yieldOrder 1, then R2 → yieldOrder 2) to drop based
+  // on PIXEL distance to non-yielding levels (STOP, R1, NOW). The chart
+  // height is small (~140px), so when 5 labels compete for ~120px of
+  // plot height we'd otherwise stack pills inside their gap threshold
+  // and the resolver would clip the lowest-priority pill off-screen.
+  // Hiding cleanly is preferable to clipping silently.
+  //
+  // Algorithm:
+  //   1. Project every level + current onto a temporary y axis built from
+  //      the SAME refs array we'll use for the real plot.
+  //   2. For each yieldable level, measure pixel distance to NOW and to
+  //      every non-yielding level (yieldOrder === 0).
+  //   3. If the closest such distance is below HIDE_PX (15px) → drop it.
+  //   4. Re-evaluate after each drop (a hidden level may free space for
+  //      the remaining yieldables to stay visible).
+  //
+  // The actual reference lines (STOP, R1, NOW) are NEVER hidden; only
+  // ENTRY/R2/BASE/BE labels (the muted/secondary tier) can yield.
+  if(levels.length && current > 0) {
+    const _refsAll = levels.map(l => l.price).concat([current])
+    let _mn = Math.min.apply(null, _refsAll), _mx = Math.max.apply(null, _refsAll)
+    if(_mx > _mn) {
+      const _spanT = _mx - _mn, _bufT = _spanT * 0.22
+      _mn -= _bufT; _mx += _bufT
+      const _padT = 10, _padB = 10
+      const _Happrox = Math.max(100, canvas.clientHeight || canvas.offsetHeight || 140)
+      const _plotH = _Happrox - _padT - _padB
+      const _yT = v => _padT + _plotH * (1 - (v - _mn) / (_mx - _mn))
+      const HIDE_PX = 15
+      // Pixel y of the immutable anchors (NOW + non-yielding levels).
+      const anchorYs = []
+      anchorYs.push(_yT(current))
+      for(const l of levels) if(!l.yieldOrder || l.yieldOrder === 0) anchorYs.push(_yT(l.price))
+      // Cascade: order 1 (ENTRY/BASE) first, then order 2 (R2/BE).
+      const yieldKinds = [1, 2]
+      for(const order of yieldKinds) {
+        const candidates = levels.filter(l => l.yieldOrder === order)
+        for(const c of candidates) {
+          const cy = _yT(c.price)
+          let minD = Infinity
+          for(const ay of anchorYs) {
+            const d = Math.abs(cy - ay)
+            if(d < minD) minD = d
+          }
+          if(minD < HIDE_PX) {
+            c._hiddenLabel = true   // do not delete — line still draws; only the pill is suppressed
+          }
+        }
+      }
+    }
+  }
+
   const refs = levels.map(l => l.price).concat([current].filter(v => typeof v === 'number' && isFinite(v) && v > 0))
 
   if(!refs.length) {
@@ -9380,12 +9435,26 @@ function drawMiniChart(canvas, levels, current, sym, t) {
     return
   }
 
-  // Y-axis range spans every reference level with a small buffer
+  // Y-axis range spans every reference level with ADAPTIVE buffer:
+  //   • base padding 22% on each side so the most-extreme labels (STOP at
+  //     bottom, R2 at top) are not clipped against the plot border;
+  //   • EXTRA padding on the side AWAY from NOW so the dense label cluster
+  //     has more space. If NOW is in the bottom 1/3 of the level range,
+  //     pad the TOP more (R1/R2 cluster up there); if NOW is in the top
+  //     1/3, pad the BOTTOM more (STOP cluster down there). Strategy lines
+  //     stay anchored to true price; only the visible plot extents shift.
   let mn = Math.min.apply(null, refs)
   let mx = Math.max.apply(null, refs)
   if(!(mx > mn)) { mn = mn - 0.5; mx = mx + 0.5 }
-  const buf = (mx - mn) * 0.18
-  mn -= buf; mx += buf
+  const span = mx - mn
+  const baseBuf = span * 0.22
+  let bufLo = baseBuf, bufHi = baseBuf
+  if(current > 0 && span > 0) {
+    const rel = (current - mn) / span   // 0 = NOW at bottom, 1 = NOW at top
+    if(rel < 0.33)      bufHi += span * 0.10   // NOW low → extra room above for R1/R2
+    else if(rel > 0.67) bufLo += span * 0.10   // NOW high → extra room below for STOP
+  }
+  mn -= bufLo; mx += bufHi
 
   const pad = { t: 10, r: 86, b: 10, l: 6 }
   const plotW = W - pad.l - pad.r
@@ -9474,7 +9543,13 @@ function drawMiniChart(canvas, levels, current, sym, t) {
   }
 
   const raw = []
-  for(const l of levels) raw.push({ kind: l.kind, label: l.label, price: l.price, truthY: y(l.price) })
+  // Hidden labels (set by the crowding pass above) skip pill creation but
+  // their dashed reference line was already drawn — the level still anchors
+  // the chart, just without a label cluttering the right-edge labels.
+  for(const l of levels) {
+    if(l._hiddenLabel) continue
+    raw.push({ kind: l.kind, label: l.label, price: l.price, truthY: y(l.price) })
+  }
   if(current > 0) raw.push({ kind:'now', label:'NOW', price: current, truthY: y(current), isNow: true })
 
   // 2) Group by pixel-rounded truthY so equal / sub-pixel-equal prices
@@ -9516,9 +9591,16 @@ function drawMiniChart(canvas, levels, current, sym, t) {
   // downward — which dragged R1 past R2 and clipped at the bottom when
   // ATR was small. The new logic moves the LOWER-priority pill in
   // either direction so the higher-priority pill stays put.
-  const PRIO = { now:100, stop:80, r1:60, r2:60, nr:60, be:50, base:20, entry:20 }
+  // R1 and STOP are the actionable levels; R2 is informational/secondary
+  // so it yields ground when packing gets tight. ENTRY/BASE remain the
+  // muted bottom of the priority stack (they're usually hidden by the
+  // crowding pass above before they ever reach this resolver).
+  const PRIO = { now:100, stop:80, r1:60, nr:60, r2:40, be:50, base:20, entry:20 }
   const pillPriority = p => p.hasNow ? PRIO.now : Math.max.apply(null, p.items.map(i => PRIO[i.kind] || 0))
-  const MIN_GAP = 22
+  // MIN_GAP scales with the number of pills — tighter packing is allowed
+  // when there are many levels, but never below 16px (the height of a
+  // non-NOW pill, so abutting pills don't visually merge).
+  const MIN_GAP = Math.max(16, Math.min(22, Math.floor(plotH / Math.max(2, pills.length + 1))))
   for(let i = 1; i < pills.length; i++) {
     const delta = pills[i].pillY - pills[i-1].pillY
     if(delta < MIN_GAP) {
@@ -9552,13 +9634,32 @@ function drawMiniChart(canvas, levels, current, sym, t) {
   for(const p of pills) {
     p.pillY = Math.min(H - 12, Math.max(12, p.pillY))
   }
+  // Post-clamp re-resolve: clamping can re-introduce overlap at the
+  // edges. Run two more priority-aware passes in BOTH y-directions so
+  // the final visible stack honors the priority map (NOW > STOP > R1
+  // > R2 > BE > ENTRY/BASE) even after edge collisions.
+  for(let pass = 0; pass < 2; pass++) {
+    pills.sort((a,b) => a.pillY - b.pillY)
+    for(let i = 1; i < pills.length; i++) {
+      const delta = pills[i].pillY - pills[i-1].pillY
+      if(delta < MIN_GAP) {
+        const need = MIN_GAP - delta
+        const pa = pillPriority(pills[i-1])
+        const pb = pillPriority(pills[i])
+        if(pa >= pb) pills[i].pillY = Math.min(H - 12, pills[i].pillY + need)
+        else         pills[i-1].pillY = Math.max(12, pills[i-1].pillY - need)
+      }
+    }
+  }
 
   // 5) Render each pill at pillY with a leader line from pillY →
   //    anchorTruthY on the chart side.
   ctx.textBaseline = 'middle'
   for(const p of pills) {
     const isNow = p.hasNow
-    const pillH = isNow ? 20 : 16
+    // Slightly shorter non-NOW pills (was 16, now 14) to let more labels
+    // fit without colliding. NOW stays large + dominant.
+    const pillH = isNow ? 20 : 14
     const pillX = W - pad.r + 4
     const pillW = pad.r - 6
     const pillR = isNow ? 4 : 3
@@ -9625,24 +9726,33 @@ function drawMiniChart(canvas, levels, current, sym, t) {
       ctx.textAlign = 'right'
       ctx.fillText(priceText, pillX + pillW - 6, pillY)
     } else {
-      // Non-NOW pills: label + price on top row, optional % distance
-      // from NOW on a small bottom row. Distance uses the FULL-precision
-      // current value — text is the only thing we round.
+      // Non-NOW pills (pillH 14): single row with label LEFT, price + tiny
+      // % chip RIGHT on the same baseline. Dropping the two-row layout
+      // saves ~4px per pill so STOP / R1 / R2 / NOW can all coexist on
+      // the 140px chart without dynamic clipping.
       ctx.font = 'bold 10px "SF Mono", monospace'
       ctx.textAlign = 'left'
       ctx.fillStyle = styleColor
-      ctx.fillText(labelText, pillX + 5, pillY - 3)
+      ctx.fillText(labelText, pillX + 5, pillY)
       ctx.textAlign = 'right'
-      ctx.fillText(priceText, pillX + pillW - 5, pillY - 3)
+      ctx.fillText(priceText, pillX + pillW - 5, pillY)
       if(current > 0) {
-        const dist = p.items[0].price - current
-        const pct  = current > 0 ? (dist / current * 100) : 0
-        const chip = (pct >= 0 ? '+' : '') + pct.toFixed(1) + '%'
-        ctx.font = '8px "SF Mono", monospace'
-        ctx.textAlign = 'right'
-        const dimS = kindStyles[p.items[0].kind] || kindStyles.entry
-        ctx.fillStyle = dimS.dim
-        ctx.fillText(chip, pillX + pillW - 5, pillY + 5)
+        // Inline % chip just left of the price — only when there's space.
+        // Skipped on merged multi-kind pills (label is already long).
+        if(p.items.length === 1) {
+          const dist = p.items[0].price - current
+          const pct  = current > 0 ? (dist / current * 100) : 0
+          const chip = (pct >= 0 ? '+' : '') + pct.toFixed(1) + '%'
+          const labelW = ctx.measureText(labelText).width
+          const priceW = ctx.measureText(priceText).width
+          const slack  = pillW - labelW - priceW - 14
+          if(slack >= 22) {
+            ctx.font = '8px "SF Mono", monospace'
+            const dimS = kindStyles[p.items[0].kind] || kindStyles.entry
+            ctx.fillStyle = dimS.dim
+            ctx.fillText(chip, pillX + pillW - 5 - priceW - 5, pillY)
+          }
+        }
       }
     }
   }
@@ -9729,28 +9839,34 @@ function renderMiniChartForTrade(t) {
   // NOW remains the most prominent element via solid line + glowing dot.
   const levels = []
   if(phase === 'pre-roll') {
-    if(t.stop125Entry != null) levels.push({ kind:'stop', price:+t.stop125Entry, label:'STOP',  color:'#ff4560' })
-    if(entry > 0)              levels.push({ kind:'entry',price:entry,            label:'ENTRY', color:'#a6884c' })
-    if(t.roll05Entry != null)  levels.push({ kind:'r1',   price:+t.roll05Entry,   label:'R1',    color:'#00d68f' })
-    if(t.roll10Entry != null)  levels.push({ kind:'r2',   price:+t.roll10Entry,   label:'R2',    color:'#00a878' })
+    // yieldOrder marks WHICH labels can be hidden when the chart gets
+    // crowded, in cascade order. ENTRY yields first (it's redundant when
+    // close to NOW or R1); R2 yields second (R1 is the actionable level,
+    // R2 is informational). STOP / R1 / NOW are never yielded — they
+    // remain visible regardless of overlap. drawMiniChart performs the
+    // actual hide + collision resolution after measuring pixel positions.
+    if(t.stop125Entry != null) levels.push({ kind:'stop', price:+t.stop125Entry, label:'STOP',  color:'#ff4560', yieldOrder: 0 })
+    if(entry > 0)              levels.push({ kind:'entry',price:entry,            label:'ENTRY', color:'#a6884c', yieldOrder: 1 })
+    if(t.roll05Entry != null)  levels.push({ kind:'r1',   price:+t.roll05Entry,   label:'R1',    color:'#00d68f', yieldOrder: 0 })
+    if(t.roll10Entry != null)  levels.push({ kind:'r2',   price:+t.roll10Entry,   label:'R2',    color:'#00a878', yieldOrder: 2 })
     // R3 intentionally omitted from Trade Manager mini-chart per design.
     // Planner candidate table still shows R3 (entry + 2.0·ATR).
   } else {
     // Post-roll: focus on trailing stop, breakeven, new base, next roll.
     const rc = +t.rollCount || 1
     const activeStop = +t.activeStop
-    if(t.activeStop != null) levels.push({ kind:'stop', price:activeStop, label:'STOP', color:'#ff4560' })
+    if(t.activeStop != null) levels.push({ kind:'stop', price:activeStop, label:'STOP', color:'#ff4560', yieldOrder: 0 })
     // Suppress BE pill when it is within $0.01 of the active stop
     // (typically true when BE is the higher floor of the trailing
     // formula — duplicating the same line as STOP would just clutter).
     if(t.breakevenUnderlying != null) {
       const beDiff = Math.abs(+t.breakevenUnderlying - activeStop)
-      if(beDiff > 0.01) levels.push({ kind:'be', price:+t.breakevenUnderlying, label:'BE', color:'#ff8c42' })
+      if(beDiff > 0.01) levels.push({ kind:'be', price:+t.breakevenUnderlying, label:'BE', color:'#ff8c42', yieldOrder: 2 })
     }
-    if(t.newBase != null) levels.push({ kind:'base', price:+t.newBase, label:'BASE', color:'#a6884c' })
+    if(t.newBase != null) levels.push({ kind:'base', price:+t.newBase, label:'BASE', color:'#a6884c', yieldOrder: 1 })
     if(rc < 3) {
       const nextRoll = rc === 1 ? t.roll10Entry : rc === 2 ? t.roll20Entry : null
-      if(nextRoll != null) levels.push({ kind:'nr', price:+nextRoll, label:'NEXT ROLL', color:'#00d68f' })
+      if(nextRoll != null) levels.push({ kind:'nr', price:+nextRoll, label:'NEXT ROLL', color:'#00d68f', yieldOrder: 0 })
     }
   }
 
