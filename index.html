@@ -3771,138 +3771,193 @@ async function saveAllToFirebase() {
 // Load ALL platform data from Firebase
 async function loadFromFirebase() {
   if(!window.FBUID) return
-  try {
-    const data = await fbLoad('platform')
-    if(!data) { console.log('Firebase: no cloud data yet'); return }
-
-    // OV data
-    if(data.ov_data && data.ov_data.ov) {
-      const localSaved = JSON.parse(localStorage.getItem('gt_ov_data') || '{}')
-      const cloudTs = data.savedAt || 0
-      const localTs = localSaved.savedAt || 0
-      if(cloudTs > localTs) {
-        Object.entries(data.ov_data.ov).forEach(([k,v]) => { OV[k] = v })
-        localStorage.setItem('gt_ov_data', JSON.stringify(data.ov_data))
-        const el = document.getElementById('ov-last-update')
-        if(el && data.ov_data.importedAt) el.textContent = 'Last import: ' + new Date(data.ov_data.importedAt).toLocaleString()
-        runFilter()
+  // Helper: runs a hydration block in its own try/catch so one bad
+  // field (malformed risk object, unexpected type on a callable, etc.)
+  // doesn't abort the rest of the restore. Logs a recovery message
+  // with the block name + error so regressions are self-diagnosing.
+  // The previous version wrapped EVERYTHING in one try, which meant a
+  // single "{} is not a function" anywhere would silently skip
+  // roll_ledger / price_history / etc. restoration on cold load.
+  const _step = (name, fn) => {
+    try { fn() }
+    catch(e) {
+      console.warn('[FB-LOAD] recovered from "'+name+'" error — continuing with other blocks:', (e && e.message) || e, e && e.stack)
+    }
+  }
+  // Callable guard — used around globals that aren't under our control
+  // (browser extensions, stale overrides, race-condition replacements
+  // can leave these as objects). Never throws; returns the result of
+  // fn() or a silent no-op.
+  const _call = (ref, label) => {
+    if(typeof ref === 'function') {
+      try { return ref() } catch(e) {
+        console.warn('[FB-LOAD] '+label+' threw:', e && e.message); return undefined
       }
     }
+    if(ref !== undefined) {
+      console.warn('[FB-LOAD] '+label+' is not callable (typeof='+(typeof ref)+') — skipping')
+    }
+    return undefined
+  }
 
-    // Also check users/{uid}/ov_data (written by Tampermonkey — cross-device sync)
-    try {
-      const ovDirect = await fbLoad('ov_data')
-      if(ovDirect && ovDirect.ov) {
-        const localTs = parseInt(localStorage.getItem('gt_ov_last_savedAt') || '0')
-        if(true || (ovDirect.savedAt || 0) > localTs) { // always load on startup
-          Object.entries(ovDirect.ov).forEach(([k,v]) => { OV[k] = v })
-          localStorage.setItem('gt_ov_data', JSON.stringify(ovDirect))
-          localStorage.setItem('gt_ov_last_savedAt', String(ovDirect.savedAt || Date.now()))
-          const ovEl2 = document.getElementById('ov-last-update')
-          if(ovEl2) ovEl2.textContent = 'Last import: ' + new Date(ovDirect.importedAt).toLocaleString() + ' (' + Object.keys(ovDirect.ov).length + ' tickers)'
-          runFilter()
-          console.log('GOGO: Loaded OV from cross-device path — ' + Object.keys(ovDirect.ov).length + ' tickers')
-        }
-      }
-    } catch(ovErr) { console.warn('OV direct load error:', ovErr.message) }
-    // Trades
-    if(data.trades && Array.isArray(data.trades)) {
-      TRADES = data.trades.map(t => (typeof normalizeUnderlying==='function' ? normalizeUnderlying({...t, rolls: Array.isArray(t.rolls) ? t.rolls : []}) : {...t, rolls: Array.isArray(t.rolls) ? t.rolls : []}))
-      localStorage.setItem('gt_trades', JSON.stringify(TRADES))
-      if(typeof renderTrades === 'function') renderTrades()
+  let data
+  try { data = await fbLoad('platform') }
+  catch(e) { console.warn('[FB-LOAD] fbLoad("platform") threw:', e && e.message); return }
+  if(!data) { console.log('Firebase: no cloud data yet'); return }
+  if(typeof data !== 'object') {
+    console.warn('[FB-LOAD] platform payload is not an object (typeof='+(typeof data)+') — aborting restore')
+    return
+  }
+
+  // ── OV data ────────────────────────────────────────────────────────
+  _step('ov_data', () => {
+    if(!(data.ov_data && data.ov_data.ov && typeof data.ov_data.ov === 'object')) return
+    const localSaved = JSON.parse(localStorage.getItem('gt_ov_data') || '{}')
+    const cloudTs = +data.savedAt || 0
+    const localTs = +localSaved.savedAt || 0
+    if(cloudTs <= localTs) return
+    Object.entries(data.ov_data.ov).forEach(([k,v]) => { OV[k] = v })
+    localStorage.setItem('gt_ov_data', JSON.stringify(data.ov_data))
+    const el = document.getElementById('ov-last-update')
+    if(el && data.ov_data.importedAt) el.textContent = 'Last import: ' + new Date(data.ov_data.importedAt).toLocaleString()
+    _call(window.runFilter, 'runFilter')
+  })
+
+  // ── OV direct (Tampermonkey cross-device path) ─────────────────────
+  try {
+    const ovDirect = await fbLoad('ov_data')
+    if(ovDirect && ovDirect.ov && typeof ovDirect.ov === 'object') {
+      Object.entries(ovDirect.ov).forEach(([k,v]) => { OV[k] = v })
+      localStorage.setItem('gt_ov_data', JSON.stringify(ovDirect))
+      localStorage.setItem('gt_ov_last_savedAt', String(ovDirect.savedAt || Date.now()))
+      const ovEl2 = document.getElementById('ov-last-update')
+      if(ovEl2 && ovDirect.importedAt) ovEl2.textContent = 'Last import: ' + new Date(ovDirect.importedAt).toLocaleString() + ' (' + Object.keys(ovDirect.ov).length + ' tickers)'
+      _call(window.runFilter, 'runFilter')
+      console.log('GOGO: Loaded OV from cross-device path — ' + Object.keys(ovDirect.ov).length + ' tickers')
+    }
+  } catch(ovErr) { console.warn('[FB-LOAD] ov_direct error — continuing:', ovErr && ovErr.message) }
+
+  // ── Trades ─────────────────────────────────────────────────────────
+  _step('trades', () => {
+    if(!(data.trades && Array.isArray(data.trades))) return
+    TRADES = data.trades.map(t => (typeof normalizeUnderlying==='function' ? normalizeUnderlying({...t, rolls: Array.isArray(t.rolls) ? t.rolls : []}) : {...t, rolls: Array.isArray(t.rolls) ? t.rolls : []}))
+    localStorage.setItem('gt_trades', JSON.stringify(TRADES))
+    if(typeof renderTrades === 'function') renderTrades()
     if(typeof updateTmRiskSummary === 'function') updateTmRiskSummary()
     if(typeof updateRiskMeter === 'function') updateRiskMeter()
     if(typeof initPlanner === 'function' && document.getElementById('sizer')?.classList.contains('active')) initPlanner()
-    }
-    // 10-Bagger watchlist
-    if(data.tenx && Array.isArray(data.tenx)) {
-      TENX = data.tenx
-      localStorage.setItem('gt_tenx', JSON.stringify(TENX))
-      if(typeof tenxRender === 'function') tenxRender()
-    }
-    // Closed trades
-    if(data.closed_trades && Array.isArray(data.closed_trades)) {
-      CLOSED_TRADES = data.closed_trades
-      localStorage.setItem('gt_closed_trades', JSON.stringify(CLOSED_TRADES))
-    }
+  })
 
-    // Rebalancer accounts
-    if(data.reb_accounts && Array.isArray(data.reb_accounts)) {
-      REB_ACCOUNTS = data.reb_accounts
-      localStorage.setItem('gt_reb_accounts', JSON.stringify(REB_ACCOUNTS))
-      setTimeout(() => rebCalc(), 500)
-    }
+  // ── 10-Bagger watchlist ────────────────────────────────────────────
+  _step('tenx', () => {
+    if(!(data.tenx && Array.isArray(data.tenx))) return
+    TENX = data.tenx
+    localStorage.setItem('gt_tenx', JSON.stringify(TENX))
+    if(typeof tenxRender === 'function') tenxRender()
+  })
 
-    // Risk settings
-  // Risk settings
-  if(data.risk) {
-    var rb = data.risk.budget || data.risk.acct_risk
+  // ── Closed trades ──────────────────────────────────────────────────
+  _step('closed_trades', () => {
+    if(!(data.closed_trades && Array.isArray(data.closed_trades))) return
+    CLOSED_TRADES = data.closed_trades
+    localStorage.setItem('gt_closed_trades', JSON.stringify(CLOSED_TRADES))
+  })
+
+  // ── Rebalancer accounts ────────────────────────────────────────────
+  _step('reb_accounts', () => {
+    if(!(data.reb_accounts && Array.isArray(data.reb_accounts))) return
+    REB_ACCOUNTS = data.reb_accounts
+    localStorage.setItem('gt_reb_accounts', JSON.stringify(REB_ACCOUNTS))
+    setTimeout(() => { _call(window.rebCalc, 'rebCalc') }, 500)
+  })
+
+  // ── Risk settings (budget, n_trades, delta, atr_mult, gt_stop_mult, acct, riskpct) ──
+  _step('risk', () => {
+    if(!(data.risk && typeof data.risk === 'object' && !Array.isArray(data.risk))) return
+    const r = data.risk
+    const rb = r.budget || r.acct_risk
     if(rb) { localStorage.setItem('gt_risk_budget', rb); var el=document.getElementById('risk-budget'); if(el) el.value=rb }
-    if(data.risk.n_trades) { localStorage.setItem('gt_risk_n_trades', data.risk.n_trades); var el2=document.getElementById('risk-n-trades'); if(el2) el2.value=data.risk.n_trades }
-    if(data.risk.delta) { localStorage.setItem('gt_risk_delta', data.risk.delta); var el3=document.getElementById('delta'); if(el3) el3.value=data.risk.delta }
-    if(data.risk.atr_mult) window.GT_ATR_MULT = data.risk.atr_mult
-    // Stop ATR multiplier — restored through the canonical setter so
-    // the <select>, localStorage, and every downstream surface stay in
-    // sync. Unknown / legacy values fall back to the 1.25 default.
-    if(data.risk.gt_stop_mult && typeof window.setGTStopMult === 'function') {
-      window.setGTStopMult(+data.risk.gt_stop_mult)
+    if(r.n_trades) { localStorage.setItem('gt_risk_n_trades', r.n_trades); var el2=document.getElementById('risk-n-trades'); if(el2) el2.value=r.n_trades }
+    if(r.delta)    { localStorage.setItem('gt_risk_delta', r.delta); var el3=document.getElementById('delta'); if(el3) el3.value=r.delta }
+    if(r.atr_mult) window.GT_ATR_MULT = r.atr_mult
+    // Stop ATR multiplier — restored through the canonical setter.
+    // Only call when the payload value is a number/string that parses
+    // to a finite number; setGTStopMult's own normalizer will reject
+    // out-of-range values silently.
+    if(r.gt_stop_mult != null && typeof window.setGTStopMult === 'function') {
+      const n = parseFloat(r.gt_stop_mult)
+      if(isFinite(n)) window.setGTStopMult(n)
+      else console.warn('[FB-LOAD] risk.gt_stop_mult not numeric — skipping:', r.gt_stop_mult)
     }
-    if(data.risk.acct) { localStorage.setItem('gt_acct', data.risk.acct); var el4=document.getElementById('acct'); if(el4) el4.value=data.risk.acct }
-    if(data.risk.riskpct) { localStorage.setItem('gt_riskpct', data.risk.riskpct); var el5=document.getElementById('riskpct'); if(el5) el5.value=data.risk.riskpct }
-  }
-  // Watchlist
-  if(data.watchlist && Array.isArray(data.watchlist)) {
+    if(r.acct)    { localStorage.setItem('gt_acct', r.acct); var el4=document.getElementById('acct'); if(el4) el4.value=r.acct }
+    if(r.riskpct) { localStorage.setItem('gt_riskpct', r.riskpct); var el5=document.getElementById('riskpct'); if(el5) el5.value=r.riskpct }
+  })
+
+  // ── Watchlist ──────────────────────────────────────────────────────
+  _step('watchlist', () => {
+    if(!(data.watchlist && Array.isArray(data.watchlist))) return
     localStorage.setItem('gt_scr_watchlist', JSON.stringify(data.watchlist))
-  }
-  if(typeof loadInternalResults==='function') loadInternalResults(data)
-  if(data.planner_candidates && Array.isArray(data.planner_candidates)) {
+  })
+
+  // ── Internal results (hoists its own guards) ───────────────────────
+  _step('internal_results', () => {
+    if(typeof loadInternalResults === 'function') loadInternalResults(data)
+    else if(loadInternalResults !== undefined) {
+      console.warn('[FB-LOAD] loadInternalResults is not callable (typeof='+(typeof loadInternalResults)+')')
+    }
+  })
+
+  // ── Planner candidates ─────────────────────────────────────────────
+  _step('planner_candidates', () => {
+    if(!(data.planner_candidates && Array.isArray(data.planner_candidates))) return
     PLANNER_CANDIDATES = data.planner_candidates
     localStorage.setItem('gt_planner_candidates', JSON.stringify(PLANNER_CANDIDATES))
-  }
-  // Roll Engine ledger restore. Cloud version wins on cold load — same
-  // policy as the rest of the platform state. The in-memory window.ROLL_LEDGER
-  // is rebuilt so the next render picks up pending detections.
-  if(data.roll_ledger && Array.isArray(data.roll_ledger.events)) {
+  })
+
+  // ── Roll Engine ledger restore ─────────────────────────────────────
+  _step('roll_ledger', () => {
+    if(!(data.roll_ledger && typeof data.roll_ledger === 'object' && Array.isArray(data.roll_ledger.events))) return
     window.ROLL_LEDGER = data.roll_ledger
     localStorage.setItem('gt_roll_ledger', JSON.stringify(window.ROLL_LEDGER))
     console.log('[ROLL-ENGINE] hydrated from Firebase: '+data.roll_ledger.events.length+' event(s)')
-    try { if(typeof renderRollReview === 'function') renderRollReview() } catch(e) {}
-  }
-  // Stop Comparison price history (merge, prefer cloud points since they
-  // can only have been added by live refreshes which always append).
-  if(data.price_history && typeof data.price_history === 'object') {
-    try {
-      const merged = window.PRICE_HISTORY || {}
-      for(const sym of Object.keys(data.price_history)) {
-        const cloudArr = Array.isArray(data.price_history[sym]) ? data.price_history[sym] : []
-        const localArr = Array.isArray(merged[sym]) ? merged[sym] : []
-        // De-dupe by ts (approx second) merging both streams
-        const seen = new Set()
-        const combined = []
-        for(const pt of [...localArr, ...cloudArr]) {
-          if(!pt || typeof pt.ts !== 'number' || typeof pt.px !== 'number') continue
-          const k = Math.floor(pt.ts / 1000)
-          if(seen.has(k)) continue
-          seen.add(k); combined.push({ ts: +pt.ts, px: +pt.px })
-        }
-        combined.sort((a,b) => a.ts - b.ts)
-        const cap = (window.GT && window.GT.PRICE_HISTORY_MAX_PER_SYM) || 500
-        if(combined.length > cap) combined.splice(0, combined.length - cap)
-        merged[sym] = combined
-      }
-      window.PRICE_HISTORY = merged
-      localStorage.setItem('gt_price_history', JSON.stringify(merged))
-      console.log('[STOP-COMP] hydrated price history from Firebase:', Object.keys(merged).length, 'symbol(s)')
-      try { if(typeof renderStopComparison === 'function') renderStopComparison() } catch(e) {}
-    } catch(e) { console.warn('[STOP-COMP] price history merge skipped:', e.message) }
-  }
-  // Update UI after Firebase restore
-  if(typeof updateRiskMeter === 'function') { setTimeout(updateRiskMeter, 100) }
-  if(typeof updateTmRiskSummary === 'function') { setTimeout(updateTmRiskSummary, 100) }
+    if(typeof renderRollReview === 'function') renderRollReview()
+  })
 
-    setApi('Loaded from Firebase ✓ (' + new Date(data.savedAt).toLocaleTimeString() + ')', 'ok')
-    console.log('Firebase: loaded data saved at', new Date(data.savedAt).toLocaleString())
-  } catch(e) { console.warn('loadFromFirebase error:', e.message) }
+  // ── Stop Comparison price history (merge) ──────────────────────────
+  _step('price_history', () => {
+    if(!(data.price_history && typeof data.price_history === 'object' && !Array.isArray(data.price_history))) return
+    const merged = window.PRICE_HISTORY || {}
+    for(const sym of Object.keys(data.price_history)) {
+      const cloudArr = Array.isArray(data.price_history[sym]) ? data.price_history[sym] : []
+      const localArr = Array.isArray(merged[sym]) ? merged[sym] : []
+      const seen = new Set()
+      const combined = []
+      for(const pt of [...localArr, ...cloudArr]) {
+        if(!pt || typeof pt.ts !== 'number' || typeof pt.px !== 'number') continue
+        const k = Math.floor(pt.ts / 1000)
+        if(seen.has(k)) continue
+        seen.add(k); combined.push({ ts: +pt.ts, px: +pt.px })
+      }
+      combined.sort((a,b) => a.ts - b.ts)
+      const cap = (window.GT && window.GT.PRICE_HISTORY_MAX_PER_SYM) || 500
+      if(combined.length > cap) combined.splice(0, combined.length - cap)
+      merged[sym] = combined
+    }
+    window.PRICE_HISTORY = merged
+    localStorage.setItem('gt_price_history', JSON.stringify(merged))
+    console.log('[STOP-COMP] hydrated price history from Firebase:', Object.keys(merged).length, 'symbol(s)')
+    if(typeof renderStopComparison === 'function') renderStopComparison()
+  })
+
+  // ── Post-restore UI refresh ────────────────────────────────────────
+  _step('post_restore_ui', () => {
+    if(typeof updateRiskMeter      === 'function') setTimeout(updateRiskMeter, 100)
+    if(typeof updateTmRiskSummary === 'function') setTimeout(updateTmRiskSummary, 100)
+    if(typeof setApi === 'function') {
+      setApi('Loaded from Firebase ✓ (' + new Date(data.savedAt || Date.now()).toLocaleTimeString() + ')', 'ok')
+    }
+    console.log('Firebase: loaded data saved at', new Date(data.savedAt || Date.now()).toLocaleString())
+  })
 }
 
 // Auto-save to Firebase after key actions (debounced)
