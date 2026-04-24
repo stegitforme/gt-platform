@@ -637,9 +637,8 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
     </div>
   </div>
 
-</div>
-
 </div><!-- end screener-ovtlyr-panel -->
+
 <div id="screener-internal-panel" style="display:none">
   <!-- Internal Command Bar -->
   <div style="display:flex;gap:8px;align-items:center;padding:10px 14px;background:#0d1117;border-radius:8px;border:1px solid #1e2d3d;margin-bottom:10px;flex-wrap:wrap">
@@ -715,7 +714,8 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
       <span id="int-bar-label" style="font-size:11px;color:#555c6e">Fetching data...</span>
     </div>
   </div>
-</div>
+</div><!-- end screener-internal-panel -->
+</div><!-- end #screener (page wrapper). Before this fix the closing tag lived at line 642 and closed #screener too early — the INTERNAL panel ended up as a SIBLING of #screener instead of nested inside, so hiding the Screener tab via the page switcher left the INTERNAL panel visible on Planner / Trade Manager / etc. -->
 <!-- &#9552;&#9552;&#9552; POSITION SIZER &#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552; -->
 <div id="sizer" class="sizer-page">
 <!-- LEFT RAIL — sticky risk-budget summary -->
@@ -7662,34 +7662,75 @@ if(typeof window !== 'undefined') window.runInternalScreen = runInternalScreen
 // entry point so the Apply button, the sort click handler, and any
 // programmatic caller all produce identical visible sets.
 function runInternalFilter() {
-  var minScore     = +document.getElementById('int-f-score')?.value     || 0
-  var priceMinStr  = document.getElementById('int-f-price-min')?.value
-  var priceMaxStr  = document.getElementById('int-f-price-max')?.value
-  var priceMin     = priceMinStr !== '' && priceMinStr != null ? +priceMinStr : null
-  var priceMax     = priceMaxStr !== '' && priceMaxStr != null ? +priceMaxStr : null
-  var minVolM      = +document.getElementById('int-f-vol')?.value        || 0
-  var maxSpreadPct = +document.getElementById('int-f-spread')?.value     || 100
-  var trendSel     = document.getElementById('int-f-trend')?.value       || ''
-  var sector       = document.getElementById('int-f-sector')?.value      || ''
-  var noEarn       = document.getElementById('int-f-earn')?.checked      || false
+  // Coerce form values with explicit helpers. parseFloat over `+x` so an
+  // empty string reads as NaN (not 0), letting us distinguish "blank"
+  // from "zero" for the price range bounds — previously `+''` = 0 which
+  // could accidentally enforce a zero floor/ceiling.
+  var _num = function(id, def) {
+    var el = document.getElementById(id)
+    if(!el) return def
+    var v = parseFloat(el.value)
+    return isFinite(v) ? v : def
+  }
+  var _str = function(id) {
+    var el = document.getElementById(id)
+    return el ? String(el.value || '') : ''
+  }
+  var _bool = function(id) {
+    var el = document.getElementById(id)
+    return !!(el && el.checked)
+  }
+  var minScore     = _num('int-f-score', 0)
+  var priceMinEl   = document.getElementById('int-f-price-min')
+  var priceMaxEl   = document.getElementById('int-f-price-max')
+  var priceMin     = priceMinEl && priceMinEl.value !== '' ? parseFloat(priceMinEl.value) : null
+  var priceMax     = priceMaxEl && priceMaxEl.value !== '' ? parseFloat(priceMaxEl.value) : null
+  if(priceMin != null && !isFinite(priceMin)) priceMin = null
+  if(priceMax != null && !isFinite(priceMax)) priceMax = null
+  var minVolM      = _num('int-f-vol', 0)
+  var maxSpreadPct = _num('int-f-spread', 100)
+  var trendSel     = _str('int-f-trend')   // 'up' | 'down' | ''
+  var sector       = _str('int-f-sector')
+  var noEarn       = _bool('int-f-earn')
+
+  // Per-gate counters so we can diagnose why a specific row survived or
+  // didn't. Printed as a single compact summary at the end.
+  var counters = { input:0, outScore:0, outPrice:0, outVol:0, outSpread:0, outTrend:0, outSector:0, outEarn:0, passed:0 }
+
   var filtered = (INTERNAL_RESULTS || []).filter(function(r) {
     if(!r) return false
-    var gt    = +r.gtScore    || +(r.score && r.score.total) || 0
-    var px    = +r.price      || +(r.score && r.score.price) || 0
-    var vol   = +r.volume     || 0
-    var sp    = (r.spreadPct == null) ? null : +r.spreadPct
-    var trd   = +r.trendScore || +(r.score && r.score.trend) || 0
-    if(gt < minScore) return false
-    if(priceMin != null && isFinite(priceMin) && px < priceMin) return false
-    if(priceMax != null && isFinite(priceMax) && px > priceMax) return false
-    if(minVolM > 0 && vol < minVolM * 1e6) return false
-    if(sp != null && sp > maxSpreadPct) return false   // null-spread rows pass
-    if(trendSel === 'up'   && trd < 15) return false
-    if(trendSel === 'down' && trd >= 10) return false
-    if(sector && r.sector !== sector && r.cluster !== sector) return false
-    if(noEarn && r.earningsDate) return false
+    counters.input++
+    // Trend score resolution — prefer top-level field (new shape),
+    // fall back to nested score.trend (legacy payloads). parseFloat
+    // handles stringified numbers; nullish → 0.
+    var gtRaw   = (r.gtScore != null) ? r.gtScore : (r.score && r.score.total)
+    var pxRaw   = (r.price   != null) ? r.price   : (r.score && r.score.price)
+    var trdRaw  = (r.trendScore != null) ? r.trendScore : (r.score && r.score.trend)
+    var gt  = parseFloat(gtRaw);  if(!isFinite(gt))  gt  = 0
+    var px  = parseFloat(pxRaw);  if(!isFinite(px))  px  = 0
+    var vol = parseFloat(r.volume); if(!isFinite(vol)) vol = 0
+    var trd = parseFloat(trdRaw); if(!isFinite(trd)) trd = 0
+    var sp  = (r.spreadPct == null) ? null : parseFloat(r.spreadPct)
+    if(sp != null && !isFinite(sp)) sp = null
+    // Gates — first-fail short-circuits
+    if(gt < minScore)                                       { counters.outScore++;  return false }
+    if(priceMin != null && px < priceMin)                   { counters.outPrice++;  return false }
+    if(priceMax != null && px > priceMax)                   { counters.outPrice++;  return false }
+    if(minVolM > 0 && vol < minVolM * 1e6)                  { counters.outVol++;    return false }
+    if(sp != null && sp > maxSpreadPct)                     { counters.outSpread++; return false }  // null-spread passes
+    if(trendSel === 'up'   && trd < 15)                     { counters.outTrend++;  return false }
+    if(trendSel === 'down' && trd >= 10)                    { counters.outTrend++;  return false }
+    if(sector && r.sector !== sector && r.cluster !== sector){counters.outSector++; return false }
+    if(noEarn && r.earningsDate)                            { counters.outEarn++;   return false }
+    counters.passed++
     return true
   })
+  // One-line diagnostic so users can verify in DevTools that filters are
+  // actually running AND that the form values were read correctly. If
+  // someone reports "trend filter didn't work", this log pinpoints
+  // whether the trendSel was read as expected and how many rows were
+  // dropped by the trend gate specifically.
+  console.log('[INT-FILTER] inputs:', { minScore, priceMin, priceMax, minVolM, maxSpreadPct, trendSel, sector, noEarn }, '· counters:', counters)
   renderInternalResults(filtered, true)
 }
 // Clear every filter input to its default, then re-render full list.
@@ -7729,6 +7770,40 @@ function quickAddInternalTrade(sym) {
   catch(e) { console.warn('[INT-SCREEN] goSize failed for', sym, e && e.message) }
 }
 window.quickAddInternalTrade = quickAddInternalTrade
+
+// Star handler + immediate re-render. sendToPlanner mutates
+// PLANNER_CANDIDATES synchronously (then kicks an async ATR refetch),
+// so re-invoking the current Internal Screener render right after
+// flips the button from "☆ Star" to the "already in Planner" ★
+// indicator without a page reload. If any filter is active we go
+// through runInternalFilter so the filtered-set sort state is
+// preserved; otherwise we render the raw INTERNAL_RESULTS with the
+// current sort applied.
+function starInternalCandidate(sym) {
+  if(!sym) return
+  try { if(typeof sendToPlanner === 'function') sendToPlanner(sym) }
+  catch(e) { console.warn('[INT-SCREEN] sendToPlanner failed for', sym, e && e.message) }
+  // Re-render after a tick so the DOM update reads the freshly-pushed
+  // PLANNER_CANDIDATES entry. Prefer runInternalFilter if any filter
+  // input is non-default so the user's filter state isn't lost.
+  try {
+    setTimeout(function(){
+      var anyFilterSet = (
+        (document.getElementById('int-f-score')?.value || '0') !== '0' ||
+        (document.getElementById('int-f-price-min')?.value || '') !== '' ||
+        (document.getElementById('int-f-price-max')?.value || '') !== '' ||
+        (document.getElementById('int-f-vol')?.value || '3') !== '3' ||
+        (document.getElementById('int-f-spread')?.value || '10') !== '10' ||
+        (document.getElementById('int-f-trend')?.value || '') !== '' ||
+        (document.getElementById('int-f-sector')?.value || '') !== '' ||
+        !!document.getElementById('int-f-earn')?.checked
+      )
+      if(anyFilterSet && typeof runInternalFilter === 'function') runInternalFilter()
+      else if(typeof renderInternalResults === 'function') renderInternalResults(INTERNAL_RESULTS)
+    }, 30)
+  } catch(e) {}
+}
+window.starInternalCandidate = starInternalCandidate
 
 function renderInternalResults(results, filtered) {
   var tbody = document.getElementById('int-body')
@@ -7779,13 +7854,17 @@ function renderInternalResults(results, filtered) {
                  : (+r.spreadPct).toFixed(1)+'%'
     var spCol  = (r.spreadPct == null) ? '#555c6e' : (+r.spreadPct > 10 ? '#ff4560' : +r.spreadPct > 5 ? '#ff8c42' : '#8b91a0')
     var earnStr = r.earningsDate ? '<span title="'+r.earningsDate+'" style="color:#ff8c42;font-size:10px">⚠</span>' : '<span style="color:#333a4a;font-size:10px">·</span>'
-    // Check Planner membership so the Star button reflects "already sent".
+    // Check Planner membership so the Star button reflects "already
+    // sent". Clicking Star now routes through starInternalCandidate,
+    // which calls sendToPlanner AND immediately re-renders the
+    // Internal Screener table so the button flips to ★ Starred
+    // without a page reload.
     var sentAlready = (typeof PLANNER_CANDIDATES !== 'undefined' && Array.isArray(PLANNER_CANDIDATES))
       ? PLANNER_CANDIDATES.some(function(c){ return c && c.sym === r.sym })
       : false
     var starBtn = sentAlready
-      ? '<span title="Already in Planner" style="display:inline-block;color:#00d68f;font-size:11px;padding:2px 6px;margin-right:3px">★</span>'
-      : '<button onclick="event.stopPropagation();sendToPlanner(\''+r.sym+'\');this.blur()" title="Send to Planner (adds to PLANNER_CANDIDATES with price + gtScore + auto-fetch ATR)" style="background:transparent;color:#f0c040;border:1px solid rgba(240,192,64,.45);border-radius:3px;padding:2px 7px;font-size:11px;font-weight:700;cursor:pointer;margin-right:3px;font-family:inherit">☆ Star</button>'
+      ? '<button onclick="event.stopPropagation();goSize(\''+r.sym+'\')" title="Already in Planner — click to open in Sizer" style="background:rgba(0,214,143,.14);color:#00d68f;border:1px solid rgba(0,214,143,.45);border-radius:3px;padding:2px 7px;font-size:11px;font-weight:700;cursor:pointer;margin-right:3px;font-family:inherit">★ Starred</button>'
+      : '<button onclick="event.stopPropagation();starInternalCandidate(\''+r.sym+'\');this.blur()" title="Send to Planner (adds to PLANNER_CANDIDATES with price + gtScore + auto-fetch ATR)" style="background:transparent;color:#f0c040;border:1px solid rgba(240,192,64,.45);border-radius:3px;padding:2px 7px;font-size:11px;font-weight:700;cursor:pointer;margin-right:3px;font-family:inherit">☆ Star</button>'
     var quickBtn = '<button onclick="event.stopPropagation();quickAddInternalTrade(\''+r.sym+'\')" title="Send to Planner + jump to Quick Size sizer (stop/R1/R2 use current Stop ATR setting)" style="background:#00d68f;color:#0a0c0f;border:none;border-radius:3px;padding:2px 8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">⚡ Quick Add</button>'
     return '<tr style="border-bottom:1px solid #0d1117;cursor:pointer" onclick="goSize(\''+r.sym+'\')">'+
       '<td style="padding:4px 10px;color:#555c6e;font-size:10px">'+(i+1)+'\x3C/td>'+
