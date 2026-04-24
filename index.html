@@ -6526,10 +6526,35 @@ async function refreshCandidateATRs() {
 // ── PLANNER SUMMARY CALC ─────────────────────────────────────────────────────
 // Reads current-open positions via getOpenBook() so numbers line up with the
 // authoritative source (Fidelity snapshot when present; legacy TRADES fallback).
+// Shared safe-call helper used by the risk-intelligence family.
+// Returns fn(...args) when fn is a function; otherwise logs ONCE per
+// dependency label and returns `fallback`. Never throws. Complements
+// the existing Array.isArray coercions by also surviving the case
+// where a dependency itself is not callable (a stale override, a
+// browser extension shadow, or an early pre-parse Firebase callback).
+var __riMissingLogged = window.__riMissingLogged || (window.__riMissingLogged = {})
+function __riSafeCall(fn, args, fallback, label) {
+  if(typeof fn === 'function') {
+    try { return fn.apply(null, args || []) }
+    catch(e) { console.warn('[RISK-INTEL] '+label+' threw:', e && e.message); return fallback }
+  }
+  if(fn !== undefined && !__riMissingLogged[label]) {
+    console.warn('[RISK-INTEL] dependency "'+label+'" is not callable (typeof='+(typeof fn)+') — using safe fallback')
+    __riMissingLogged[label] = true
+  }
+  return fallback
+}
 function calcDeployed() {
-  var open = (typeof getOpenBook === 'function') ? getOpenBook() : TRADES.filter(function(t){return t.status==="open"})
+  // getOpenBook is the preferred source — already guarded in-line +
+  // Array.isArray coerced below. Wrapped in __riSafeCall so if
+  // getOpenBook itself throws (rather than just returning a bad value)
+  // we still degrade to an empty book instead of bubbling up into
+  // renderRiskIntelligence → updateRiskMeter → Firebase hydration.
+  var open = (typeof getOpenBook === 'function')
+    ? __riSafeCall(getOpenBook, [], [], 'getOpenBook')
+    : (Array.isArray(window.TRADES) ? window.TRADES.filter(function(t){return t&&t.status==="open"}) : [])
   if(!Array.isArray(open)) open = []
-  return open.reduce(function(s,t){var d=t.delta||0.80;return s+(t.atr||0)*d*100*(t.cts||1)},0)
+  return open.reduce(function(s,t){var d=(t&&t.delta)||0.80;return s+((t&&t.atr)||0)*d*100*((t&&t.cts)||1)},0)
 }
 function calcSectorRisk(sector) {
   if(!sector||sector==="—") return 0
@@ -7022,11 +7047,25 @@ function addQuickSizeTradeToManager() {
 var CLUSTER_MAP = {'Tech':'AI/Tech','Communication':'AI/Tech','NVDA':'AI/Tech','AMD':'AI/Tech','AVGO':'AI/Tech','TSM':'AI/Tech','CLS':'AI/Tech','LRCX':'AI/Tech','SMCI':'AI/Tech','VRT':'AI/Tech','GLW':'AI/Tech','Financials':'Rates/Finance','HOOD':'Rates/Finance','BCS':'Rates/Finance','SKM':'Rates/Finance','GS':'Rates/Finance','JPM':'Rates/Finance','Energy':'Oil/Energy','XOM':'Oil/Energy','CVX':'Oil/Energy','Healthcare':'Healthcare','Industrials':'Industrial','EMBJ':'Industrial','Discretionary':'Consumer','AMZN':'Consumer','Space':'Space/Defense','LUNR':'Space/Defense','Staples':'Defensive','Utilities':'Defensive','REIT':'Defensive'}
 function getCluster(sym) { return CLUSTER_MAP[sym] || CLUSTER_MAP[getSector(sym)] || getSector(sym) || "Other" }
 function calcClusterRisk() {
-  var open = (typeof getOpenBook === 'function') ? getOpenBook() : TRADES.filter(function(t){return t.status==="open"})
+  var open = (typeof getOpenBook === 'function')
+    ? __riSafeCall(getOpenBook, [], [], 'getOpenBook')
+    : (Array.isArray(window.TRADES) ? window.TRADES.filter(function(t){return t&&t.status==="open"}) : [])
   if(!Array.isArray(open)) open = []
   var clusters={},total=0
-  open.forEach(function(t){var sym=rootTicker(t.ticker);var cl=getCluster(sym);var d=t.delta||0.80;var risk=(t.atr||0)*d*100*(t.cts||1);clusters[cl]=(clusters[cl]||0)+risk;total+=risk})
-  return {clusters,total}
+  open.forEach(function(t){
+    if(!t) return
+    // rootTicker / getCluster are function declarations elsewhere and
+    // normally hoisted. Guard them anyway so a stale override or an
+    // extension that shadows one of these globals can't take down the
+    // whole risk-intelligence chain.
+    var sym = __riSafeCall(rootTicker, [t.ticker], (t.ticker||''), 'rootTicker')
+    var cl  = __riSafeCall(getCluster, [sym], 'Other',           'getCluster')
+    var d   = (t.delta || 0.80)
+    var risk= (t.atr||0) * d * 100 * (t.cts||1)
+    clusters[cl] = (clusters[cl] || 0) + risk
+    total += risk
+  })
+  return {clusters: clusters, total: total}
 }
 function calcCandClusterRisk(sym,tradeRisk) {
   var cl=getCluster(sym);var e=calcClusterRisk();var cur=e.clusters[cl]||0
@@ -7034,33 +7073,97 @@ function calcCandClusterRisk(sym,tradeRisk) {
   return {cluster:cl,newClusterPct:newT>0?newC/newT*100:0}
 }
 function getRiskIntelligence() {
-  var budget=+localStorage.getItem("gt_risk_budget")||21000
-  var deployed=calcDeployed();var available=Math.max(0,budget-deployed)
-  var cr=calcClusterRisk();var clusters=cr.clusters;var total=cr.total
-  var defaultRisk=+document.getElementById("pl-default-risk")?.value||5500
-  var intel={warnings:[],suggestions:[],clusters:[]}
+  // Every dependency call goes through __riSafeCall so a single missing
+  // or malformed global ({} instead of a function, an extension that
+  // shadowed a helper, a TDZ access during an early Firebase-load
+  // callback, etc.) never takes down the whole risk-intelligence pass.
+  // Each safe call logs ONCE per missing dependency so regressions are
+  // still diagnosable without spamming the console.
+  //
+  // Normal case — every dependency is callable and well-formed — is
+  // BYTE-PRESERVED: same arithmetic, same output shape, same thresholds.
+  // Only the error paths change.
+  var intel = { warnings: [], suggestions: [], clusters: [] }
+
+  var budget = +localStorage.getItem("gt_risk_budget") || 21000
+
+  var deployed = __riSafeCall(calcDeployed, [], 0, 'calcDeployed')
+  if(typeof deployed !== 'number' || !isFinite(deployed)) deployed = 0
+  var available = Math.max(0, budget - deployed)
+
+  var cr = __riSafeCall(calcClusterRisk, [], { clusters: {}, total: 0 }, 'calcClusterRisk')
+  var clusters = (cr && cr.clusters && typeof cr.clusters === 'object') ? cr.clusters : {}
+  var total    = (cr && typeof cr.total === 'number' && isFinite(cr.total)) ? cr.total : 0
+
+  var defaultRisk = +document.getElementById("pl-default-risk")?.value || 5500
+
   // Cluster bars
-  Object.entries(clusters).sort(function(a,b){return b[1]-a[1]}).forEach(function(e){
-    var pct=total>0?Math.round(e[1]/total*100):0
-    intel.clusters.push({name:e[0],risk:Math.round(e[1]),pct})
-    if(pct>=50) intel.warnings.push({level:"high",msg:"⚠️ "+e[0]+": "+pct+"% of portfolio — very concentrated"})
-    else if(pct>=35) intel.warnings.push({level:"medium",msg:"⚠️ "+e[0]+": "+pct+"% — elevated concentration"})
+  try {
+    Object.entries(clusters)
+      .sort(function(a,b){ return (+b[1]||0) - (+a[1]||0) })
+      .forEach(function(e){
+        var riskVal = +e[1] || 0
+        var pct = total > 0 ? Math.round(riskVal / total * 100) : 0
+        intel.clusters.push({ name: e[0], risk: Math.round(riskVal), pct: pct })
+        if(pct >= 50)      intel.warnings.push({ level:"high",   msg:"⚠️ "+e[0]+": "+pct+"% of portfolio — very concentrated" })
+        else if(pct >= 35) intel.warnings.push({ level:"medium", msg:"⚠️ "+e[0]+": "+pct+"% — elevated concentration" })
+      })
+  } catch(e) { console.warn('[RISK-INTEL] cluster bar build failed:', e && e.message) }
+
+  // Suggested sizing — PLANNER_CANDIDATES coerced to [] if not array
+  var pc = Array.isArray(PLANNER_CANDIDATES) ? PLANNER_CANDIDATES : []
+  var candCount = pc.length
+  if(available > 0 && candCount > 0) {
+    var sug = Math.floor(available / candCount)
+    intel.suggestions.push("💡 $"+Math.round(available).toLocaleString()+" available ÷ "+candCount+" candidates = ~$"+sug.toLocaleString()+"/trade suggested")
+  } else if(available <= 0) {
+    intel.suggestions.push("🔴 No budget remaining — reduce or close positions first")
+  }
+
+  // Ticker concentration — wrap getOpenBook + rootTicker so stale
+  // overrides don't crash the whole call. Array.isArray coerce kept
+  // in line with the prior narrower fix.
+  var tickerRisks = {}
+  var _openForRisk = (typeof getOpenBook === 'function')
+    ? __riSafeCall(getOpenBook, [], [], 'getOpenBook')
+    : (Array.isArray(window.TRADES) ? window.TRADES.filter(function(t){return t&&t.status==="open"}) : [])
+  if(!Array.isArray(_openForRisk)) _openForRisk = []
+  _openForRisk.forEach(function(t){
+    if(!t) return
+    var sym = __riSafeCall(rootTicker, [t.ticker], (t.ticker||''), 'rootTicker')
+    var d   = (t.delta || 0.80)
+    tickerRisks[sym] = (tickerRisks[sym] || 0) + (t.atr||0) * d * 100 * (t.cts||1)
   })
-  // Suggested sizing
-  var candCount=PLANNER_CANDIDATES.length
-  if(available>0&&candCount>0){var sug=Math.floor(available/candCount);intel.suggestions.push("💡 $"+Math.round(available).toLocaleString()+" available ÷ "+candCount+" candidates = ~$"+sug.toLocaleString()+"/trade suggested")}
-  else if(available<=0) intel.suggestions.push("🔴 No budget remaining — reduce or close positions first")
-  // Ticker concentration
-  var tickerRisks={}
-  var _openForRisk=(typeof getOpenBook==='function')?getOpenBook():TRADES.filter(function(t){return t.status==="open"})
-  if(!Array.isArray(_openForRisk)) _openForRisk=[]
-  _openForRisk.forEach(function(t){var sym=rootTicker(t.ticker);var d=t.delta||0.80;tickerRisks[sym]=(tickerRisks[sym]||0)+(t.atr||0)*d*100*(t.cts||1)})
-  Object.entries(tickerRisks).forEach(function(e){var pct=total>0?Math.round(e[1]/total*100):0;if(pct>=20)intel.warnings.push({level:"medium",msg:"⚠️ "+e[0]+": "+pct+"% single-name concentration"})})
+  try {
+    Object.entries(tickerRisks).forEach(function(e){
+      var pct = total > 0 ? Math.round((+e[1]||0) / total * 100) : 0
+      if(pct >= 20) intel.warnings.push({ level:"medium", msg:"⚠️ "+e[0]+": "+pct+"% single-name concentration" })
+    })
+  } catch(e) { console.warn('[RISK-INTEL] ticker concentration build failed:', e && e.message) }
+
   return intel
 }
 function renderRiskIntelligence() {
   var panel=document.getElementById("pl-intel-panel");if(!panel)return
-  var intel=getRiskIntelligence();var html="";
+  // getRiskIntelligence is now defensively hardened, but wrap the whole
+  // render in a try/catch as a last line of defense so a partial UI
+  // failure here never aborts the Firebase-hydration block that called
+  // updateRiskMeter → renderRiskIntelligence.
+  var intel
+  try { intel = getRiskIntelligence() }
+  catch(e) {
+    console.warn('[RISK-INTEL] getRiskIntelligence threw — rendering empty panel:', e && e.message)
+    panel.innerHTML = '<div style="font-size:11px;color:#555c6e">✅ No concentration warnings\x3C/div>'
+    return
+  }
+  if(!intel || typeof intel !== 'object') {
+    panel.innerHTML = '<div style="font-size:11px;color:#555c6e">✅ No concentration warnings\x3C/div>'
+    return
+  }
+  intel.warnings   = Array.isArray(intel.warnings)   ? intel.warnings   : []
+  intel.suggestions= Array.isArray(intel.suggestions)? intel.suggestions: []
+  intel.clusters   = Array.isArray(intel.clusters)   ? intel.clusters   : []
+  var html=""
   if(intel.clusters.length){
     html+='<div style="font-size:10px;color:#555c6e;font-weight:600;letter-spacing:.08em;margin-bottom:6px">CLUSTER EXPOSURE\x3C/div>'
     intel.clusters.forEach(function(c){
