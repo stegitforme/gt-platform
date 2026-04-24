@@ -753,8 +753,10 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
           <th data-sort-key="sector" style="padding:6px 4px;text-align:left;cursor:pointer;user-select:none">Sector<span class="pl-sort-ind" style="margin-left:4px;color:#333a4a"></span></th>
           <th style="padding:6px 4px;text-align:right">ATR</th>
           <th data-sort-key="gt" title="GT Score — 0–10 scale (same as Screener). Weighted: trend 30% + momentum 25% + RS 20% + structure 15% + volume 10%. Color: ≥8 green, ≥6 amber, ≥4 orange, <4 red." style="padding:6px 4px;text-align:right;cursor:pointer;user-select:none">GT<span class="pl-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
-          <th data-sort-key="stop05" title="Stock stop at entry − 0.5 · ATR (based on current stock price)" style="padding:6px 4px;text-align:right;cursor:pointer;user-select:none">-.5 ATR<span class="pl-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
-          <th data-sort-key="stop10" title="Stock stop at entry − 1.0 · ATR (based on current stock price)" style="padding:6px 4px;text-align:right;cursor:pointer;user-select:none">-1 ATR<span class="pl-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
+          <th data-sort-key="stop125" title="Golden Ticket hard stop = entry − 1.25 · ATR (mechanical, no exceptions)" style="padding:6px 4px;text-align:right;cursor:pointer;user-select:none;color:#ff4560">STOP<span style="font-size:9px;color:#555c6e;margin-left:2px">−1.25</span><span class="pl-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
+          <th data-sort-key="roll05" title="Roll 1 marker = entry + 0.5 · ATR" style="padding:6px 4px;text-align:right;cursor:pointer;user-select:none;color:#00d68f">R1<span style="font-size:9px;color:#555c6e;margin-left:2px">+½</span><span class="pl-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
+          <th data-sort-key="roll10" title="Roll 2 marker = entry + 1.0 · ATR" style="padding:6px 4px;text-align:right;cursor:pointer;user-select:none;color:#00b080">R2<span style="font-size:9px;color:#555c6e;margin-left:2px">+1</span><span class="pl-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
+          <th data-sort-key="roll20" title="Roll 3 marker = entry + 2.0 · ATR" style="padding:6px 4px;text-align:right;cursor:pointer;user-select:none;color:#008c60">R3<span style="font-size:9px;color:#555c6e;margin-left:2px">+2</span><span class="pl-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
           <th style="padding:6px 4px;text-align:right">Delta</th>
           <th style="padding:6px 4px;text-align:right">RPC</th>
           <th style="padding:6px 4px;text-align:right">Risk $</th>
@@ -765,7 +767,7 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
           <th style="padding:6px 4px;text-align:center">Status</th>
           <th style="padding:6px 4px"></th>
         </tr></thead>
-        <tbody id="pl-cand-body"><tr><td colspan="15" style="padding:12px;text-align:center;color:#555c6e">Star stocks in Screener or add a ticker above</td></tr></tbody>
+        <tbody id="pl-cand-body"><tr><td colspan="17" style="padding:12px;text-align:center;color:#555c6e">Star stocks in Screener or add a ticker above</td></tr></tbody>
         <tfoot><tr style="border-top:1px solid #1e2d3d;font-weight:700">
           <td colspan="8" style="padding:6px 10px;font-size:11px;color:#555c6e">TOTAL NEW RISK</td>
           <td id="pl-cand-risk-total" style="padding:6px 4px;text-align:right;color:#f0c040">--</td>
@@ -1379,8 +1381,8 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 // the latest commit — your browser is serving CACHED older HTML.
 // Hard-reload: Cmd+Shift+R (Mac) / Ctrl+Shift+F5 (Win).
 window.__GT_BUILD = {
-  sha:   '555de90b1eb0f683de09f327ed615576f3742f17',
-  short: '555de90',
+  sha:   'c982c39a99de50c39ce39bd9782191077ebef4df',
+  short: 'c982c39',
   builtAt: new Date().toISOString()
 }
 ;(function(){
@@ -5646,6 +5648,29 @@ var PL_SORT_SPEC = {
   ticker:  { type:'text',    getVal: c => (c.sym || '').toUpperCase() },
   sector:  { type:'text',    getVal: (c, ctx) => (ctx.getSector ? ctx.getSector(c.sym) : '') || '' },
   gt:      { type:'numeric', getVal: c => (typeof GT_SCORES !== 'undefined' && GT_SCORES[c.sym] && typeof GT_SCORES[c.sym].score === 'number') ? GT_SCORES[c.sym].score : null },
+  // ── Golden Ticket planner column sort-keys ───────────────────────────
+  //   stop125 = current px − 1.25 · ATR  (the hard mechanical stop)
+  //   roll05  = current px + 0.5  · ATR  (Roll 1 marker)
+  //   roll10  = current px + 1.0  · ATR  (Roll 2 marker)
+  //   roll20  = current px + 2.0  · ATR  (Roll 3 marker)
+  // Legacy stop05 / stop10 kept for back-compat with any saved sort state.
+  stop125: { type:'numeric', getVal: c => {
+    const px = (typeof LIVE_PRICES !== 'undefined' && LIVE_PRICES[c.sym] && LIVE_PRICES[c.sym].price) || c.price || 0
+    return (px > 0 && c.atr > 0) ? (px - (window.GT ? window.GT.STOP_MULT : 1.25) * c.atr) : null
+  }},
+  roll05:  { type:'numeric', getVal: c => {
+    const px = (typeof LIVE_PRICES !== 'undefined' && LIVE_PRICES[c.sym] && LIVE_PRICES[c.sym].price) || c.price || 0
+    return (px > 0 && c.atr > 0) ? (px + (window.GT ? window.GT.ROLL_1_MULT : 0.5) * c.atr) : null
+  }},
+  roll10:  { type:'numeric', getVal: c => {
+    const px = (typeof LIVE_PRICES !== 'undefined' && LIVE_PRICES[c.sym] && LIVE_PRICES[c.sym].price) || c.price || 0
+    return (px > 0 && c.atr > 0) ? (px + (window.GT ? window.GT.ROLL_2_MULT : 1.0) * c.atr) : null
+  }},
+  roll20:  { type:'numeric', getVal: c => {
+    const px = (typeof LIVE_PRICES !== 'undefined' && LIVE_PRICES[c.sym] && LIVE_PRICES[c.sym].price) || c.price || 0
+    return (px > 0 && c.atr > 0) ? (px + (window.GT ? window.GT.ROLL_3_MULT : 2.0) * c.atr) : null
+  }},
+  // ── Legacy back-compat (unused by new UI) ────────────────────────────
   stop05:  { type:'numeric', getVal: c => {
     const px = (typeof LIVE_PRICES !== 'undefined' && LIVE_PRICES[c.sym] && LIVE_PRICES[c.sym].price) || c.price || 0
     return (px > 0 && c.atr > 0) ? (px - 0.5 * c.atr) : null
@@ -5936,7 +5961,7 @@ function renderCandidateTable() {
   var tbody = document.getElementById("pl-cand-body")
   if(!tbody) return
   if(!PLANNER_CANDIDATES.length){
-    tbody.innerHTML="<tr><td colspan='15' style='padding:12px;text-align:center;color:#555c6e'>Star stocks in Screener or add a ticker above\x3C/td>\x3C/tr>";
+    tbody.innerHTML="<tr><td colspan='17' style='padding:12px;text-align:center;color:#555c6e'>Star stocks in Screener or add a ticker above\x3C/td>\x3C/tr>";
     if(typeof updatePlSortIndicators === 'function') updatePlSortIndicators()
     return
   }
@@ -5991,13 +6016,18 @@ function renderCandidateTable() {
       if(b === 'flagged') return { txt:'E: \u26a0', col:'#f0c040', title:'Earnings flagged — no date available' }
       return { txt:'E: —', col:'#333a4a', title:'No earnings data' }
     })()
-    // Decision helpers per row — GT Score + stock stop levels.
-    //   entry = current stock price (LIVE_PRICES preferred, else c.price)
-    //   stop05 = entry - 0.5 · ATR   (matches Open Trades "-.5 ATR" ladder)
-    //   stop10 = entry - 1.0 · ATR
+    // Decision helpers per row — GT Score + GOLDEN TICKET planning levels.
+    //   entry  = current stock price (LIVE_PRICES preferred, else c.price)
+    //   stop125 = entry − 1.25 · ATR  (the hard mechanical stop)
+    //   roll05  = entry + 0.5  · ATR  (Roll 1 marker)
+    //   roll10  = entry + 1.0  · ATR  (Roll 2 marker)
+    //   roll20  = entry + 2.0  · ATR  (Roll 3 marker)
     var stockPx = (typeof LIVE_PRICES !== 'undefined' && LIVE_PRICES[sym] && LIVE_PRICES[sym].price) || c.price || 0
-    var stop05 = (stockPx > 0 && atr > 0) ? (stockPx - 0.5 * atr) : 0
-    var stop10 = (stockPx > 0 && atr > 0) ? (stockPx - 1.0 * atr) : 0
+    var _gt     = window.GT || { STOP_MULT:1.25, ROLL_1_MULT:0.5, ROLL_2_MULT:1.0, ROLL_3_MULT:2.0 }
+    var stop125 = (stockPx > 0 && atr > 0) ? (stockPx - _gt.STOP_MULT   * atr) : 0
+    var roll05  = (stockPx > 0 && atr > 0) ? (stockPx + _gt.ROLL_1_MULT * atr) : 0
+    var roll10  = (stockPx > 0 && atr > 0) ? (stockPx + _gt.ROLL_2_MULT * atr) : 0
+    var roll20  = (stockPx > 0 && atr > 0) ? (stockPx + _gt.ROLL_3_MULT * atr) : 0
     // GT_SCORES[sym].score is the raw 0-10 integer produced by
     // calcGTScore (weighted sum: trend 30% + mom 25% + RS 20% + struct 15% +
     // vol 10%, each sub-score 0-10). Displayed raw — same scale the
@@ -6014,8 +6044,10 @@ function renderCandidateTable() {
       "<td style='padding:5px 4px;color:#8b91a0;font-size:11px'>"+sector+"\x3C/td>"+
       "<td style='padding:5px 4px;text-align:right'>"+(atr>0?"$"+atr.toFixed(2):"—")+"\x3C/td>"+
       "<td style='padding:5px 4px;text-align:right;font-weight:700;color:"+gtCol+"' title='GT Score'>"+(gtScore==null?"—":gtScore)+"\x3C/td>"+
-      "<td style='padding:5px 4px;text-align:right;color:#ff8c42;font-family:\"SF Mono\",monospace;font-size:11px' title='Entry − 0.5·ATR stop (" + (stockPx>0?"based on $"+stockPx.toFixed(2):"need price") + ")'>"+(stop05>0?"$"+stop05.toFixed(2):"—")+"\x3C/td>"+
-      "<td style='padding:5px 4px;text-align:right;color:#ff4560;font-family:\"SF Mono\",monospace;font-size:11px' title='Entry − 1.0·ATR stop'>"+(stop10>0?"$"+stop10.toFixed(2):"—")+"\x3C/td>"+
+      "<td style='padding:5px 4px;text-align:right;color:#ff4560;font-family:\"SF Mono\",monospace;font-size:11px;font-weight:600' title='Golden Ticket hard stop = entry − 1.25·ATR (" + (stockPx>0?"based on $"+stockPx.toFixed(2):"need price") + ")'>"+(stop125>0?"$"+stop125.toFixed(2):"—")+"\x3C/td>"+
+      "<td style='padding:5px 4px;text-align:right;color:#00d68f;font-family:\"SF Mono\",monospace;font-size:11px' title='Roll 1 marker = entry + 0.5·ATR'>"+(roll05>0?"$"+roll05.toFixed(2):"—")+"\x3C/td>"+
+      "<td style='padding:5px 4px;text-align:right;color:#00b080;font-family:\"SF Mono\",monospace;font-size:11px' title='Roll 2 marker = entry + 1.0·ATR'>"+(roll10>0?"$"+roll10.toFixed(2):"—")+"\x3C/td>"+
+      "<td style='padding:5px 4px;text-align:right;color:#008c60;font-family:\"SF Mono\",monospace;font-size:11px' title='Roll 3 marker = entry + 2.0·ATR'>"+(roll20>0?"$"+roll20.toFixed(2):"—")+"\x3C/td>"+
       "<td style='padding:5px 4px;text-align:right'><input type='number' value='"+delta.toFixed(2)+"' step='0.01' min='0.1' max='1' style='width:50px;font-size:11px;padding:2px 4px;text-align:right' onchange='updateCandidateDelta("+idx+",this.value)'>\x3C/td>"+
       "<td style='padding:5px 4px;text-align:right;color:#555c6e'>"+(rpc>0?"$"+Math.round(rpc):"—")+"\x3C/td>"+
       "<td style='padding:5px 4px;text-align:right'><input type='number' value='"+Math.round(riskAlloc)+"' step='100' style='width:65px;font-size:11px;padding:2px 4px;text-align:right' onchange='updateCandidateRisk("+idx+",this.value)'>\x3C/td>"+
@@ -7827,6 +7859,36 @@ window.GT.MAX_SPREAD_PCT = 10    // bid/ask spread %
 window.GT.MAX_EXTRINSIC_PCT = 20 // extrinsic value %
 window.GT.DTE_MIN = 20; window.GT.DTE_MAX = 40
 
+// ─── Canonical entry resolver (Golden Ticket math reads from this) ─────
+// Single source of truth so card display, debugGoldenTicket, mini-chart,
+// Planner sizing, and every diagnostic ALL agree on what "entry" means
+// for a given trade.
+//
+// Priority:
+//   1. FID_OPEN snapshot (entryUnderlyingPrice + entryATR)
+//   2. legacy TRADES journal (legacyEntry + legacyAtr — only present on
+//      synthesized rows that came from buildTradeShapesFromFidOpen
+//      with a matched legacy record)
+//   3. live current price (last resort)
+//
+// Returns { entry, atr, source } where source is one of:
+//   'fid-snapshot' | 'legacy' | 'live-fallback' | 'unknown'
+function resolveGoldenTicketEntry(t) {
+  if(!t) return { entry: 0, atr: 0, source: 'unknown' }
+  const fidEntry = +t.entryUnderlyingPrice || 0
+  const fidAtr   = +t.entryATR             || 0
+  const legEntry = +t.legacyEntry          || 0
+  const legAtr   = +t.legacyAtr            || 0
+  const liveUnd  = (typeof getCurrentUnderlyingPxForTrade === 'function')
+    ? +getCurrentUnderlyingPxForTrade(t) : (+t.stockPrice || 0)
+  const liveAtr  = +t.atr || 0
+  if(fidEntry > 0) return { entry: fidEntry, atr: fidAtr || legAtr || liveAtr, source: 'fid-snapshot' }
+  if(legEntry > 0) return { entry: legEntry, atr: legAtr || liveAtr,           source: 'legacy' }
+  if(liveUnd  > 0) return { entry: liveUnd,  atr: liveAtr,                     source: 'live-fallback' }
+  return { entry: 0, atr: 0, source: 'unknown' }
+}
+if(typeof window !== 'undefined') window.resolveGoldenTicketEntry = resolveGoldenTicketEntry
+
 // ═══ POSITION IDENTITY + EVENT-DERIVED POSITIONS ═════════════════════════
 // Single source of truth for "what open positions does the user hold?".
 // Existing TRADES records are treated as IMMUTABLE EVENTS:
@@ -8000,7 +8062,11 @@ function debugGoldenTicket(filterSym, overrideCredits, overrideRollCount) {
   const out = rows.map(t => {
     const creds = overrideCredits != null ? +overrideCredits : (+t.cumulativeCredits || 0)
     const rc    = overrideRollCount != null ? +overrideRollCount : (+t.rollCount || 0)
-    const entry = +t.entry, atr = +t.entryATR || +t.atr
+    // CANONICAL entry resolver — same function the synthesizer uses, so
+    // the math here is guaranteed to match the card display.
+    const ge    = (typeof resolveGoldenTicketEntry === 'function')
+      ? resolveGoldenTicketEntry(t) : { entry: +t.entry || 0, atr: +t.entryATR || +t.atr || 0, source: 'fallback' }
+    const entry = ge.entry, atr = ge.atr
     const stopMult = window.GT.STOP_MULT, delta = window.GT.DELTA
     const stop125 = entry - stopMult * atr
     const roll1   = entry + window.GT.ROLL_1_MULT * atr
@@ -8019,6 +8085,7 @@ function debugGoldenTicket(filterSym, overrideCredits, overrideRollCount) {
     const row = {
       sym:         t.underlying + (t.strike ? (' '+t.strike+(t.type==='Put'?'P':'C')) : ''),
       entry, atr,
+      entrySource: ge.source,        // ← which feed wins for this position
       cts:         t.cts,
       rollCount:   rc,
       phase,
@@ -9326,6 +9393,9 @@ function buildTradeShapesFromFidOpen() {
       entryUnderlyingPrice: entryUnd,
       entryATR:             entryAtr,
       // GOLDEN TICKET fields (new canonical system)
+      // Surface the legacy candidates so resolveGoldenTicketEntry can see them
+      legacyEntry:          legacyEntry,
+      legacyAtr:            legacyAtr,
       stop125Entry:         stop125,
       roll05Entry:          roll05,
       roll10Entry:          roll10,
@@ -10406,18 +10476,27 @@ function renderTrades() {
           '<canvas id="mini-chart-' + t.id + '" style="width:100%;height:140px;display:block"></canvas>' +
           // Bottom ribbon: credits input + roll count input + breakeven readout
           (pid
-            ? '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;padding:0 2px;gap:8px;flex-wrap:wrap">' +
-                '<div style="display:flex;align-items:center;gap:4px">' +
-                  '<span style="font-size:9px;color:#555c6e;text-transform:uppercase;letter-spacing:.07em">Rolls</span>' +
-                  '<input type="number" min="0" max="3" step="1" value="'+rollCt+'" onchange="setPositionCredits('+JSON.stringify(pid)+', null, +this.value)" style="width:30px;background:#111318;border:1px solid rgba(255,255,255,.08);border-radius:3px;color:#e8eaf0;font-size:10px;padding:1px 3px;text-align:center;font-family:inherit">' +
-                  '<span style="font-size:9px;color:#555c6e;margin-left:6px;text-transform:uppercase;letter-spacing:.07em">Credits $</span>' +
-                  '<input type="number" min="0" step="10" value="'+credStr+'" onchange="setPositionCredits('+JSON.stringify(pid)+', +this.value, null)" style="width:60px;background:#111318;border:1px solid rgba(255,255,255,.08);border-radius:3px;color:#e8eaf0;font-size:10px;padding:1px 4px;font-family:inherit">' +
-                '</div>' +
-                (t.strategyPhase === 'post-roll' && t.breakevenUnderlying != null
-                  ? '<span style="font-size:9px;color:#ff8c42" title="Breakeven = entry − (credits / (100 × delta 0.80)) · approx">BE ≈ $'+(+t.breakevenUnderlying).toFixed(2)+'</span>'
-                  : '<span></span>'
-                ) +
-              '</div>'
+            ? (function(){
+                // Escape pid for safe inline-JS use inside an HTML attribute.
+                // BUG fixed: JSON.stringify(pid) yields "UBS|Call|42.5|2026-05-15"
+                // which when interpolated into onchange="setPositionCredits(…)"
+                // immediately closes the double-quoted attribute, the browser
+                // parses garbage, and the function never fires. Use a single-
+                // quoted string with backslash-escaping instead.
+                var pidJs = "'" + String(pid).replace(/\\/g,'\\\\').replace(/'/g,"\\'") + "'"
+                return '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;padding:0 2px;gap:8px;flex-wrap:wrap">' +
+                  '<div style="display:flex;align-items:center;gap:4px">' +
+                    '<span style="font-size:9px;color:#555c6e;text-transform:uppercase;letter-spacing:.07em">Rolls</span>' +
+                    '<input type="number" min="0" max="3" step="1" value="'+rollCt+'" onchange="setPositionCredits('+pidJs+', null, +this.value)" style="width:30px;background:#111318;border:1px solid rgba(255,255,255,.08);border-radius:3px;color:#e8eaf0;font-size:10px;padding:1px 3px;text-align:center;font-family:inherit">' +
+                    '<span style="font-size:9px;color:#555c6e;margin-left:6px;text-transform:uppercase;letter-spacing:.07em">Credits $</span>' +
+                    '<input type="number" min="0" step="10" value="'+credStr+'" onchange="setPositionCredits('+pidJs+', +this.value, null)" style="width:60px;background:#111318;border:1px solid rgba(255,255,255,.08);border-radius:3px;color:#e8eaf0;font-size:10px;padding:1px 4px;font-family:inherit">' +
+                  '</div>' +
+                  (t.strategyPhase === 'post-roll' && t.breakevenUnderlying != null
+                    ? '<span style="font-size:9px;color:#ff8c42" title="Breakeven = entry − (credits / (100 × delta 0.80)) · approx">BE ≈ $'+(+t.breakevenUnderlying).toFixed(2)+'</span>'
+                    : '<span></span>'
+                  ) +
+                '</div>'
+              })()
             : ''
           ) +
         '</div>'
