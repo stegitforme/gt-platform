@@ -3708,6 +3708,10 @@ async function saveAllToFirebase() {
     internal_results: INTERNAL_RESULTS.slice(0,150),
     internal_scored_at: INTERNAL_SCORED_AT,
     turbo:       JSON.parse(localStorage.getItem('gt_turbo_state') || '{}'),
+    // Roll Engine ledger — persisted alongside the rest of the platform
+    // state so a fresh device load reconstitutes pending detections and
+    // historical roll events together with FID_OPEN/FID_CLOSED/FID_CREDITS.
+    roll_ledger: JSON.parse(localStorage.getItem('gt_roll_ledger') || 'null') || { events: [], schemaVersion: 1 },
     savedAt:     Date.now()
   }
   const ok = await fbSave('platform', payload)
@@ -3798,6 +3802,14 @@ async function loadFromFirebase() {
   if(data.planner_candidates && Array.isArray(data.planner_candidates)) {
     PLANNER_CANDIDATES = data.planner_candidates
     localStorage.setItem('gt_planner_candidates', JSON.stringify(PLANNER_CANDIDATES))
+  }
+  // Roll Engine ledger restore. Cloud version wins on cold load — same
+  // policy as the rest of the platform state. The in-memory window.ROLL_LEDGER
+  // is rebuilt so the next render picks up pending detections.
+  if(data.roll_ledger && Array.isArray(data.roll_ledger.events)) {
+    window.ROLL_LEDGER = data.roll_ledger
+    localStorage.setItem('gt_roll_ledger', JSON.stringify(window.ROLL_LEDGER))
+    console.log('[ROLL-ENGINE] hydrated from Firebase: '+data.roll_ledger.events.length+' event(s)')
   }
   // Update UI after Firebase restore
   if(typeof updateRiskMeter === 'function') { setTimeout(updateRiskMeter, 100) }
@@ -7859,6 +7871,28 @@ window.GT.MAX_SPREAD_PCT = 10    // bid/ask spread %
 window.GT.MAX_EXTRINSIC_PCT = 20 // extrinsic value %
 window.GT.DTE_MIN = 20; window.GT.DTE_MAX = 40
 
+// ─── Roll Engine constants ─────────────────────────────────────────────
+// State machine for the four phases of a Golden Ticket position.
+//   PRE_ROLL       — under R1; default
+//   ROLL_WATCH     — price >= R1 but no roll executed (price-driven only)
+//   ROLL_DETECTED  — CSV diff produced a detected pair waiting on user
+//   POST_ROLL      — at least one roll has been confirmed
+// The transition PRE → POST is GATED by user confirmation of a detected
+// roll (or by the legacy manual Rolls input as a fallback override).
+// Price hitting R1/R2/R3 alone NEVER moves a position to post-roll.
+window.GT.ROLL_STATE = {
+  PRE_ROLL:      'pre-roll',
+  ROLL_WATCH:    'roll-watch',
+  ROLL_DETECTED: 'roll-detected',
+  POST_ROLL:     'post-roll'
+}
+window.GT.ROLL_LEDGER_KEY      = 'gt_roll_ledger'
+window.GT.ROLL_CONF_HIGH       = 70   // auto-surface as ROLL_DETECTED
+window.GT.ROLL_CONF_MEDIUM     = 50   // log only; do not surface
+window.GT.ROLL_QTY_TOLERANCE   = 0.20 // ±20% qty match still scores
+window.GT.MAX_ROLLS            = 3
+window.GT.AUTO_CONFIRM_ROLLS   = false  // safety: never auto-confirm
+
 // ─── Canonical entry resolver (Golden Ticket math reads from this) ─────
 // Single source of truth so card display, debugGoldenTicket, mini-chart,
 // Planner sizing, and every diagnostic ALL agree on what "entry" means
@@ -8369,6 +8403,14 @@ async function importFidelityOpenPositionsFromFile(file) {
     // original entry snapshot (fixed entry underlying / entry ATR / stops).
     // Brand-new position_id → fresh snapshot captured after enrichment.
     const priorSnaps = {}
+    // Roll Engine: also capture FULL prior open positions (not just the
+    // frozen-snapshot fields) keyed by position_id, plus the set of
+    // closed-lot ids known BEFORE this import. The detector diffs the new
+    // CSV against this baseline to find disappeared/appeared option pairs.
+    const rollPrev = {
+      openByPid:  {},
+      closedIds:  new Set()
+    }
     if(window.FID_OPEN && Array.isArray(window.FID_OPEN.positions)) {
       for(const p of window.FID_OPEN.positions) {
         if(p && p.entryCapturedAt) {
@@ -8381,6 +8423,12 @@ async function importFidelityOpenPositionsFromFile(file) {
             entryCapturedAt:      p.entryCapturedAt
           }
         }
+        if(p && p.position_id) rollPrev.openByPid[p.position_id] = p
+      }
+    }
+    if(window.FID_CLOSED && Array.isArray(window.FID_CLOSED.lots)) {
+      for(const lot of window.FID_CLOSED.lots) {
+        if(lot && lot.lot_id) rollPrev.closedIds.add(lot.lot_id)
       }
     }
     // REPLACE — do not append. Fidelity is the source of truth.
@@ -8406,6 +8454,17 @@ async function importFidelityOpenPositionsFromFile(file) {
     // create fresh ones for new / re-entered position_ids.
     try { captureEntrySnapshots(priorSnaps) }
     catch(e) { console.warn('[FID-IMPORT] entry snapshot capture skipped:', e.message) }
+    // Roll Engine: detect probable rolls by diffing the prior snapshot
+    // against the new one. Surfaces ROLL_DETECTED prompts on the relevant
+    // cards; never auto-confirms (per safety policy).
+    try {
+      if(typeof runRollDetection === 'function') {
+        const det = runRollDetection(rollPrev)
+        if(det && det.detected && det.detected.length) {
+          setStatus('✓ '+positions.length+' positions imported · '+det.detected.length+' roll(s) detected — review on the cards', '#f0c040')
+        }
+      }
+    } catch(e) { console.warn('[FID-IMPORT] roll detection skipped:', e.message) }
     // Persist + re-render with all enrichments applied
     saveFidOpen()
     updateFidSyncUI()
@@ -8458,6 +8517,394 @@ function setPositionCredits(positionId, cumulativeCredits, rollCount) {
   if(typeof fbAutoSave === 'function') fbAutoSave(1500)
 }
 if(typeof window !== 'undefined') window.setPositionCredits = setPositionCredits
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  ROLL ENGINE — detection, scoring, credit estimation, confirmation.
+//  ─────────────────────────────────────────────────────────────────────────
+//  States: PRE_ROLL → ROLL_WATCH (price ≥ R1) → ROLL_DETECTED (CSV diff)
+//          → POST_ROLL (user confirmed). Transition to POST_ROLL requires
+//          explicit confirmation; price alone never flips phase.
+//
+//  Pipeline:
+//    1. importFidelityOpenPositionsFromFile() snapshots the OLD FID_OPEN +
+//       FID_CLOSED state, then writes the new state.
+//    2. After captureEntrySnapshots() finishes, runRollDetection(snapshot)
+//       diffs old vs new and emits ROLL_DETECTED events into ROLL_LEDGER.
+//    3. buildTradeShapesFromFidOpen() reads ROLL_LEDGER for each card and
+//       sets t.rollState + t.pendingRollDetection.
+//    4. The trade card render injects an amber prompt when rollState ===
+//       'roll-detected' with Confirm / Adjust / Reject buttons.
+//    5. On Confirm, confirmRollDetection() updates FID_CREDITS (rollCount
+//       + cumulativeCredits) which flips strategyPhase to 'post-roll'
+//       through the existing buildTradeShapesFromFidOpen logic — NO new
+//       phase machinery is added; the engine drives the EXISTING signal.
+//
+//  Storage:
+//    window.ROLL_LEDGER = { events: [ rollEvent, ... ] }
+//    Persisted at localStorage['gt_roll_ledger']
+//    Mirrored to Firebase via saveAllToFirebase().
+// ═══════════════════════════════════════════════════════════════════════════
+
+window.ROLL_LEDGER = (function(){
+  try { return JSON.parse(localStorage.getItem(window.GT.ROLL_LEDGER_KEY)||'null') || null }
+  catch(e) { return null }
+})() || { events: [], schemaVersion: 1 }
+if(!Array.isArray(window.ROLL_LEDGER.events)) window.ROLL_LEDGER.events = []
+
+function saveRollLedger() {
+  try { localStorage.setItem(window.GT.ROLL_LEDGER_KEY, JSON.stringify(window.ROLL_LEDGER)) }
+  catch(e) { console.warn('[ROLL-ENGINE] persist failed:', e.message) }
+}
+
+function rollIdFor(oldOcc, newOcc) {
+  return String(oldOcc||'?') + '→' + String(newOcc||'?')
+}
+
+// All events for the position whose CURRENT (post-roll) position_id matches.
+function rollEventsForPositionId(pid) {
+  if(!pid) return []
+  return (window.ROLL_LEDGER.events||[]).filter(e =>
+    e && (e.new_position_id === pid || e.old_position_id === pid)
+  ).sort((a,b) => (b.timestamp||0) - (a.timestamp||0))
+}
+
+// Most recent unresolved (status === 'detected') event for a position_id.
+// Returns null if no pending detection.
+function pendingDetectionForPositionId(pid) {
+  if(!pid) return null
+  const events = (window.ROLL_LEDGER.events||[]).filter(e =>
+    e && e.status === 'detected' && e.new_position_id === pid
+  ).sort((a,b) => (b.timestamp||0) - (a.timestamp||0))
+  return events[0] || null
+}
+
+// ── Detection algorithm ────────────────────────────────────────────────
+// Inputs:
+//   prevOpenById  : { position_id: openPositionRow }  (BEFORE the import)
+//   prevClosedIds : Set<lot_id>                       (BEFORE the import)
+//   currOpen      : window.FID_OPEN.positions         (AFTER the import)
+//   currClosed    : window.FID_CLOSED.lots            (AFTER the import)
+//
+// Algorithm:
+//   1. disappeared = prev open pids absent from curr open
+//   2. appeared    = curr open pids absent from prev open
+//   3. newClosedLotsByPid = closed lots whose lot_id wasn't in prevClosedIds,
+//        grouped by position_id
+//   4. For each disappeared old pid:
+//        - candidate close = newly-closed lot(s) for that exact pid
+//        - candidate new = each appeared pid that satisfies the underlying
+//          + type + strike-direction + expiry + qty checks
+//        - score each candidate; keep highest-confidence match above the
+//          HIGH threshold; emit a ROLL_DETECTED event for it
+//   5. Persist ledger
+//
+// Returns: { detected: [...], scoredButLow: [...] }
+function runRollDetection(prev) {
+  const out = { detected: [], scoredButLow: [], skipped: [] }
+  if(!prev || !prev.openByPid) return out
+  const prevOpenByPid = prev.openByPid
+  const prevClosedIds = prev.closedIds || new Set()
+  const currPositions = (window.FID_OPEN && window.FID_OPEN.positions) || []
+  const currOpenByPid = {}
+  for(const p of currPositions) {
+    if(p && p.position_id) currOpenByPid[p.position_id] = p
+  }
+  // Newly-closed lots (this import only)
+  const newClosedByPid = {}
+  for(const lot of ((window.FID_CLOSED && window.FID_CLOSED.lots) || [])) {
+    if(!lot || !lot.lot_id) continue
+    if(prevClosedIds.has(lot.lot_id)) continue
+    if(!newClosedByPid[lot.position_id]) newClosedByPid[lot.position_id] = []
+    newClosedByPid[lot.position_id].push(lot)
+  }
+  // Pids that disappeared from open and pids that appeared
+  const disappearedPids = Object.keys(prevOpenByPid).filter(pid => !currOpenByPid[pid])
+  const appearedPids    = Object.keys(currOpenByPid).filter(pid => !prevOpenByPid[pid])
+
+  for(const oldPid of disappearedPids) {
+    const oldP = prevOpenByPid[oldPid]
+    if(!oldP) continue
+    // Skip stocks; this engine only handles option rolls
+    if(oldP.isStock || oldP.type === 'Stock') { out.skipped.push({ oldPid, why: 'stock' }); continue }
+    // Look for a matching appearance with same underlying + type
+    const candidates = []
+    for(const newPid of appearedPids) {
+      const newP = currOpenByPid[newPid]
+      if(!newP) continue
+      if(newP.underlying !== oldP.underlying) continue
+      if(newP.type !== oldP.type) continue
+      const score = scoreRollCandidate(oldP, newP, newClosedByPid[oldPid] || [])
+      candidates.push({ newPid, newP, score })
+    }
+    if(!candidates.length) { out.skipped.push({ oldPid, why: 'no-candidate' }); continue }
+    // Highest confidence wins; tiebreak by qty match then by smaller strike delta.
+    candidates.sort((a,b) => {
+      if(b.score.confidence !== a.score.confidence) return b.score.confidence - a.score.confidence
+      const qa = Math.abs((+a.newP.qty || 0) - (+oldP.qty || 0))
+      const qb = Math.abs((+b.newP.qty || 0) - (+oldP.qty || 0))
+      if(qa !== qb) return qa - qb
+      const sa = Math.abs((+a.newP.strike || 0) - (+oldP.strike || 0))
+      const sb = Math.abs((+b.newP.strike || 0) - (+oldP.strike || 0))
+      return sa - sb
+    })
+    const winner = candidates[0]
+    if(winner.score.confidence < window.GT.ROLL_CONF_HIGH) {
+      out.scoredButLow.push({ oldPid, newPid: winner.newPid, score: winner.score })
+      continue
+    }
+    // De-dupe: if a ledger event for this exact roll_id already exists in
+    // any state, skip — never re-emit a duplicate detection.
+    const closedLots = newClosedByPid[oldPid] || []
+    const oldOcc = oldP.occ || ''
+    const newOcc = winner.newP.occ || ''
+    const rid = rollIdFor(oldOcc, newOcc)
+    const existing = (window.ROLL_LEDGER.events||[]).find(e => e && e.roll_id === rid)
+    if(existing) { out.skipped.push({ oldPid, newPid: winner.newPid, why: 'duplicate-roll-id' }); continue }
+    // Estimate credit
+    const credit = estimateRollCredit(oldP, winner.newP, closedLots)
+    // Determine which roll level the OLD position price had reached
+    const rollLevelHit = rollLevelReachedAt(oldP)
+    const ev = {
+      roll_id:           rid,
+      underlying:        oldP.underlying,
+      old_occ:           oldOcc,
+      new_occ:           newOcc,
+      old_position_id:   oldPid,
+      new_position_id:   winner.newPid,
+      old_strike:        +oldP.strike || 0,
+      new_strike:        +winner.newP.strike || 0,
+      old_expiry:        oldP.expiryISO || '',
+      new_expiry:        winner.newP.expiryISO || '',
+      old_qty:           +oldP.qty || 0,
+      new_qty:           +winner.newP.qty || 0,
+      qty:               +winner.newP.qty || 0,
+      estimatedCredit:   credit.amount,
+      creditMethod:      credit.method,
+      creditNote:        credit.note || '',
+      confirmedCredit:   null,
+      confidence:        winner.score.confidence,
+      confidenceBreakdown: winner.score.breakdown,
+      rollLevelHit:      rollLevelHit,
+      timestamp:         Date.now(),
+      detectedAt:        new Date().toISOString(),
+      status:            'detected',
+      // carry the old entry-snapshot anchors so debug tooling can see the
+      // price ladder that was in play when the roll fired
+      oldEntryUnderlyingPrice: +oldP.entryUnderlyingPrice || 0,
+      oldEntryATR:             +oldP.entryATR || 0,
+      oldRoll05Entry:          +oldP.roll05Entry || 0,
+      oldRoll10Entry:          +oldP.roll10Entry || 0,
+      oldRoll20Entry:          +oldP.roll20Entry || 0
+    }
+    window.ROLL_LEDGER.events.push(ev)
+    out.detected.push(ev)
+  }
+  if(out.detected.length || out.scoredButLow.length) {
+    saveRollLedger()
+    if(typeof fbAutoSave === 'function') fbAutoSave(2000)
+  }
+  if(out.detected.length || out.scoredButLow.length || out.skipped.length) {
+    console.log('[ROLL-ENGINE] detection:', {
+      detected: out.detected.length,
+      scoredButLow: out.scoredButLow.length,
+      skipped: out.skipped.length,
+      details: out
+    })
+  }
+  return out
+}
+
+// ── Confidence scoring ─────────────────────────────────────────────────
+// Required conditions (filter, not score): same underlying + same type.
+// Scored signals (max 100):
+//    +25  old position appears in newly-closed lots
+//    +25  new position appeared in FID_OPEN this import
+//    +20  strike moved in correct direction (calls: up; puts: down)
+//    +15  new expiry >= old expiry
+//    +15  qty matches exactly                  (or +5 within ±20%)
+//    +10  price had reached R1+ on the OLD position (anchor confirms intent)
+function scoreRollCandidate(oldP, newP, closedLotsForOld) {
+  const breakdown = {}
+  let conf = 0
+  // Same underlying + type are filters; if either fails, we shouldn't be here
+  if(oldP.underlying === newP.underlying) breakdown.sameUnderlying = 0  // free
+  if(oldP.type === newP.type)             breakdown.sameType = 0        // free
+  if(closedLotsForOld && closedLotsForOld.length) { conf += 25; breakdown.oldClosed = 25 }
+  // newP appeared (caller already verified this in the diff loop)
+  conf += 25; breakdown.newAppeared = 25
+  // Strike direction
+  const oldK = +oldP.strike || 0
+  const newK = +newP.strike || 0
+  const isCall = oldP.type === 'Call'
+  const directionOk = isCall ? (newK > oldK) : (newK < oldK)
+  if(directionOk) { conf += 20; breakdown.strikeDirection = 20 }
+  else if(newK === oldK) { breakdown.strikeDirection = 0 }
+  else { conf -= 10; breakdown.strikeDirection = -10 }   // wrong-way penalty
+  // Expiry
+  const oldE = oldP.expiryISO || ''
+  const newE = newP.expiryISO || ''
+  if(newE && oldE && newE >= oldE) { conf += 15; breakdown.expiryFwd = 15 }
+  else if(newE && oldE && newE < oldE) { conf -= 10; breakdown.expiryFwd = -10 }
+  // Qty match
+  const oldQ = +oldP.qty || 0
+  const newQ = +newP.qty || 0
+  if(oldQ > 0 && newQ === oldQ) { conf += 15; breakdown.qtyExact = 15 }
+  else if(oldQ > 0 && Math.abs(newQ - oldQ) / oldQ <= window.GT.ROLL_QTY_TOLERANCE) {
+    conf += 5; breakdown.qtyClose = 5
+  }
+  // Price reached R1+ on the OLD position?
+  const oldR1 = +oldP.roll05Entry || 0
+  const oldStock = +oldP.stockPrice || +oldP.entryUnderlyingPrice || 0
+  if(oldR1 > 0 && oldStock >= oldR1) { conf += 10; breakdown.priceAtR1 = 10 }
+  return { confidence: Math.max(0, Math.min(100, conf)), breakdown }
+}
+
+// Which roll level had the OLD position's last-seen stock price reached?
+function rollLevelReachedAt(oldP) {
+  const px = +oldP.stockPrice || 0
+  if(px <= 0) return 'unknown'
+  const r1 = +oldP.roll05Entry || 0
+  const r2 = +oldP.roll10Entry || 0
+  const r3 = +oldP.roll20Entry || 0
+  if(r3 > 0 && px >= r3) return 'R3'
+  if(r2 > 0 && px >= r2) return 'R2'
+  if(r1 > 0 && px >= r1) return 'R1'
+  return 'below-R1'
+}
+
+// ── Credit estimation ──────────────────────────────────────────────────
+// Returns { amount: number|null, method: string, note?: string }
+// Methods (in priority order):
+//   'closed_lot_proceeds' — newly-closed lot proceeds minus new open cost basis
+//   'mark_diff'           — (old mark − new mark) × 100 × qty (uses last-seen
+//                           CSV currentPrice as a fallback option mark)
+//   'manual_required'     — no usable signal; user must enter the credit
+function estimateRollCredit(oldP, newP, closedLotsForOld) {
+  // Method 1: real proceeds vs real cost basis (highest fidelity)
+  if(closedLotsForOld && closedLotsForOld.length) {
+    let proceeds = 0
+    for(const lot of closedLotsForOld) proceeds += (+lot.proceeds || 0)
+    const newCost = +newP.costBasisTotal || 0
+    if(proceeds > 0 && newCost > 0) {
+      const credit = +(proceeds - newCost).toFixed(2)
+      return {
+        amount: credit,
+        method: 'closed_lot_proceeds',
+        note: 'proceeds $' + proceeds.toFixed(2) + ' − new cost basis $' + newCost.toFixed(2)
+      }
+    }
+  }
+  // Method 2: option-mark differential (least-recent CSV currentPrice is the
+  // only mark we always have — it's a coarse approximation but better than
+  // requiring manual entry on every roll)
+  const oldMark = +oldP.currentPrice || +oldP.liveOptionPx || 0
+  const newMark = +newP.currentPrice || +newP.liveOptionPx || 0
+  const qty     = +newP.qty || +oldP.qty || 0
+  if(oldMark > 0 && newMark > 0 && qty > 0) {
+    const credit = +((oldMark - newMark) * 100 * qty).toFixed(2)
+    return {
+      amount: credit,
+      method: 'mark_diff',
+      note: 'oldMark $' + oldMark.toFixed(2) + ' − newMark $' + newMark.toFixed(2) + ' × 100 × ' + qty
+    }
+  }
+  // No signal — caller must prompt user
+  return { amount: null, method: 'manual_required', note: 'no closed-lot data and no usable option marks' }
+}
+
+// ── Confirm / Adjust / Reject handlers ─────────────────────────────────
+// All three are window-exposed for inline-onclick wiring on the card.
+// Confirm: if confirmedCredit is null, falls back to estimatedCredit.
+//          Updates FID_CREDITS (rollCount += 1, cumulativeCredits += credit)
+//          which flips strategyPhase via the existing buildTradeShapesFromFidOpen
+//          logic. No new phase machinery is needed.
+function confirmRollDetection(rollId, confirmedCreditOverride) {
+  const ev = (window.ROLL_LEDGER.events||[]).find(e => e && e.roll_id === rollId)
+  if(!ev) { console.warn('[ROLL-ENGINE] confirm: no event with roll_id', rollId); return }
+  if(ev.status !== 'detected') {
+    console.warn('[ROLL-ENGINE] confirm: event already in status', ev.status)
+    return
+  }
+  let credit = (confirmedCreditOverride != null && isFinite(+confirmedCreditOverride))
+    ? +confirmedCreditOverride
+    : (ev.estimatedCredit != null ? +ev.estimatedCredit : null)
+  if(credit == null) {
+    console.warn('[ROLL-ENGINE] confirm: no credit value (estimated or override) — refusing')
+    alert('Cannot confirm a roll with no credit value. Use Adjust to enter the credit manually.')
+    return
+  }
+  ev.status = 'confirmed'
+  ev.confirmedCredit = +credit.toFixed(2)
+  ev.confirmedAt = new Date().toISOString()
+  saveRollLedger()
+  // Update FID_CREDITS for the NEW position id; this flips strategyPhase
+  // through the existing synthesizer.
+  const pid = ev.new_position_id
+  const cur = (window.FID_CREDITS && window.FID_CREDITS[pid]) || {}
+  const newRolls   = Math.max(0, Math.min(window.GT.MAX_ROLLS, (+cur.rollCount || 0) + 1))
+  const newCredits = (+cur.cumulativeCredits || 0) + (+credit)
+  setPositionCredits(pid, newCredits, newRolls)
+  console.log('[ROLL-ENGINE] confirmed', rollId, 'credit', credit, '→ FID_CREDITS', pid, '=', { rollCount: newRolls, cumulativeCredits: newCredits })
+}
+window.confirmRollDetection = confirmRollDetection
+
+function rejectRollDetection(rollId) {
+  const ev = (window.ROLL_LEDGER.events||[]).find(e => e && e.roll_id === rollId)
+  if(!ev) { console.warn('[ROLL-ENGINE] reject: no event with roll_id', rollId); return }
+  if(ev.status !== 'detected') return
+  ev.status = 'rejected'
+  ev.rejectedAt = new Date().toISOString()
+  saveRollLedger()
+  try { renderTrades() } catch(e) {}
+  if(typeof fbAutoSave === 'function') fbAutoSave(1500)
+  console.log('[ROLL-ENGINE] rejected', rollId)
+}
+window.rejectRollDetection = rejectRollDetection
+
+// Adjust = prompt for a corrected credit, then confirm with that value.
+function adjustRollDetection(rollId) {
+  const ev = (window.ROLL_LEDGER.events||[]).find(e => e && e.roll_id === rollId)
+  if(!ev) { console.warn('[ROLL-ENGINE] adjust: no event with roll_id', rollId); return }
+  const suggested = ev.estimatedCredit != null ? String(ev.estimatedCredit) : ''
+  const raw = prompt(
+    'Adjust roll credit for ' + ev.underlying + ' ' + ev.old_strike + '→' + ev.new_strike + '\n\n' +
+    'Estimated: ' + (ev.estimatedCredit != null ? '$' + ev.estimatedCredit.toFixed(2) : 'n/a') +
+    ' (' + ev.creditMethod + ')\n\n' +
+    'Enter the actual credit received (positive) or paid (negative):',
+    suggested
+  )
+  if(raw == null) return  // cancelled
+  const v = parseFloat(raw)
+  if(!isFinite(v)) { alert('Invalid number — not confirming.'); return }
+  confirmRollDetection(rollId, v)
+}
+window.adjustRollDetection = adjustRollDetection
+
+// ── Roll-state classifier (consumed by render path) ─────────────────────
+// Returns one of: 'pre-roll' | 'roll-watch' | 'roll-detected' | 'post-roll'
+//
+// CRITICAL: ROLL_WATCH is price-driven only — it never trails the stop or
+// flips phase. POST_ROLL requires rollCount >= 1 which only happens through
+// confirmRollDetection() (or the legacy Rolls input as a manual override).
+function getRollState(t) {
+  if(!t) return window.GT.ROLL_STATE.PRE_ROLL
+  if((+t.rollCount || 0) >= 1) return window.GT.ROLL_STATE.POST_ROLL
+  const pid = t.fid_position_id
+  if(pid) {
+    const pending = pendingDetectionForPositionId(pid)
+    if(pending) return window.GT.ROLL_STATE.ROLL_DETECTED
+  }
+  // Pre-roll vs ROLL_WATCH = price relative to R1
+  const cur = (typeof getCurrentUnderlyingPxForTrade === 'function')
+    ? +getCurrentUnderlyingPxForTrade(t) : 0
+  const r1  = +t.roll05Entry || 0
+  if(cur > 0 && r1 > 0 && cur >= r1) return window.GT.ROLL_STATE.ROLL_WATCH
+  return window.GT.ROLL_STATE.PRE_ROLL
+}
+window.getRollState = getRollState
+window.pendingDetectionForPositionId = pendingDetectionForPositionId
+window.rollEventsForPositionId       = rollEventsForPositionId
+window.runRollDetection              = runRollDetection
 
 // ── Entry snapshot capture (GOLDEN TICKET) ─────────────────────────────
 // For each FID_OPEN position:
@@ -9343,6 +9790,11 @@ function buildTradeShapesFromFidOpen() {
     legacyByPid[pid].push(t)
   })
   return positions.map(p => {
+    // Roll Engine: lookup any pending detection for this position_id BEFORE
+    // building the rest of the row, so we can attach the detection metadata
+    // alongside the standard Golden Ticket fields.
+    const pendingRollDetection = (typeof pendingDetectionForPositionId === 'function')
+      ? pendingDetectionForPositionId(p.position_id) : null
     // Match legacy TRADE by THIS position's position_id only. A rolled
     // position (e.g. LUNR 24 after rolling from LUNR 21) has a different
     // position_id than the old contract, so its renderer CANNOT inherit
@@ -9464,6 +9916,12 @@ function buildTradeShapesFromFidOpen() {
       firstRollAchieved:    firstRollAchieved,
       trailingActive:       trailingActive,
       strategyPhase:        strategyPhase,
+      // Roll Engine — phase machinery layered on top of strategyPhase.
+      // rollState is one of: 'pre-roll' | 'roll-watch' | 'roll-detected' | 'post-roll'
+      // pendingRollDetection is the ledger event with status === 'detected'
+      // that the card UI uses to render its amber confirmation prompt.
+      // Resolved at render time to pick up live price changes (ROLL_WATCH).
+      pendingRollDetection: pendingRollDetection || null,
       breakevenUnderlying:  breakevenUnderlying,
       newBase:              newBase,
       trailingStop:         trailingStop,
@@ -10518,11 +10976,59 @@ function renderTrades() {
     const dayWarn  = (window.GT && window.GT.DAY_WARN) || 20
     const dayCol   = dayN >= dayStop ? '#ff4560' : dayN >= dayWarn ? '#ff8c42' : '#8b91a0'
     const dayIcon  = dayN >= dayStop ? '⚠ ' : ''
-    const phaseLbl = t.strategyPhase === 'post-roll' ? ('POST-ROLL · '+(t.rollCount||0)+'/3') : 'PRE-ROLL'
-    const phaseCol = t.strategyPhase === 'post-roll' ? '#00d68f' : '#4da6ff'
+    // Roll Engine: classify the four-state phase. POST_ROLL still keys off
+    // strategyPhase (which is rollCount-driven); ROLL_DETECTED comes from
+    // the ledger; ROLL_WATCH is price-vs-R1 only.
+    const rollState = (typeof getRollState === 'function') ? getRollState(t) : (t.strategyPhase || 'pre-roll')
+    const ROLL_S    = (window.GT && window.GT.ROLL_STATE) || { PRE_ROLL:'pre-roll', ROLL_WATCH:'roll-watch', ROLL_DETECTED:'roll-detected', POST_ROLL:'post-roll' }
+    let phaseLbl, phaseCol
+    if(rollState === ROLL_S.POST_ROLL) {
+      phaseLbl = 'POST-ROLL · '+(t.rollCount||0)+'/3'; phaseCol = '#00d68f'
+    } else if(rollState === ROLL_S.ROLL_DETECTED) {
+      phaseLbl = 'ROLL DETECTED · review';            phaseCol = '#f0c040'
+    } else if(rollState === ROLL_S.ROLL_WATCH) {
+      phaseLbl = 'ROLL WATCH · price ≥ R1';            phaseCol = '#f0c040'
+    } else {
+      phaseLbl = 'PRE-ROLL';                           phaseCol = '#4da6ff'
+    }
     const pid      = t.fid_position_id || ''
     const credStr  = (+t.cumulativeCredits || 0).toFixed(0)
     const rollCt   = +t.rollCount || 0
+    // Roll Engine: amber confirmation prompt (only when state === ROLL_DETECTED)
+    const detEv    = (rollState === ROLL_S.ROLL_DETECTED) ? t.pendingRollDetection : null
+    const rollDetectedPanel = (detEv && detEv.roll_id) ? (function(){
+      // Inline-onclick safe escape for the roll_id (contains '→' which is
+      // unicode-safe but the OCC parts can contain digits/letters only).
+      var ridJs = "'" + String(detEv.roll_id).replace(/\\/g,'\\\\').replace(/'/g,"\\'") + "'"
+      var creditStr = (detEv.estimatedCredit != null)
+        ? '$' + (+detEv.estimatedCredit).toFixed(2)
+        : '<em style="color:#8b91a0">none — manual entry required</em>'
+      var methodLbl = detEv.creditMethod === 'closed_lot_proceeds' ? 'from closed-lot proceeds'
+                    : detEv.creditMethod === 'mark_diff'           ? 'from option mark differential'
+                    : detEv.creditMethod === 'manual_required'     ? 'no automatic estimate'
+                    : detEv.creditMethod || ''
+      var dirArrow = detEv.old_strike < detEv.new_strike ? '↑' : detEv.old_strike > detEv.new_strike ? '↓' : '→'
+      return '<div style="margin-top:8px;background:rgba(240,192,64,.10);border:1px solid rgba(240,192,64,.45);border-radius:6px;padding:8px 10px">' +
+          '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">' +
+            '<span style="background:#f0c040;color:#0a0c0f;font-size:9px;font-weight:800;padding:2px 6px;border-radius:3px;letter-spacing:.08em">POTENTIAL ROLL</span>' +
+            '<span style="font-size:9px;color:#8b91a0;letter-spacing:.06em;text-transform:uppercase">conf '+(+detEv.confidence||0)+'% · '+(detEv.rollLevelHit||'unknown')+'</span>' +
+          '</div>' +
+          '<div style="font-family:\'SF Mono\',monospace;font-size:11px;color:#e8eaf0;margin-bottom:3px">' +
+            esc(detEv.underlying) + ' ' + (+detEv.old_strike).toFixed(2) + (detEv.old_expiry ? ' '+esc(detEv.old_expiry) : '') +
+            ' <span style="color:#f0c040;font-weight:700">'+dirArrow+'</span> ' +
+            (+detEv.new_strike).toFixed(2) + (detEv.new_expiry ? ' '+esc(detEv.new_expiry) : '') +
+          '</div>' +
+          '<div style="font-size:10px;color:#8b91a0;margin-bottom:6px">' +
+            'Estimated credit: <span style="color:#e8eaf0;font-weight:700">' + creditStr + '</span>' +
+            ' <span style="color:#555c6e">· '+esc(methodLbl)+' · estimated</span>' +
+          '</div>' +
+          '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
+            '<button onclick="confirmRollDetection('+ridJs+')" style="background:#00d68f;color:#0a0c0f;border:none;border-radius:4px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">Confirm</button>' +
+            '<button onclick="adjustRollDetection('+ridJs+')"  style="background:transparent;color:#f0c040;border:1px solid rgba(240,192,64,.5);border-radius:4px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">Adjust</button>' +
+            '<button onclick="rejectRollDetection('+ridJs+')"  style="background:transparent;color:#8b91a0;border:1px solid rgba(139,145,160,.35);border-radius:4px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">Reject</button>' +
+          '</div>' +
+        '</div>'
+    })() : ''
     const miniChartHtml = hasEntrySnap
       ? (
         '<div style="background:#0a0c0f;border:1px solid rgba(255,255,255,.06);border-radius:8px;padding:8px 10px 6px;position:relative">' +
@@ -10558,6 +11064,12 @@ function renderTrades() {
               })()
             : ''
           ) +
+          // Roll Engine: amber confirmation prompt — only present when
+          // rollState === 'roll-detected'. Buttons wire to inline-onclick
+          // handlers on window (confirmRollDetection / adjustRollDetection /
+          // rejectRollDetection). Single-quoted JS string escape pattern
+          // matches the credits-input fix.
+          rollDetectedPanel +
         '</div>'
       )
       : '<div style="background:#0a0c0f;border:1px solid rgba(255,255,255,.06);border-radius:8px;padding:20px;text-align:center;color:#555c6e;font-size:11px">Entry snapshot pending — upload Fidelity CSV to capture stops.</div>'
