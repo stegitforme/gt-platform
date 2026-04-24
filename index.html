@@ -569,7 +569,7 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
     <div style="flex:0 0 auto"><div style="font-size:10px;color:#555c6e;margin-bottom:3px">MIN SIGNAL %</div><input type="number" id="f-sig" value="0" step="50" min="0" style="width:72px;padding:4px 6px;font-size:12px" oninput="debouncedFilter()"></div>
     <div style="flex:0 0 auto"><div style="font-size:10px;color:#555c6e;margin-bottom:3px">F&G MIN</div><input type="number" id="f-fg-min" value="0" step="5" min="0" max="100" style="width:56px;padding:4px 6px;font-size:12px" oninput="debouncedFilter()"></div>
     <div style="flex:0 0 auto"><div style="font-size:10px;color:#555c6e;margin-bottom:3px">F&G MAX</div><input type="number" id="f-fg-max" value="100" step="5" min="0" max="100" style="width:56px;padding:4px 6px;font-size:12px" oninput="debouncedFilter()"></div>
-    <div style="flex:0 0 auto"><div style="font-size:10px;color:#555c6e;margin-bottom:3px">MAX SPREAD <span id="f-spread-type" onclick="toggleSpreadType()" style="cursor:pointer;color:#4da6ff;font-weight:700">$</span></div><input type="number" id="f-spread" value="0.50" step="0.05" style="width:60px;padding:4px 6px;font-size:12px" oninput="debouncedFilter()"></div>
+    <div style="flex:0 0 auto"><div style="font-size:10px;color:#555c6e;margin-bottom:3px">MAX SPREAD <span id="f-spread-type" style="color:#4da6ff;font-weight:700">%</span></div><input type="number" id="f-spread" value="10" step="0.5" style="width:60px;padding:4px 6px;font-size:12px" oninput="debouncedFilter()"></div>
     <div style="flex:0 0 auto"><div style="font-size:10px;color:#555c6e;margin-bottom:3px">MIN 30D VOL</div><input type="number" id="f-vol" value="0" step="500000" min="0" style="width:80px;padding:4px 6px;font-size:12px" oninput="debouncedFilter()"></div>
     <div style="flex:0 0 auto;display:flex;flex-direction:column;gap:4px">
       <label style="font-size:11px;color:#8b91a0;display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="f-earn" onchange="debouncedFilter()"> No earnings ≤21d</label>
@@ -3170,9 +3170,11 @@ function runFilter() {
   const minSig  = +document.getElementById('f-sig')?.value || 0
   const fgMin   = +document.getElementById('f-fg-min')?.value || 0
   const fgMax   = +document.getElementById('f-fg-max')?.value || 100
-  const spreadType = document.getElementById('f-spread-type')?.textContent?.trim() || ''
-;
-  const maxSp   = +document.getElementById('f-spread')?.value || 999
+  // Spread is now percent-only. User-entered value on the filter input
+  // overrides window.GT.MAX_SPREAD_PCT if provided; the GT constant is
+  // the default threshold. Formula: spreadPct = (ask-bid) / ((ask+bid)/2) × 100
+  const maxSp   = +document.getElementById('f-spread')?.value
+                || (window.GT && window.GT.MAX_SPREAD_PCT) || 10
   const minOI   = +document.getElementById('f-oi')?.value || 0
   const minVol  = +document.getElementById('f-vol')?.value || 0
   const noEarn  = document.getElementById('f-earn')?.checked
@@ -3180,16 +3182,16 @@ function runFilter() {
   const noWide  = document.getElementById('f-wide')?.checked
 
   const scored = Object.entries(OV).map(([t, d]) => {
-    // Spread check: use live bid/ask if available, else WIDE_SPREADS fallback
+    // Spread check: percentage-based. Use live bid/ask when available,
+    // else fall back to the WIDE_SPREADS static deny-list.
+    //   spreadPct = (ask − bid) / ((ask + bid) / 2) × 100
+    //   passes filter when spreadPct < maxSp
     let spreadOk = !WIDE_SPREADS.has(t)
     if(LIVE_PRICES[t] && LIVE_PRICES[t].bid !== undefined && LIVE_PRICES[t].ask !== undefined) {
       const bid = LIVE_PRICES[t].bid, ask = LIVE_PRICES[t].ask
       const mid = (bid + ask) / 2
-      const dollarSpread = ask - bid
-      const pctSpread = mid > 0 ? (dollarSpread / mid * 100) : 999
-      const spreadType = document.getElementById('f-spread-type')?.textContent?.trim() || ''
-
-      spreadOk = spreadType === '%' ? pctSpread <= maxSp : dollarSpread <= maxSp
+      const spreadPct = mid > 0 ? ((ask - bid) / mid * 100) : 999
+      spreadOk = spreadPct < maxSp
     }
     const earnOk   = !hasEarnings(t)
     if(minSig > 0 && d.r < minSig) return null
@@ -3256,12 +3258,18 @@ function runFilter() {
   var sendBtn = '<button id="send-planner-'+s.t+'" onclick="event.stopPropagation();sendToPlanner(\'' + s.t + '\')" style="background:#1e2d3d;color:#4da6ff;border:1px solid #4da6ff;border-radius:3px;cursor:pointer;font-size:10px;padding:3px 8px;margin-right:4px;white-space:nowrap" title="Send to Planner">→ Planner\x3C/button>'
   // Plan Trade button
   var planBtn = '<button onclick="event.stopPropagation();goSize(\'' + s.t + '\')" class="btn btn-gold" style="font-size:10px;padding:3px 8px;white-space:nowrap">Plan Trade →\x3C/button>';
-  // Spread display (header col 8). Falls back to — when we have no live bid/ask.
+  // Spread display (header col 8) — percentage. Formula:
+  //   spreadPct = (ask − bid) / ((ask + bid)/2) × 100
+  // Color thresholds track the percent-based filter: red above
+  // window.GT.MAX_SPREAD_PCT, orange above half the threshold,
+  // grey otherwise. Em-dash when no live bid/ask is known.
   var spreadStr = '<span style="color:#333a4a;font-size:10px">—\x3C/span>'
   if(lp && lp.bid && lp.ask) {
-    var sp = +(lp.ask - lp.bid).toFixed(2)
-    var spCol = sp > 0.50 ? '#ff4560' : sp > 0.25 ? '#ff8c42' : '#8b91a0'
-    spreadStr = '<span style="color:'+spCol+';font-size:11px">$'+sp.toFixed(2)+'\x3C/span>'
+    var _mid = (lp.bid + lp.ask) / 2
+    var spP  = _mid > 0 ? +((lp.ask - lp.bid) / _mid * 100).toFixed(1) : 0
+    var maxP = (window.GT && window.GT.MAX_SPREAD_PCT) || 10
+    var spCol = spP > maxP ? '#ff4560' : spP > maxP/2 ? '#ff8c42' : '#8b91a0'
+    spreadStr = '<span style="color:'+spCol+';font-size:11px">'+spP.toFixed(1)+'%\x3C/span>'
   }
   // Earnings-only pill (header col 9). Wide-spread warning now lives in spreadStr's red color.
   var earnStr = earn
@@ -3869,30 +3877,19 @@ function scrSort(col) {
   runFilter()
 }
 
-function toggleSpreadType() {
-  var el = document.getElementById('f-spread-type')
-  if(!el) return
-  if(el.textContent.trim() === ''
-) {
-    el.textContent = '%'
-    // Switch default value: $0.50 -> 10%
-    var inp = document.getElementById('f-spread')
-    if(inp && +inp.value <= 2) inp.value = '10'
-  } else {
-    el.textContent = ''
-
-    // Switch back: 10% -> $0.50
-    var inp = document.getElementById('f-spread')
-    if(inp && +inp.value >= 5) inp.value = '0.50'
-  }
-  runFilter()
-}
+// Retired: MAX SPREAD filter is now percent-only; there is no $/% toggle.
+// Stub left in place so any stale cached HTML (or a saved preset referring
+// to the old inline handler) can still call it without throwing.
+function toggleSpreadType() { /* no-op; spread is percent-only */ }
 
 function loadPreset(name) {
+  // Spread values on presets are now percent (was dollars). Default 10
+  // matches window.GT.MAX_SPREAD_PCT so the filter threshold stays
+  // aligned with the canonical constant.
   var presets = {
-    highConv: {sig:200,fgMin:30,fgMax:70,spread:0.50,earn:true,bull:false,wide:true},
-    safe:     {sig:50, fgMin:0, fgMax:100,spread:0.50,earn:true,bull:false,wide:true},
-    bull:     {sig:0,  fgMin:40,fgMax:75, spread:0.50,earn:false,bull:true,wide:true}
+    highConv: {sig:200,fgMin:30,fgMax:70,spread:10,earn:true,bull:false,wide:true},
+    safe:     {sig:50, fgMin:0, fgMax:100,spread:10,earn:true,bull:false,wide:true},
+    bull:     {sig:0,  fgMin:40,fgMax:75, spread:10,earn:false,bull:true,wide:true}
   }
   var custom = null; try { custom = JSON.parse(localStorage.getItem('gt_custom_preset')) } catch(e){}
   var pr = name==='custom' ? custom : presets[name]
@@ -3907,7 +3904,7 @@ function loadPreset(name) {
   runFilter()
 }
 function saveCurrentPreset() {
-  var pr = {sig:+document.getElementById('f-sig').value||0,fgMin:+document.getElementById('f-fg-min').value||0,fgMax:+document.getElementById('f-fg-max').value||100,spread:+document.getElementById('f-spread').value||0.50,earn:document.getElementById('f-earn').checked,bull:document.getElementById('f-bull').checked,wide:document.getElementById('f-wide').checked}
+  var pr = {sig:+document.getElementById('f-sig').value||0,fgMin:+document.getElementById('f-fg-min').value||0,fgMax:+document.getElementById('f-fg-max').value||100,spread:+document.getElementById('f-spread').value||((window.GT&&window.GT.MAX_SPREAD_PCT)||10),earn:document.getElementById('f-earn').checked,bull:document.getElementById('f-bull').checked,wide:document.getElementById('f-wide').checked}
   localStorage.setItem('gt_custom_preset', JSON.stringify(pr))
   setApi('Filter preset saved ✓', 'ok')
 }
@@ -3915,7 +3912,7 @@ function resetFilters() {
   document.getElementById('f-sig').value = 0
   document.getElementById('f-fg-min').value = 0
   document.getElementById('f-fg-max').value = 100
-  document.getElementById('f-spread').value = 0.50
+  document.getElementById('f-spread').value = (window.GT && window.GT.MAX_SPREAD_PCT) || 10
   document.getElementById('f-oi').value = 0
   document.getElementById('f-vol').value = 0
   document.getElementById('f-earn').checked = true
