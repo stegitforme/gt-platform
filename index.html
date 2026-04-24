@@ -1381,8 +1381,8 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 // the latest commit — your browser is serving CACHED older HTML.
 // Hard-reload: Cmd+Shift+R (Mac) / Ctrl+Shift+F5 (Win).
 window.__GT_BUILD = {
-  sha:   'c982c39a99de50c39ce39bd9782191077ebef4df',
-  short: 'c982c39',
+  sha:   'a1aba4e1544717748a6b5991514a747c0841a4ae',
+  short: 'a1aba4e',
   builtAt: new Date().toISOString()
 }
 ;(function(){
@@ -8966,12 +8966,15 @@ function drawMiniChart(canvas, levels, current, sym, t) {
   ctx.fillStyle = 'rgba(255,255,255,.02)'
   ctx.fillRect(pad.l, pad.t, plotW, plotH)
 
-  // Dashed reference lines — every level
+  // Dashed reference lines — per-kind weight so STOP reads heavier than
+  // ENTRY (which is intentionally muted) without changing the chart layout.
+  // Stop = 1.5px / Rolls = 1px / Entry + Base = 0.8px.
+  const kindLineWidth = { stop:1.5, entry:0.8, base:0.8 }
   for(const l of levels) {
     const py = y(l.price)
     ctx.strokeStyle = l.color
-    ctx.lineWidth = 1
-    ctx.setLineDash([3, 3])
+    ctx.lineWidth = kindLineWidth[l.kind] || 1
+    ctx.setLineDash(l.kind === 'entry' || l.kind === 'base' ? [2, 4] : [3, 3])
     ctx.beginPath(); ctx.moveTo(pad.l, py); ctx.lineTo(W - pad.r, py); ctx.stroke()
     ctx.setLineDash([])
   }
@@ -9006,15 +9009,21 @@ function drawMiniChart(canvas, levels, current, sym, t) {
 
   // ── Right-edge labels (geometric-truth-preserving) ───────────────────
   const MERGE_EPS = 2
+  // Visual hierarchy:
+  //   NOW    (drawn elsewhere) — dominant: solid line, glowing dot, inverted pill
+  //   STOP   — bright red, thicker dashed line
+  //   r1/r2  — green tones, normal dashed
+  //   ENTRY  — muted gold (low contrast) so it doesn't compete with stop/rolls
+  //   BE / BASE / NEXT ROLL — same kind of treatment as their pre-roll cousins
   const kindStyles = {
-    stop:  { color:'#ff4560', bg:'rgba(255,69,96,.16)',  border:'rgba(255,69,96,.5)',  dim:'rgba(255,69,96,.75)'  },
-    entry: { color:'#f0c040', bg:'rgba(240,192,64,.16)', border:'rgba(240,192,64,.5)', dim:'rgba(240,192,64,.75)' },
-    r1:    { color:'#00d68f', bg:'rgba(0,214,143,.16)',  border:'rgba(0,214,143,.5)',  dim:'rgba(0,214,143,.75)'  },
-    r2:    { color:'#00b080', bg:'rgba(0,176,128,.16)',  border:'rgba(0,176,128,.5)',  dim:'rgba(0,176,128,.75)'  },
-    r3:    { color:'#008c60', bg:'rgba(0,140,96,.16)',   border:'rgba(0,140,96,.5)',   dim:'rgba(0,140,96,.75)'   },
-    be:    { color:'#ff8c42', bg:'rgba(255,140,66,.16)', border:'rgba(255,140,66,.5)', dim:'rgba(255,140,66,.75)' },
-    base:  { color:'#f0c040', bg:'rgba(240,192,64,.16)', border:'rgba(240,192,64,.5)', dim:'rgba(240,192,64,.75)' },
-    nr:    { color:'#00d68f', bg:'rgba(0,214,143,.16)',  border:'rgba(0,214,143,.5)',  dim:'rgba(0,214,143,.75)'  }
+    stop:  { color:'#ff4560', bg:'rgba(255,69,96,.18)',  border:'rgba(255,69,96,.6)',  dim:'rgba(255,69,96,.75)',  lineWidth: 1.5 },
+    entry: { color:'#a6884c', bg:'rgba(166,136,76,.10)', border:'rgba(166,136,76,.4)', dim:'rgba(166,136,76,.65)', lineWidth: 0.8 },
+    r1:    { color:'#00d68f', bg:'rgba(0,214,143,.16)',  border:'rgba(0,214,143,.5)',  dim:'rgba(0,214,143,.75)',  lineWidth: 1   },
+    r2:    { color:'#00a878', bg:'rgba(0,168,120,.14)',  border:'rgba(0,168,120,.45)', dim:'rgba(0,168,120,.7)',   lineWidth: 1   },
+    r3:    { color:'#008c60', bg:'rgba(0,140,96,.16)',   border:'rgba(0,140,96,.5)',   dim:'rgba(0,140,96,.75)',   lineWidth: 1   },
+    be:    { color:'#ff8c42', bg:'rgba(255,140,66,.16)', border:'rgba(255,140,66,.5)', dim:'rgba(255,140,66,.75)', lineWidth: 1   },
+    base:  { color:'#a6884c', bg:'rgba(166,136,76,.10)', border:'rgba(166,136,76,.4)', dim:'rgba(166,136,76,.65)', lineWidth: 0.8 },
+    nr:    { color:'#00d68f', bg:'rgba(0,214,143,.16)',  border:'rgba(0,214,143,.5)',  dim:'rgba(0,214,143,.75)',  lineWidth: 1   }
   }
 
   const raw = []
@@ -9048,14 +9057,48 @@ function drawMiniChart(canvas, levels, current, sym, t) {
   // 4) Resolve vertical overlap BETWEEN groups — but only move the pill
   //    body; the leader line goes back to anchorTruthY so the visual
   //    relationship between pill and line never breaks.
+  //
+  // Priority for who yields when two pills collide (higher = more pinned
+  // to truthY, lower = more willing to move out of the way):
+  //    NOW         100  — never moves
+  //    STOP         80  — must stay near its real value
+  //    R1 / R2 / NR 60  — important, prefer not to move
+  //    BE           50  — informational
+  //    ENTRY/BASE   20  — muted, yield first
+  // The previous resolver always pushed the LATER pill in y-order
+  // downward — which dragged R1 past R2 and clipped at the bottom when
+  // ATR was small. The new logic moves the LOWER-priority pill in
+  // either direction so the higher-priority pill stays put.
+  const PRIO = { now:100, stop:80, r1:60, r2:60, nr:60, be:50, base:20, entry:20 }
+  const pillPriority = p => p.hasNow ? PRIO.now : Math.max.apply(null, p.items.map(i => PRIO[i.kind] || 0))
   const MIN_GAP = 22
   for(let i = 1; i < pills.length; i++) {
     const delta = pills[i].pillY - pills[i-1].pillY
     if(delta < MIN_GAP) {
-      if(pills[i].hasNow && !pills[i-1].hasNow) {
-        pills[i-1].pillY -= (MIN_GAP - delta)
+      const need = MIN_GAP - delta
+      const pa = pillPriority(pills[i-1])
+      const pb = pillPriority(pills[i])
+      if(pa >= pb) {
+        // higher pill (i-1) wins; push lower-priority pill (i) down
+        pills[i].pillY += need
       } else {
-        pills[i].pillY += (MIN_GAP - delta)
+        // lower pill (i) is higher priority; push (i-1) up
+        pills[i-1].pillY -= need
+      }
+    }
+  }
+  // Second pass: resolve any new conflicts created by the first pass
+  // (pushing one pill can collide with the next).
+  for(let pass = 0; pass < 2; pass++) {
+    pills.sort((a,b) => a.pillY - b.pillY)
+    for(let i = 1; i < pills.length; i++) {
+      const delta = pills[i].pillY - pills[i-1].pillY
+      if(delta < MIN_GAP) {
+        const need = MIN_GAP - delta
+        const pa = pillPriority(pills[i-1])
+        const pb = pillPriority(pills[i])
+        if(pa >= pb) pills[i].pillY += need
+        else         pills[i-1].pillY -= need
       }
     }
   }
@@ -9227,21 +9270,37 @@ function renderMiniChartForTrade(t) {
   const current  = getCurrentUnderlyingPxForTrade(t)
   const phase    = t.strategyPhase || 'pre-roll'
 
-  // Build level list based on phase.
+  // Build level list based on phase. Trade Manager mini-chart shows a
+  // simplified set tuned for at-a-glance scanning. Planner candidates
+  // table still shows R3 separately.
+  //
+  //   PRE-ROLL  → STOP, ENTRY (muted), R1, R2, NOW          (R3 omitted)
+  //   POST-ROLL → STOP (active trailing), BE (only if it differs from
+  //               STOP by ≥ $0.01), BASE, NEXT ROLL, NOW
+  //
+  // ENTRY is rendered with a muted gold so STOP and the rolls dominate;
+  // NOW remains the most prominent element via solid line + glowing dot.
   const levels = []
   if(phase === 'pre-roll') {
-    if(t.stop125Entry != null) levels.push({ kind:'stop', price:+t.stop125Entry, label:'STOP',   color:'#ff4560' })
-    if(entry > 0)              levels.push({ kind:'entry',price:entry,            label:'ENTRY',  color:'#f0c040' })
-    if(t.roll05Entry != null)  levels.push({ kind:'r1',   price:+t.roll05Entry,   label:'ROLL 1', color:'#00d68f' })
-    if(t.roll10Entry != null)  levels.push({ kind:'r2',   price:+t.roll10Entry,   label:'ROLL 2', color:'#00b080' })
-    if(t.roll20Entry != null)  levels.push({ kind:'r3',   price:+t.roll20Entry,   label:'ROLL 3', color:'#008c60' })
+    if(t.stop125Entry != null) levels.push({ kind:'stop', price:+t.stop125Entry, label:'STOP',  color:'#ff4560' })
+    if(entry > 0)              levels.push({ kind:'entry',price:entry,            label:'ENTRY', color:'#a6884c' })
+    if(t.roll05Entry != null)  levels.push({ kind:'r1',   price:+t.roll05Entry,   label:'R1',    color:'#00d68f' })
+    if(t.roll10Entry != null)  levels.push({ kind:'r2',   price:+t.roll10Entry,   label:'R2',    color:'#00a878' })
+    // R3 intentionally omitted from Trade Manager mini-chart per design.
+    // Planner candidate table still shows R3 (entry + 2.0·ATR).
   } else {
     // Post-roll: focus on trailing stop, breakeven, new base, next roll.
     const rc = +t.rollCount || 1
-    if(t.activeStop != null)         levels.push({ kind:'stop',  price:+t.activeStop,         label:'STOP',  color:'#ff4560' })
-    if(t.breakevenUnderlying != null)levels.push({ kind:'be',    price:+t.breakevenUnderlying,label:'BE',    color:'#ff8c42' })
-    if(t.newBase != null)            levels.push({ kind:'base',  price:+t.newBase,            label:'BASE',  color:'#f0c040' })
-    // Show the NEXT unreached roll marker if any
+    const activeStop = +t.activeStop
+    if(t.activeStop != null) levels.push({ kind:'stop', price:activeStop, label:'STOP', color:'#ff4560' })
+    // Suppress BE pill when it is within $0.01 of the active stop
+    // (typically true when BE is the higher floor of the trailing
+    // formula — duplicating the same line as STOP would just clutter).
+    if(t.breakevenUnderlying != null) {
+      const beDiff = Math.abs(+t.breakevenUnderlying - activeStop)
+      if(beDiff > 0.01) levels.push({ kind:'be', price:+t.breakevenUnderlying, label:'BE', color:'#ff8c42' })
+    }
+    if(t.newBase != null) levels.push({ kind:'base', price:+t.newBase, label:'BASE', color:'#a6884c' })
     if(rc < 3) {
       const nextRoll = rc === 1 ? t.roll10Entry : rc === 2 ? t.roll20Entry : null
       if(nextRoll != null) levels.push({ kind:'nr', price:+nextRoll, label:'NEXT ROLL', color:'#00d68f' })
