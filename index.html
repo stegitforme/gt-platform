@@ -9130,25 +9130,71 @@ window.updateStopMultLabels = function() {
     var th = document.getElementById('pl-stop-th')
     if(th) th.title = 'Golden Ticket hard stop = entry − ' + n + ' · ATR (mechanical, no exceptions)'
   } catch(e) {}
-  // Helper text under the segmented selector. When a Planner candidate
-  // or open trade exposes a usable ATR via window._lastFocusedATR (set
-  // by Planner row hover or sizer focus), surface the approximate
-  // risk-per-contract using the canonical formula: 100 × delta × STOP_MULT × ATR.
-  // Falls back to a clean "Active stop: X × ATR" line when no context.
+  // Helper text under the segmented selector. Resolves an ATR from any
+  // reasonable current context (focused trade → selected Planner
+  // candidate → first visible open trade). When ATR is found, surfaces
+  // the approximate risk-per-contract using the canonical formula:
+  //
+  //     riskPerContract = 100 × DELTA × STOP_MULT × ATR
+  //
+  // Falls back to a clean "Active stop: X × ATR" when no context exists.
+  // NEVER fabricates ATR — silently omits the risk line when nothing
+  // resolvable is in scope.
   try {
     var helper = document.getElementById('gt-stop-mult-helper')
     if(helper) {
       var line = 'Active stop: ' + n + ' × ATR'
-      var atr = +window._lastFocusedATR || 0
+      var ctx = (typeof window.resolveStopMultATRContext === 'function')
+        ? window.resolveStopMultATRContext()
+        : null
       var delta = (window.GT && +window.GT.DELTA) || 0.80
-      if(atr > 0) {
-        var rpc = 100 * delta * n * atr
+      if(ctx && ctx.atr > 0) {
+        var rpc = 100 * delta * n * ctx.atr
+        var srcLabel = ctx.src === 'focused' ? 'focused trade'
+                     : ctx.src === 'planner' ? 'planner candidate ' + (ctx.sym || '')
+                     : ctx.src === 'open'    ? 'open trade '       + (ctx.sym || '')
+                     : (ctx.sym || 'context')
         line += ' · ≈ Risk/contract: $' + Math.round(rpc).toLocaleString() +
-                ' (100 × ' + delta.toFixed(2) + ' × ' + n + ' × $' + atr.toFixed(2) + ' ATR)'
+                ' (100 × ' + delta.toFixed(2) + ' × ' + n + ' × $' + ctx.atr.toFixed(2) + ' ATR · ' + srcLabel + ')'
       }
       helper.textContent = line
     }
   } catch(e) {}
+}
+
+// Resolve an ATR from the current UI context, in priority order:
+//   1. window._lastFocusedATR — set by mini-chart hover / sizer focus /
+//      any future "I'm hovering this trade" hook
+//   2. Selected Planner candidate (window._SELECTED_CAND_SYM →
+//      PLANNER_CANDIDATES[i].atr)
+//   3. First visible open trade with ATR > 0 (via getOpenBook())
+// Returns { atr, sym, src } or null. Never throws; never fabricates.
+window.resolveStopMultATRContext = function() {
+  // Priority 1: last-focused ATR (hover / sizer)
+  if(+window._lastFocusedATR > 0) {
+    return { atr: +window._lastFocusedATR, sym: (window._lastFocusedSym || '?'), src: 'focused' }
+  }
+  // Priority 2: selected Planner candidate
+  try {
+    if(window._SELECTED_CAND_SYM && Array.isArray(window.PLANNER_CANDIDATES)) {
+      var c = window.PLANNER_CANDIDATES.find(function(x){ return x && x.sym === window._SELECTED_CAND_SYM })
+      if(c && +c.atr > 0) return { atr: +c.atr, sym: c.sym, src: 'planner' }
+    }
+  } catch(e) {}
+  // Priority 3: first visible open trade with ATR
+  try {
+    if(typeof getOpenBook === 'function') {
+      var open = getOpenBook()
+      if(Array.isArray(open) && open.length) {
+        for(var i = 0; i < open.length; i++) {
+          var t = open[i]
+          var a = +(t && (t.atr || t.entryATR)) || 0
+          if(a > 0) return { atr: a, sym: t.ticker || t.underlying || '?', src: 'open' }
+        }
+      }
+    }
+  } catch(e) {}
+  return null
 }
 window.GT.DELTA        = 0.80
 window.GT.BASE_RISK    = 625     // default per-trade risk $
@@ -10979,6 +11025,50 @@ function renderRollReview() {
     if(ev.estimatedCredit != null && isFinite(+ev.estimatedCredit)) return +ev.estimatedCredit
     return -Infinity   // null credits sort last in BOTH directions when paired with NaN guard below
   }
+
+  // ─── Opportunity score (virtual sortable column) ──────────────────
+  // Combines THREE transparent factors, each normalized to [0, 1]:
+  //
+  //   creditNorm   = clamp(credit / max(credit), 0, 1) — relative to
+  //                  the LARGEST credit in the current visible event
+  //                  set. Negative or null credits → 0.
+  //   confNorm     = (confidence ?? 0) / 100
+  //   recencyMult  = 1.0 for events within 24h, decaying linearly to
+  //                  0.7 at 30 days. Older events floor at 0.7. Mild
+  //                  decay so older confirmed rolls aren't unfairly
+  //                  penalized.
+  //
+  //   opportunity  = 0.50 × creditNorm
+  //                + 0.35 × confNorm
+  //                + 0.15 × recencyMult     (weighted sum, [0, 1])
+  //
+  // Computed across the FILTERED visible set so the normalizer is
+  // meaningful for what the user is currently looking at. Disqualified
+  // / rejected events get opportunity = 0 so they never crowd the top.
+  const _computeOpportunity = (eventList) => {
+    let maxCredit = 0
+    for(const e of eventList) {
+      const c = _rrCredit(e)
+      if(isFinite(c) && c > maxCredit) maxCredit = c
+    }
+    const now = Date.now()
+    for(const e of eventList) {
+      if(e.status === 'rejected') { e._opp = 0; continue }
+      const c = _rrCredit(e)
+      const creditNorm = (maxCredit > 0 && isFinite(c) && c > 0) ? (c / maxCredit) : 0
+      const confNorm   = Math.max(0, Math.min(1, (+e.confidence || 0) / 100))
+      const ageDays    = e.timestamp ? Math.max(0, (now - e.timestamp) / 864e5) : 30
+      // Linear decay 1.0 → 0.7 over 0–30 days, floor 0.7
+      const recencyMult = ageDays < 1 ? 1.0
+                       : ageDays < 30 ? (1.0 - 0.3 * (ageDays - 1) / 29)
+                       : 0.7
+      e._opp = +(0.50 * creditNorm + 0.35 * confNorm + 0.15 * recencyMult).toFixed(3)
+    }
+  }
+  // Compute opportunity scores up-front so the sort comparator can read
+  // them as a stable property. Recomputes every render — cheap.
+  _computeOpportunity(events)
+
   const _rrSort = (a, b) => {
     const s = window.__rrSort, dir = s.dir, key = s.key
     let av, bv, isStr = false
@@ -10989,6 +11079,7 @@ function renderRollReview() {
       case 'confidence':   av = +a.confidence || 0;           bv = +b.confidence || 0; break
       case 'status':       av = String(a.status||'~');        bv = String(b.status||'~'); isStr = true; break
       case 'method':       av = String(a.creditMethod||'~');  bv = String(b.creditMethod||'~'); isStr = true; break
+      case 'opportunity':  av = +a._opp || 0;                 bv = +b._opp || 0; break
       default:             av = +a.timestamp || 0;            bv = +b.timestamp || 0; break
     }
     let cmp = isStr ? av.localeCompare(bv) : (av - bv)
@@ -11288,13 +11379,19 @@ function renderRollReview() {
   // Sortable variant — same style; adds a sort key, click handler, and
   // an arrow when this is the active sort column. Calls back into
   // setRollReviewSort() defined on window so the inline onclick can
-  // trigger a re-render without closing over filter scope.
-  const thSort = (label, key) => {
+  // trigger a re-render without closing over filter scope. ACTIVE
+  // styling: gold bold text + amber underline + soft background tint
+  // + arrow — leaves no ambiguity which column is currently sorted.
+  const thSort = (label, key, extraTitle) => {
     const s = window.__rrSort || { key:'credit', dir:-1 }
     const active = s.key === key
     const arrow = active ? (s.dir === -1 ? ' ▼' : ' ▲') : ''
-    const col   = active ? '#f0c040' : '#555c6e'
-    return '<th onclick="setRollReviewSort(\''+key+'\')" style="text-align:left;padding:6px 8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:'+col+';border-bottom:1px solid rgba(255,255,255,.10);background:#0a0c0f;white-space:nowrap;cursor:pointer;user-select:none" title="Click to sort by '+label+'">'+label+arrow+'</th>'
+    const col       = active ? '#f0c040' : '#555c6e'
+    const wt        = active ? '800'     : '700'
+    const bg        = active ? 'rgba(240,192,64,.10)' : '#0a0c0f'
+    const borderBot = active ? '2px solid #f0c040'    : '1px solid rgba(255,255,255,.10)'
+    const titleStr  = (extraTitle ? extraTitle : ('Click to sort by '+label))
+    return '<th onclick="setRollReviewSort(\''+key+'\')" style="text-align:left;padding:6px 8px;font-size:9px;font-weight:'+wt+';text-transform:uppercase;letter-spacing:.06em;color:'+col+';border-bottom:'+borderBot+';background:'+bg+';white-space:nowrap;cursor:pointer;user-select:none" title="'+titleStr.replace(/"/g,'&quot;')+'">'+label+arrow+'</th>'
   }
   const td = (h, c, extra) => '<td style="padding:6px 8px;font-size:11px;color:'+(c||'#e8eaf0')+';border-bottom:1px solid rgba(255,255,255,.04);'+(extra||'')+'">'+h+'</td>'
 
@@ -11329,6 +11426,15 @@ function renderRollReview() {
       td(fmt$(ev.confirmedCredit), ev.status === 'confirmed' ? '#00d68f' : null, 'text-align:right;font-family:\'SF Mono\',monospace') +
       td('<span title="'+esc(ev.creditNote||'')+'" style="color:#8b91a0;font-size:10px">'+esc(methodLbl(ev.creditMethod))+'</span>', null, 'text-align:center') +
       td('<span style="color:#555c6e;font-size:10px">'+fmtT(ev.timestamp)+'</span>') +
+      // Opportunity cell — derived 0–1 score (50% credit-norm + 35%
+      // confidence + 15% recency); rejected rows always show 0.
+      // Color-coded so high-opportunity rows pop on quick scan.
+      (function(){
+        const opp = +ev._opp || 0
+        const oCol = opp >= 0.75 ? '#00d68f' : opp >= 0.55 ? '#f0c040' : opp >= 0.30 ? '#ff8c42' : '#555c6e'
+        const oTitle = 'Opportunity = 0.50×credit_norm + 0.35×confidence + 0.15×recency. Computed across the current visible set; rejected rows = 0.'
+        return td('<span title="'+oTitle+'" style="color:'+oCol+';font-weight:700;font-family:\'SF Mono\',monospace;font-size:11px">'+opp.toFixed(2)+'</span>', null, 'text-align:right')
+      })() +
       td(actionsFor(ev), null, 'text-align:right;white-space:nowrap') +
     '</tr>'
   }
@@ -11351,7 +11457,7 @@ function renderRollReview() {
       ' title="Select all visible detected/historical rows" style="cursor:pointer;accent-color:#4da6ff">'
   const table =
     '<div style="overflow-x:auto;background:#0a0c0f;border:1px solid rgba(255,255,255,.06);border-radius:6px">' +
-      '<table style="width:100%;border-collapse:collapse;min-width:1140px">' +
+      '<table style="width:100%;border-collapse:collapse;min-width:1200px">' +
         '<thead><tr>' +
           th(headCheckbox) +
           thSort('Status', 'status') + thSort('Conf', 'confidence') + thSort('Underlying', 'underlying') + th('Old contract') +
@@ -11361,7 +11467,11 @@ function renderRollReview() {
           // available, else estimated). Two distinct headers but one
           // logical sort key keeps the UI honest.
           thSort('Estimated', 'credit') + thSort('Confirmed', 'credit') +
-          thSort('Method', 'method') + thSort('Detected', 'timestamp') + th('Actions') +
+          thSort('Method', 'method') + thSort('Detected', 'timestamp') +
+          // Opportunity — virtual sortable column. Score formula and
+          // weights documented in _computeOpportunity above.
+          thSort('Opp', 'opportunity', 'Opportunity = 0.50×credit-normalized + 0.35×confidence + 0.15×recency. Computed across the current visible set so the credit normalizer is meaningful. Rejected rows score 0. Click to sort.') +
+          th('Actions') +
         '</tr></thead>' +
         '<tbody>'+rows+'</tbody>' +
       '</table>' +
@@ -13092,6 +13202,18 @@ setTimeout(() => { renderTrades(); renderPortfolioRisk(); if(typeof updateFidSyn
   // multiplier after hard-reload (e.g. header shows "STOP −1.0" when
   // the persisted value is 1.0).
   try { if(typeof window.updateStopMultLabels === 'function') window.updateStopMultLabels() } catch(e) {}
+  // Light-touch refresh interval: re-resolves the helper's ATR context
+  // every 4 seconds so a freshly-loaded Planner candidate, a hover
+  // change, or an open-trade ATR enrichment shows up in the
+  // "Risk/contract" line without requiring a full re-render. The
+  // function is a few DOM reads + arithmetic — cheap enough.
+  try {
+    if(!window._stopHelperTimer) {
+      window._stopHelperTimer = setInterval(function() {
+        try { if(typeof window.updateStopMultLabels === 'function') window.updateStopMultLabels() } catch(e) {}
+      }, 4000)
+    }
+  } catch(e) {}
 }, 800)
 
 function saveTrades() {
