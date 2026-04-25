@@ -936,7 +936,33 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
       <span id="total-pnl-display" style="font-size:12px;color:#555c6e"></span>
       <button id="pnl-refresh-btn" class="btn btn-ghost" style="font-size:11px;padding:4px 10px" onclick="refreshAllPnL()">Refresh P&amp;L</button>
       <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px;color:#4da6ff;border-color:rgba(77,166,255,.3)" onclick="fetchStockPricesForTrades()" title="Fetch live stock prices for all open trades">⟳ Stock Prices</button>
-      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap"><span style="font-size:11px;color:#555c6e;font-weight:600">ATR Stop:</span><button id="atr-btn-half" onclick="setAtrStop(0.5)" class="btn btn-ghost" style="font-size:11px;padding:3px 10px">&#189; ATR</button><button id="atr-btn-1" onclick="setAtrStop(1)" class="btn btn-ghost" style="font-size:11px;padding:3px 10px;background:#1a2332;color:#f0c040;border:1px solid #f0c040">1 ATR</button><button id="atr-btn-2" onclick="setAtrStop(2)" class="btn btn-ghost" style="font-size:11px;padding:3px 10px">2 ATR</button><span style="font-size:11px;color:#555c6e;font-weight:600;margin-left:12px" title="Golden Ticket stop multiplier: STOP = entry − (Stop ATR × ATR). Changes propagate to Planner STOP/RPC/Cts + Trade Manager mini-chart immediately.">Stop ATR:</span><select id="gt-stop-mult-select" onchange="setGTStopMult(+this.value)" title="Golden Ticket stop multiplier. Roll markers (+0.5/+1.0/+2.0 ATR) are unaffected." style="background:#0a0c0f;border:1px solid rgba(255,255,255,.12);border-radius:4px;padding:3px 8px;font-size:11px;color:#f0c040;outline:none;cursor:pointer;font-weight:700"><option value="0.5">0.5 ATR</option><option value="1.0">1.0 ATR</option><option value="1.25">1.25 ATR</option><option value="1.5">1.5 ATR</option><option value="2.0">2.0 ATR</option></select></div><div id="tm-risk-bar" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;padding:8px 12px;background:#0d1117;border-radius:8px;border:1px solid #1e2d3d;font-size:12px;margin-bottom:8px"><span style="color:#555c6e">Budget:</span><span id="tm-budget-total" style="color:#f0c040;font-weight:700">--</span><span style="color:#555c6e">Deployed:</span><span id="tm-deployed" style="color:#ff8c42;font-weight:700">--</span><span style="color:#555c6e">Available:</span><span id="tm-available" style="color:#00d68f;font-weight:700">--</span></div><select id="tm-sort" onchange="renderTrades()" style="background:#0a0c0f;border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:3px 8px;font-size:11px;color:#8b91a0;outline:none;cursor:pointer;position:relative;z-index:10">
+      <!-- ── Stop ATR — single segmented selector ──────────────────────────
+     Replaces the prior dual control (½/1/2 ATR ghost buttons +
+     dropdown) which were two SEPARATE settings (window.GT_ATR_MULT
+     vs window.GT.STOP_MULT). The segmented bar below is the SINGLE
+     source of truth: it drives window.GT.STOP_MULT (persisted as
+     gt_stop_mult in localStorage and on the Firebase risk payload),
+     re-renders Planner + Trade Manager on every click, and surfaces
+     the active stop in plain text underneath. -->
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap" title="Golden Ticket stop multiplier: STOP = entry − (Stop ATR × ATR). Changes propagate to Planner STOP/RPC/Cts and the Trade Manager mini-chart immediately. Roll markers (+0.5/+1.0/+2.0 ATR) are unaffected.">
+  <span style="font-size:11px;color:#555c6e;font-weight:600;letter-spacing:.05em;text-transform:uppercase">Stop ATR</span>
+  <div id="gt-stop-mult-seg" role="radiogroup" aria-label="Stop ATR multiplier" style="display:inline-flex;background:#0a0c0f;border:1px solid rgba(255,255,255,.12);border-radius:6px;overflow:hidden">
+    <button type="button" data-mult="0.5"  onclick="setGTStopMult(this.getAttribute('data-mult'))" class="gt-stop-seg" style="background:transparent;border:none;color:#8b91a0;padding:4px 12px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;border-right:1px solid rgba(255,255,255,.07)">0.5</button>
+    <button type="button" data-mult="1.0"  onclick="setGTStopMult(this.getAttribute('data-mult'))" class="gt-stop-seg" style="background:transparent;border:none;color:#8b91a0;padding:4px 12px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;border-right:1px solid rgba(255,255,255,.07)">1.0</button>
+    <button type="button" data-mult="1.25" onclick="setGTStopMult(this.getAttribute('data-mult'))" class="gt-stop-seg" style="background:transparent;border:none;color:#8b91a0;padding:4px 12px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;border-right:1px solid rgba(255,255,255,.07)">1.25</button>
+    <button type="button" data-mult="1.5"  onclick="setGTStopMult(this.getAttribute('data-mult'))" class="gt-stop-seg" style="background:transparent;border:none;color:#8b91a0;padding:4px 12px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;border-right:1px solid rgba(255,255,255,.07)">1.5</button>
+    <button type="button" data-mult="2.0"  onclick="setGTStopMult(this.getAttribute('data-mult'))" class="gt-stop-seg" style="background:transparent;border:none;color:#8b91a0;padding:4px 12px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">2.0</button>
+  </div>
+  <span style="font-size:10px;color:#555c6e">× ATR</span>
+  <span id="gt-stop-mult-helper" style="font-size:10px;color:#8b91a0;margin-left:4px">Active stop: 1.25 × ATR</span>
+</div>
+<!-- Hidden compatibility shim: keep #gt-stop-mult-select in the DOM so
+     setGTStopMult's existing sel.value = key sync path (and Firebase
+     restore call site) remains a no-op rather than a missing-element
+     error. The visible UI is the segmented bar above. -->
+<select id="gt-stop-mult-select" aria-hidden="true" style="display:none">
+  <option value="0.5">0.5</option><option value="1.0">1.0</option><option value="1.25">1.25</option><option value="1.5">1.5</option><option value="2.0">2.0</option>
+</select><div id="tm-risk-bar" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;padding:8px 12px;background:#0d1117;border-radius:8px;border:1px solid #1e2d3d;font-size:12px;margin-bottom:8px"><span style="color:#555c6e">Budget:</span><span id="tm-budget-total" style="color:#f0c040;font-weight:700">--</span><span style="color:#555c6e">Deployed:</span><span id="tm-deployed" style="color:#ff8c42;font-weight:700">--</span><span style="color:#555c6e">Available:</span><span id="tm-available" style="color:#00d68f;font-weight:700">--</span></div><select id="tm-sort" onchange="renderTrades()" style="background:#0a0c0f;border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:3px 8px;font-size:11px;color:#8b91a0;outline:none;cursor:pointer;position:relative;z-index:10">
         <option value="date-desc">Newest first</option>
         <option value="date-asc">Oldest first</option>
         <option value="pnl-desc">P&amp;L: best first</option>
@@ -9043,12 +9069,17 @@ window.setGTStopMult = function(v) {
   var n = parseFloat(key)
   window.GT.STOP_MULT = n
   try { localStorage.setItem('gt_stop_mult', key) } catch(e) {}
-  // Sync the <select> using the exact string key so the option matches.
+  // Sync the hidden <select> shim so any legacy reader (Firebase
+  // restore call site, debug code) still sees a well-formed value.
   try {
     var sel = document.getElementById('gt-stop-mult-select')
     if(sel && sel.value !== key) sel.value = key
   } catch(e) {}
-  // Update any dynamic STOP label (Planner header "−1.25" pill, etc.).
+  // Sync the segmented selector — highlight the active button, dim the
+  // rest. The visible UI is the single source of truth now.
+  try { if(typeof window.syncStopMultSegmented === 'function') window.syncStopMultSegmented() } catch(e) {}
+  // Update any dynamic STOP label (Planner header "−1.25" pill, the
+  // "Active stop: X × ATR" helper text under the segmented control, etc.).
   try { if(typeof window.updateStopMultLabels === 'function') window.updateStopMultLabels() } catch(e) {}
   // Re-render downstream surfaces. plannerCalc() refreshes the Candidates
   // table (STOP/RPC/Cts); renderTrades() rebuilds the Trade Manager cards
@@ -9058,6 +9089,27 @@ window.setGTStopMult = function(v) {
   try { if(typeof renderTrades === 'function') renderTrades() } catch(e) {}
   if(typeof fbAutoSave === 'function') fbAutoSave(1500)
   console.log('[GT] STOP_MULT set to', n, '(key "'+key+'")')
+}
+
+// Repaint the segmented control's active state. Runs on every setGTStopMult
+// call AND on boot once the DOM is ready. Highlighted button gets the
+// gold accent; the rest fade to muted grey. Pure DOM read/write — no
+// side effects on STOP_MULT itself.
+window.syncStopMultSegmented = function() {
+  try {
+    var key = window.normalizeStopMult(window.GT && window.GT.STOP_MULT)
+    if(!key) return
+    var seg = document.getElementById('gt-stop-mult-seg')
+    if(!seg) return
+    var btns = seg.querySelectorAll('.gt-stop-seg')
+    btns.forEach(function(b) {
+      var active = b.getAttribute('data-mult') === key
+      b.style.background = active ? '#1a2332'                : 'transparent'
+      b.style.color      = active ? '#f0c040'                : '#8b91a0'
+      b.style.fontWeight = active ? '700'                    : '600'
+      b.setAttribute('aria-pressed', active ? 'true' : 'false')
+    })
+  } catch(e) {}
 }
 
 // updateStopMultLabels — refreshes every visible "−1.25" style label to
@@ -9077,6 +9129,25 @@ window.updateStopMultLabels = function() {
   try {
     var th = document.getElementById('pl-stop-th')
     if(th) th.title = 'Golden Ticket hard stop = entry − ' + n + ' · ATR (mechanical, no exceptions)'
+  } catch(e) {}
+  // Helper text under the segmented selector. When a Planner candidate
+  // or open trade exposes a usable ATR via window._lastFocusedATR (set
+  // by Planner row hover or sizer focus), surface the approximate
+  // risk-per-contract using the canonical formula: 100 × delta × STOP_MULT × ATR.
+  // Falls back to a clean "Active stop: X × ATR" line when no context.
+  try {
+    var helper = document.getElementById('gt-stop-mult-helper')
+    if(helper) {
+      var line = 'Active stop: ' + n + ' × ATR'
+      var atr = +window._lastFocusedATR || 0
+      var delta = (window.GT && +window.GT.DELTA) || 0.80
+      if(atr > 0) {
+        var rpc = 100 * delta * n * atr
+        line += ' · ≈ Risk/contract: $' + Math.round(rpc).toLocaleString() +
+                ' (100 × ' + delta.toFixed(2) + ' × ' + n + ' × $' + atr.toFixed(2) + ' ATR)'
+      }
+      helper.textContent = line
+    }
   } catch(e) {}
 }
 window.GT.DELTA        = 0.80
@@ -10662,6 +10733,27 @@ function setRollReviewFilter(f) {
 }
 window.setRollReviewFilter = setRollReviewFilter
 
+// Sortable Roll Review columns. Click a sortable header → toggle the
+// direction if it's already the active key; otherwise set it as the new
+// key with a sensible default direction (DESC for numeric / dates, ASC
+// for strings). Sort is applied INSIDE the current filter view by the
+// renderRollReview path, so changing sort never changes which rows are
+// visible — only the order. No Roll Engine data, confirmation logic,
+// bulk actions, or analytics math touched.
+function setRollReviewSort(key) {
+  if(!key) return
+  if(!window.__rrSort) window.__rrSort = { key: 'credit', dir: -1 }
+  if(window.__rrSort.key === key) {
+    window.__rrSort.dir = -window.__rrSort.dir
+  } else {
+    window.__rrSort.key = key
+    // String columns default to ASC; numeric / date default to DESC.
+    window.__rrSort.dir = (key === 'underlying' || key === 'status' || key === 'method') ? 1 : -1
+  }
+  renderRollReview()
+}
+window.setRollReviewSort = setRollReviewSort
+
 // ─── Bulk actions + selection + analytics helpers ──────────────────────
 // All bulk actions operate on the CURRENTLY-VISIBLE (filtered) rows only —
 // hidden rows are never touched. Every transition routes through the
@@ -10876,8 +10968,34 @@ function renderRollReview() {
   if(!body) return
   const events = (window.ROLL_LEDGER && Array.isArray(window.ROLL_LEDGER.events))
     ? window.ROLL_LEDGER.events.slice() : []
-  // Newest first
-  events.sort((a,b) => (b.timestamp||0) - (a.timestamp||0))
+  // Default sort = highest credit first (estimated when not yet
+  // confirmed; confirmed once user accepts). Sortable via column-header
+  // clicks below; window.__rrSort persists the user's choice across
+  // re-renders. Falls back to timestamp DESC for ties so newer detections
+  // surface first within an equal-credit group.
+  if(!window.__rrSort) window.__rrSort = { key: 'credit', dir: -1 }
+  const _rrCredit = ev => {
+    if(ev.status === 'confirmed' && ev.confirmedCredit != null && isFinite(+ev.confirmedCredit)) return +ev.confirmedCredit
+    if(ev.estimatedCredit != null && isFinite(+ev.estimatedCredit)) return +ev.estimatedCredit
+    return -Infinity   // null credits sort last in BOTH directions when paired with NaN guard below
+  }
+  const _rrSort = (a, b) => {
+    const s = window.__rrSort, dir = s.dir, key = s.key
+    let av, bv, isStr = false
+    switch(key) {
+      case 'credit':       av = _rrCredit(a);                 bv = _rrCredit(b); break
+      case 'timestamp':    av = +a.timestamp || 0;            bv = +b.timestamp || 0; break
+      case 'underlying':   av = String(a.underlying||'~');    bv = String(b.underlying||'~'); isStr = true; break
+      case 'confidence':   av = +a.confidence || 0;           bv = +b.confidence || 0; break
+      case 'status':       av = String(a.status||'~');        bv = String(b.status||'~'); isStr = true; break
+      case 'method':       av = String(a.creditMethod||'~');  bv = String(b.creditMethod||'~'); isStr = true; break
+      default:             av = +a.timestamp || 0;            bv = +b.timestamp || 0; break
+    }
+    let cmp = isStr ? av.localeCompare(bv) : (av - bv)
+    if(cmp === 0) cmp = (+a.timestamp || 0) - (+b.timestamp || 0)   // tiebreaker: timestamp asc
+    return dir * cmp
+  }
+  events.sort(_rrSort)
   // Counts
   const cDet  = events.filter(e => e.status === 'detected').length
   const cHist = events.filter(e => e.status === 'historical_candidate').length
@@ -11167,6 +11285,17 @@ function renderRollReview() {
 
   // Table header (single-row sticky-ish; flex grid for compact dense data)
   const th = s => '<th style="text-align:left;padding:6px 8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#555c6e;border-bottom:1px solid rgba(255,255,255,.10);background:#0a0c0f;white-space:nowrap">'+s+'</th>'
+  // Sortable variant — same style; adds a sort key, click handler, and
+  // an arrow when this is the active sort column. Calls back into
+  // setRollReviewSort() defined on window so the inline onclick can
+  // trigger a re-render without closing over filter scope.
+  const thSort = (label, key) => {
+    const s = window.__rrSort || { key:'credit', dir:-1 }
+    const active = s.key === key
+    const arrow = active ? (s.dir === -1 ? ' ▼' : ' ▲') : ''
+    const col   = active ? '#f0c040' : '#555c6e'
+    return '<th onclick="setRollReviewSort(\''+key+'\')" style="text-align:left;padding:6px 8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:'+col+';border-bottom:1px solid rgba(255,255,255,.10);background:#0a0c0f;white-space:nowrap;cursor:pointer;user-select:none" title="Click to sort by '+label+'">'+label+arrow+'</th>'
+  }
   const td = (h, c, extra) => '<td style="padding:6px 8px;font-size:11px;color:'+(c||'#e8eaf0')+';border-bottom:1px solid rgba(255,255,255,.04);'+(extra||'')+'">'+h+'</td>'
 
   let rows = ''
@@ -11225,9 +11354,14 @@ function renderRollReview() {
       '<table style="width:100%;border-collapse:collapse;min-width:1140px">' +
         '<thead><tr>' +
           th(headCheckbox) +
-          th('Status') + th('Conf') + th('Underlying') + th('Old contract') +
+          thSort('Status', 'status') + thSort('Conf', 'confidence') + thSort('Underlying', 'underlying') + th('Old contract') +
           th('') + th('New contract') + th('Qty') + th('Hit') +
-          th('Estimated') + th('Confirmed') + th('Method') + th('Detected') + th('Actions') +
+          // Estimated + Confirmed both read the same _rrCredit accessor
+          // so clicking either sorts by "active credit" (confirmed when
+          // available, else estimated). Two distinct headers but one
+          // logical sort key keeps the UI honest.
+          thSort('Estimated', 'credit') + thSort('Confirmed', 'credit') +
+          thSort('Method', 'method') + thSort('Detected', 'timestamp') + th('Actions') +
         '</tr></thead>' +
         '<tbody>'+rows+'</tbody>' +
       '</table>' +
@@ -12940,9 +13074,10 @@ setTimeout(() => { renderTrades(); renderPortfolioRisk(); if(typeof updateFidSyn
   // Stop Comparison panel — cheap to render, keeps in sync with Trade
   // Manager's open-trades list on every subsequent refresh.
   try { if(typeof renderStopComparison === 'function') renderStopComparison() } catch(e) {}
-  // Sync the Stop ATR <select> with the hydrated window.GT.STOP_MULT
-  // value. Uses the CANONICAL string key (via normalizeStopMult) so the
-  // <option value="1.0"> match survives String()-drops-trailing-zero.
+  // Sync the hidden <select> shim and the visible segmented selector
+  // with the hydrated window.GT.STOP_MULT value. Uses the CANONICAL
+  // string key (via normalizeStopMult) so the option-value match
+  // survives String()-drops-trailing-zero.
   try {
     var _ss = document.getElementById('gt-stop-mult-select')
     if(_ss && window.GT) {
@@ -12951,6 +13086,8 @@ setTimeout(() => { renderTrades(); renderPortfolioRisk(); if(typeof updateFidSyn
       if(_k) _ss.value = _k
     }
   } catch(e) {}
+  // Paint the segmented control's active segment.
+  try { if(typeof window.syncStopMultSegmented === 'function') window.syncStopMultSegmented() } catch(e) {}
   // Refresh any "−1.25" style label so it reflects the active
   // multiplier after hard-reload (e.g. header shows "STOP −1.0" when
   // the persisted value is 1.0).
