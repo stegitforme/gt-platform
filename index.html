@@ -392,6 +392,7 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 <button onclick="show('sizer',this);initPlanner()">Planner</button>
   <button onclick="show('trades',this)">Trade Manager</button>
   <button onclick="show('tenx',this)">10-Bagger</button>
+  <button onclick="show('sa',this);saRender()">Seeking Alpha</button>
   <button onclick="show('backtest',this)">TQQQ 35% Vol Strategy</button>
   <button onclick="show('analytics',this)">Analytics</button>
 </div>
@@ -1246,6 +1247,87 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
     <div></div>
   </div>
   <div id="tenx-list" style="min-height:60px"></div>
+
+</div>
+
+
+<!-- ═══ SEEKING ALPHA / ALPHA PICKS ═══════════════════════════════════════════ -->
+<div id="sa" class="page">
+
+  <!-- Header -->
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+    <div>
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#555c6e;margin-bottom:3px">Seeking Alpha · Alpha Picks Basket</div>
+      <div style="font-size:11px;color:#555c6e">Long-term holdings · independent of SG Score / 10-Bagger · monitored for early-sell signals</div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button class="btn btn-gold" style="font-size:11px;padding:4px 11px" onclick="saRefreshLive()">⟳ Refresh Prices</button>
+      <button class="btn btn-ghost" style="font-size:11px;padding:4px 11px" onclick="document.getElementById('sa-add-form').style.display=document.getElementById('sa-add-form').style.display==='none'?'block':'none'">+ Add Holding</button>
+      <span id="sa-summary" style="font-size:11px;color:#8b91a0"></span>
+      <span id="sa-last-refresh" style="font-size:10px;color:#555c6e"></span>
+    </div>
+  </div>
+
+  <!-- Summary strip -->
+  <div id="sa-strip" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:14px"></div>
+
+  <!-- Add holding form -->
+  <div id="sa-add-form" style="display:none;background:#111318;border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:14px;margin-bottom:14px">
+    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#f0c040;margin-bottom:10px">Add Alpha Picks Holding</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px">
+      <div class="field" style="margin:0"><label>Ticker</label><input type="text" id="sa-new-ticker" placeholder="AAPL" oninput="this.value=this.value.toUpperCase()"></div>
+      <div class="field" style="margin:0"><label>Shares</label><input type="number" id="sa-new-shares" step="0.0001" placeholder="100"></div>
+      <div class="field" style="margin:0"><label>Entry date</label><input type="date" id="sa-new-entry-date"></div>
+      <div class="field" style="margin:0"><label>Entry price $</label><input type="number" id="sa-new-entry-px" step="0.01" placeholder="180.50"></div>
+      <div class="field" style="margin:0"><label>SA status</label>
+        <select id="sa-new-status" style="width:100%;background:#0a0c0f;border:1px solid rgba(255,255,255,.12);border-radius:6px;padding:7px 10px;font-size:12px;color:#e8eaf0;outline:none">
+          <option value="Buy">Buy</option>
+          <option value="Hold">Hold</option>
+          <option value="Sell">Sell</option>
+          <option value="Unknown" selected>Unknown</option>
+        </select>
+      </div>
+      <div class="field" style="margin:0"><label>Last SA alert</label><input type="date" id="sa-new-alert-date"></div>
+      <div class="field" style="margin:0"><label>Recommendation</label>
+        <select id="sa-new-rec" style="width:100%;background:#0a0c0f;border:1px solid rgba(255,255,255,.12);border-radius:6px;padding:7px 10px;font-size:12px;color:#e8eaf0;outline:none">
+          <option value="Keep" selected>Keep</option>
+          <option value="Watch">Watch</option>
+          <option value="Replace candidate">Replace candidate</option>
+          <option value="Sell review">Sell review</option>
+        </select>
+      </div>
+      <div class="field" style="margin:0;grid-column:span 2"><label>Thesis</label><input type="text" id="sa-new-thesis" placeholder="Why SA picked it..."></div>
+      <div class="field" style="margin:0;grid-column:span 2"><label>Notes</label><input type="text" id="sa-new-notes" placeholder="Risk notes / news..."></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button class="btn btn-gold" onclick="saAddHolding()">Add Holding</button>
+      <button class="btn btn-ghost" onclick="document.getElementById('sa-add-form').style.display='none'" style="padding:8px 14px">Cancel</button>
+    </div>
+  </div>
+
+  <!-- Legend -->
+  <div style="margin-bottom:12px;padding:8px 12px;background:#111318;border-radius:6px;font-size:10px;color:#8b91a0;display:flex;gap:14px;flex-wrap:wrap">
+    <span><b style="color:#e8eaf0">SG</b> trend overlay (from last screen run)</span>
+    <span><b style="color:#e8eaf0">TX</b> 10-Bagger score if in TENX</span>
+    <span><b style="color:#e8eaf0">E</b> earnings days-to</span>
+    <span><b style="color:#e8eaf0">⚠</b> early-sell warning</span>
+    <span style="color:#555c6e">Click any row to expand · advisory only — no order logic</span>
+  </div>
+
+  <!-- Table header -->
+  <div id="sa-table-header" style="display:grid;grid-template-columns:38px 70px 65px 70px 70px 60px 60px 90px 1fr 70px;gap:6px;padding:6px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e;border-bottom:1px solid rgba(255,255,255,.08)">
+    <div></div>
+    <div>Ticker</div>
+    <div style="text-align:right">Shares</div>
+    <div style="text-align:right">Entry $</div>
+    <div style="text-align:right">Last $</div>
+    <div style="text-align:right">P/L %</div>
+    <div style="text-align:center">SA</div>
+    <div>Rec</div>
+    <div>Notes / overlays</div>
+    <div></div>
+  </div>
+  <div id="sa-list" style="min-height:60px"></div>
 
 </div>
 
@@ -3939,6 +4021,7 @@ async function saveAllToFirebase() {
     trades:      TRADES,
     closed_trades: CLOSED_TRADES,
     tenx:        TENX,
+    seeking_alpha: (typeof SA_HOLDINGS !== 'undefined' && Array.isArray(SA_HOLDINGS)) ? SA_HOLDINGS : (JSON.parse(localStorage.getItem('gt_seeking_alpha') || '[]')),
     reb_accounts:REB_ACCOUNTS,
     risk: { acct: localStorage.getItem('gt_acct'), riskpct: localStorage.getItem('gt_riskpct'), budget: localStorage.getItem('gt_risk_budget'), n_trades: localStorage.getItem('gt_risk_n_trades'), delta: localStorage.getItem('gt_risk_delta'), atr_mult: window.GT_ATR_MULT||1, gt_stop_mult: (window.GT && window.GT.STOP_MULT) || 1.25 },
     watchlist: JSON.parse(localStorage.getItem('gt_scr_watchlist') || '[]'),
@@ -4073,6 +4156,14 @@ async function loadFromFirebase() {
     TENX = data.tenx
     localStorage.setItem('gt_tenx', JSON.stringify(TENX))
     if(typeof tenxRender === 'function') tenxRender()
+  })
+
+  // ── Seeking Alpha · Alpha Picks basket ─────────────────────────────
+  _step('seeking_alpha', () => {
+    if(!(data.seeking_alpha && Array.isArray(data.seeking_alpha))) return
+    if(typeof SA_HOLDINGS !== 'undefined') SA_HOLDINGS = data.seeking_alpha
+    localStorage.setItem('gt_seeking_alpha', JSON.stringify(data.seeking_alpha))
+    if(typeof saRender === 'function') saRender()
   })
 
   // ── Closed trades ──────────────────────────────────────────────────
@@ -5804,6 +5895,361 @@ function tenxRemove(ticker) {
 
 // Init render on page load
 setTimeout(tenxRender, 1200)
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ── SEEKING ALPHA / ALPHA PICKS ────────────────────────────────────────────────
+// Long-term holdings basket tracked independently of SG Score and TENX.
+// Persists to localStorage (gt_seeking_alpha) AND Firebase
+// (platform.seeking_alpha) — round-trips via saveAllToFirebase /
+// loadFromFirebase wiring above.
+//
+// SCHEMA (per holding):
+//   id            number (Date.now())
+//   ticker        string (uppercase)
+//   shares        number | undefined
+//   entryDate     ISO date string | ''
+//   entryPx       number | 0
+//   lastPx        number | 0   (auto-fetched by saRefreshLive)
+//   status        'Buy' | 'Hold' | 'Sell' | 'Unknown'
+//   alertDate     ISO date string | ''   (last SA alert date)
+//   recommendation 'Keep' | 'Watch' | 'Replace candidate' | 'Sell review'
+//   thesis        string
+//   notes         string         (free-form)
+//   riskNotes     string         (fundamental/news risk, manual)
+//   earlySellWarn boolean        (manual flag — user can also let auto-derive
+//                                 set this when computeEarlySellWarn fires)
+//   lastFetched   number (ms)
+//
+// IMPORTANT: this engine is fully isolated. It does NOT read or write
+// SG Score state, TENX state (beyond a read-only score lookup), Planner,
+// Trade Manager, Roll Engine, Roll Review, Stop Comparison, or order logic.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Default seed: 8 placeholder rows for the user's current Fidelity Alpha
+// Picks. They can edit-in-place. We seed with empty entry data so users
+// must input their own — no fabricated prices.
+const SA_DEFAULTS = Array.from({length:8}, (_,i) => ({
+  ticker: '',
+  shares: undefined, entryDate: '', entryPx: 0, lastPx: 0,
+  status: 'Unknown', alertDate: '',
+  recommendation: 'Keep',
+  thesis: '', notes: '', riskNotes: '',
+  earlySellWarn: false, lastFetched: 0
+}))
+
+let SA_HOLDINGS = []
+try { SA_HOLDINGS = JSON.parse(localStorage.getItem('gt_seeking_alpha') || 'null') || [] } catch(e) { SA_HOLDINGS = [] }
+// Don't auto-seed — start empty so users explicitly add their holdings.
+// (TENX seeds because it ships with curated public picks; SA is personal.)
+
+function saSave() {
+  localStorage.setItem('gt_seeking_alpha', JSON.stringify(SA_HOLDINGS))
+  if(typeof fbAutoSave === 'function') fbAutoSave(2000)
+}
+
+// ── Overlay helpers (READ-ONLY lookups into other modules) ───────────────────
+// SG trend: pull C5 (Trend Quality) from the most recent INTERNAL_RESULTS,
+// which is the SG Score screen output. Returns { score:0..10, rec:string }
+// or null if the ticker wasn't in the last screen.
+function saGetSGTrend(ticker) {
+  if(!ticker) return null
+  if(typeof INTERNAL_RESULTS === 'undefined' || !Array.isArray(INTERNAL_RESULTS)) return null
+  const r = INTERNAL_RESULTS.find(x => x && x.sym === ticker)
+  if(!r || !r.sg) return null
+  return { c5: +r.sg.c5 || 0, total: +r.sgScore || 0, rec: r.sg.rec || '—' }
+}
+
+// TENX overlay: read-only lookup into the 10-Bagger watchlist. Returns the
+// TENX_SCORE (0–10) if the ticker is in TENX, else null. Uses tenxScore
+// only — never writes back.
+function saGetTenxScore(ticker) {
+  if(!ticker) return null
+  if(typeof TENX === 'undefined' || !Array.isArray(TENX)) return null
+  const t = TENX.find(x => x && x.ticker === ticker)
+  if(!t || typeof tenxScore !== 'function') return null
+  return { score: tenxScore(t), category: t.theme || '—' }
+}
+
+// Earnings days-to overlay: prefer LIVE_EARNINGS_DATE map populated by the
+// Screener earnings refresh. Returns days remaining (negative if past).
+function saGetEarningsDays(ticker) {
+  if(!ticker) return null
+  try {
+    const map = (typeof LIVE_EARNINGS_DATE !== 'undefined') ? LIVE_EARNINGS_DATE : null
+    if(!map || !map[ticker]) return null
+    const d = new Date(map[ticker])
+    if(isNaN(d)) return null
+    return Math.round((d - new Date()) / 864e5)
+  } catch(e) { return null }
+}
+
+// Auto-derive early-sell warning: triggers if any of:
+//   • SG c5 (trend quality) ≤ 4   AND  P/L > +20%  (ride-down risk)
+//   • Status flipped to 'Sell'
+//   • Last price 15%+ below entry  (stop-loss territory)
+//   • Manual flag already on
+function saComputeEarlySellWarn(h) {
+  if(h.earlySellWarn === true) return true
+  if(h.status === 'Sell') return true
+  const px  = +h.lastPx || 0
+  const ent = +h.entryPx || 0
+  if(ent > 0 && px > 0) {
+    const pl = (px - ent) / ent * 100
+    if(pl <= -15) return true
+    const sg = saGetSGTrend(h.ticker)
+    if(sg && sg.c5 <= 4 && pl > 20) return true
+  }
+  return false
+}
+
+// ── REFRESH LIVE PRICES ──────────────────────────────────────────────────────
+// Reuses the existing Polygon apiGet helper (same one TENX uses). One bar
+// fetch per holding, throttled 250ms to avoid hammering.
+async function saRefreshLive() {
+  const btn = document.querySelector('[onclick="saRefreshLive()"]')
+  if(btn) { btn.textContent = '⟳ Refreshing...'; btn.disabled = true }
+  let updated = 0
+  for(let i=0; i<SA_HOLDINGS.length; i++) {
+    const h = SA_HOLDINGS[i]
+    if(!h.ticker) continue
+    if(btn) btn.textContent = '⟳ '+(i+1)+'/'+SA_HOLDINGS.length+' '+h.ticker
+    try {
+      const to   = new Date().toISOString().split('T')[0]
+      const from = new Date(Date.now()-7*864e5).toISOString().split('T')[0]
+      const data = await apiGet('/v2/aggs/ticker/'+h.ticker+'/range/1/day/'+from+'/'+to+'?adjusted=true&sort=desc&limit=5')
+      const last = data?.results?.[0]?.c
+      if(last && isFinite(last)) {
+        h.lastPx = +last.toFixed(2)
+        h.lastFetched = Date.now()
+        updated++
+      }
+    } catch(e) { /* skip silently */ }
+    await new Promise(r => setTimeout(r, 250))
+  }
+  saSave(); saRender()
+  const el = document.getElementById('sa-last-refresh')
+  if(el) el.textContent = updated + '/' + SA_HOLDINGS.length + ' updated · ' + new Date().toLocaleTimeString()
+  if(btn) { btn.textContent = '⟳ Refresh Prices'; btn.disabled = false }
+}
+
+// ── ADD HOLDING ──────────────────────────────────────────────────────────────
+function saAddHolding() {
+  const ticker = document.getElementById('sa-new-ticker').value.trim().toUpperCase()
+  if(!ticker) { alert('Ticker required'); return }
+  if(SA_HOLDINGS.find(h => h.ticker === ticker)) {
+    if(!confirm(ticker+' already in basket — add another lot?')) return
+  }
+  const sharesRaw = document.getElementById('sa-new-shares').value.trim()
+  const entry = {
+    id:             Date.now(),
+    ticker:         ticker,
+    shares:         sharesRaw === '' ? undefined : +sharesRaw,
+    entryDate:      document.getElementById('sa-new-entry-date').value,
+    entryPx:        +document.getElementById('sa-new-entry-px').value || 0,
+    lastPx:         0,
+    status:         document.getElementById('sa-new-status').value,
+    alertDate:      document.getElementById('sa-new-alert-date').value,
+    recommendation: document.getElementById('sa-new-rec').value,
+    thesis:         document.getElementById('sa-new-thesis').value.trim(),
+    notes:          document.getElementById('sa-new-notes').value.trim(),
+    riskNotes:      '',
+    earlySellWarn:  false,
+    lastFetched:    0
+  }
+  SA_HOLDINGS.push(entry)
+  saSave(); saRender()
+  // Reset form
+  ;['sa-new-ticker','sa-new-shares','sa-new-entry-date','sa-new-entry-px','sa-new-alert-date','sa-new-thesis','sa-new-notes']
+    .forEach(id => { const el = document.getElementById(id); if(el) el.value = '' })
+  document.getElementById('sa-add-form').style.display = 'none'
+}
+
+function saRemove(id) {
+  const h = SA_HOLDINGS.find(x => x.id === id)
+  if(!h) return
+  if(!confirm('Remove '+(h.ticker||'this holding')+' from Alpha Picks basket?')) return
+  SA_HOLDINGS = SA_HOLDINGS.filter(x => x.id !== id)
+  saSave(); saRender()
+}
+
+function saToggleExpand(id) {
+  window.__saExpanded = (window.__saExpanded === id) ? null : id
+  saRender()
+}
+
+function saSaveEdit(id) {
+  const h = SA_HOLDINGS.find(x => x.id === id)
+  if(!h) return
+  const g = (k) => document.getElementById('sa-edit-'+k+'-'+id)
+  const sharesRaw = g('shares').value.trim()
+  h.ticker         = g('ticker').value.trim().toUpperCase() || h.ticker
+  h.shares         = sharesRaw === '' ? undefined : +sharesRaw
+  h.entryDate      = g('edate').value
+  h.entryPx        = +g('epx').value || 0
+  h.status         = g('status').value
+  h.alertDate      = g('adate').value
+  h.recommendation = g('rec').value
+  h.thesis         = g('thesis').value.trim()
+  h.notes          = g('notes').value.trim()
+  h.riskNotes      = g('risk').value.trim()
+  h.earlySellWarn  = g('warn').checked
+  saSave()
+  window.__saExpanded = null
+  saRender()
+}
+
+// ── RENDER ───────────────────────────────────────────────────────────────────
+function saRender() {
+  const listEl = document.getElementById('sa-list')
+  if(!listEl) return
+
+  // Summary strip — total cost, total value, total P/L, status counts
+  const stripEl = document.getElementById('sa-strip')
+  let totCost = 0, totVal = 0, nWarn = 0, nKeep = 0, nReview = 0
+  SA_HOLDINGS.forEach(h => {
+    const sh = +h.shares || 0
+    totCost += sh * (+h.entryPx || 0)
+    totVal  += sh * (+h.lastPx  || +h.entryPx || 0)
+    if(saComputeEarlySellWarn(h)) nWarn++
+    if(h.recommendation === 'Keep') nKeep++
+    if(h.recommendation === 'Sell review' || h.recommendation === 'Replace candidate') nReview++
+  })
+  const totPl    = totVal - totCost
+  const totPlPct = totCost > 0 ? (totPl / totCost * 100) : 0
+  const plCol    = totPl >= 0 ? '#00d68f' : '#ff4560'
+  if(stripEl) {
+    const tile = (label, val, color) =>
+      '<div style="background:#111318;border:1px solid rgba(255,255,255,.06);border-radius:6px;padding:9px 12px">' +
+        '<div style="font-size:9px;color:#555c6e;text-transform:uppercase;letter-spacing:.07em;margin-bottom:3px">'+label+'</div>' +
+        '<div style="font-size:14px;font-weight:700;color:'+(color||'#e8eaf0')+';font-family:\'SF Mono\',monospace">'+val+'</div>' +
+      '</div>'
+    stripEl.innerHTML =
+      tile('Holdings',   String(SA_HOLDINGS.length)) +
+      tile('Cost basis', totCost > 0 ? '$'+Math.round(totCost).toLocaleString() : '—') +
+      tile('Value',      totVal  > 0 ? '$'+Math.round(totVal).toLocaleString()  : '—') +
+      tile('Total P/L',  totCost > 0 ? ((totPl>=0?'+':'')+'$'+Math.round(totPl).toLocaleString()+'  '+(totPlPct>=0?'+':'')+totPlPct.toFixed(1)+'%') : '—', totCost>0?plCol:'#e8eaf0') +
+      tile('Keep',       String(nKeep), '#00d68f') +
+      tile('Sell review',String(nReview), '#ff8c42') +
+      tile('Warnings',   String(nWarn), nWarn>0 ? '#ff4560' : '#555c6e')
+  }
+
+  if(!SA_HOLDINGS.length) {
+    listEl.innerHTML = '<div style="text-align:center;padding:40px;color:#555c6e">No holdings yet — click + Add Holding to track your Alpha Picks basket\x3C/div>'
+    return
+  }
+
+  const statusColors = {
+    'Buy':'#00d68f', 'Hold':'#4da6ff', 'Sell':'#ff4560', 'Unknown':'#555c6e'
+  }
+  const recColors = {
+    'Keep':'#00d68f', 'Watch':'#f0c040',
+    'Replace candidate':'#ff8c42', 'Sell review':'#ff4560'
+  }
+
+  function rowHtml(h) {
+    const expanded = (window.__saExpanded === h.id)
+    const sg     = saGetSGTrend(h.ticker)
+    const tx     = saGetTenxScore(h.ticker)
+    const eDays  = saGetEarningsDays(h.ticker)
+    const warn   = saComputeEarlySellWarn(h)
+    const px     = +h.lastPx || 0
+    const ent    = +h.entryPx || 0
+    const plPct  = (ent > 0 && px > 0) ? ((px - ent) / ent * 100) : null
+    const plCol  = plPct == null ? '#555c6e' : plPct >= 0 ? '#00d68f' : '#ff4560'
+    const sgChip = sg
+      ? '<span title="SG c5 trend / total" style="background:rgba(77,166,255,.12);color:#4da6ff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-right:4px">SG '+sg.c5+'/10 · '+sg.rec+'</span>'
+      : ''
+    const txChip = tx
+      ? '<span title="TENX score · '+tx.category+'" style="background:rgba(240,192,64,.12);color:#f0c040;font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-right:4px">TX '+tx.score.toFixed(1)+'</span>'
+      : ''
+    const eChip = (eDays != null)
+      ? '<span title="Earnings days-to" style="background:'+(eDays<=7?'rgba(255,69,96,.15)':eDays<=14?'rgba(255,140,66,.12)':'rgba(255,255,255,.04)')+';color:'+(eDays<=7?'#ff4560':eDays<=14?'#ff8c42':'#8b91a0')+';font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-right:4px">E '+(eDays<=0?'past':eDays+'d')+'</span>'
+      : ''
+    const warnChip = warn
+      ? '<span title="Early-sell warning triggered" style="background:rgba(255,69,96,.18);color:#ff4560;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;letter-spacing:.05em;margin-right:4px">⚠</span>'
+      : ''
+    const overlays = warnChip + sgChip + txChip + eChip
+    const noteShort = h.notes
+      ? '<span style="color:#8b91a0">'+h.notes.replace(/[<>]/g,'').slice(0,80)+(h.notes.length>80?'…':'')+'</span>'
+      : (h.thesis ? '<span style="color:#555c6e">'+h.thesis.replace(/[<>]/g,'').slice(0,80)+(h.thesis.length>80?'…':'')+'</span>' : '<span style="color:#555c6e">—</span>')
+
+    const main =
+      '<div style="display:grid;grid-template-columns:38px 70px 65px 70px 70px 60px 60px 90px 1fr 70px;gap:6px;padding:9px 10px;border-bottom:1px solid rgba(255,255,255,.04);font-size:12px;align-items:center;cursor:pointer'+(warn?';background:rgba(255,69,96,.04)':'')+'" onclick="saToggleExpand('+h.id+')">' +
+        '<div style="text-align:center;color:#555c6e;font-size:13px">'+(expanded?'▾':'▶')+'</div>' +
+        '<div style="font-family:monospace;font-weight:700;color:#f0c040">'+(h.ticker||'<span style=\"color:#555c6e\">—</span>')+'</div>' +
+        '<div style="text-align:right;font-family:monospace;color:#8b91a0">'+(h.shares!=null?h.shares:'<span style=\"color:#555c6e\">—</span>')+'</div>' +
+        '<div style="text-align:right;font-family:monospace;color:#8b91a0">'+(ent>0?'$'+ent.toFixed(2):'<span style=\"color:#555c6e\">—</span>')+'</div>' +
+        '<div style="text-align:right;font-family:monospace;color:#e8eaf0">'+(px>0?'$'+px.toFixed(2):'<span style=\"color:#555c6e\">—</span>')+'</div>' +
+        '<div style="text-align:right;font-family:monospace;font-weight:700;color:'+plCol+'">'+(plPct==null?'—':((plPct>=0?'+':'')+plPct.toFixed(1)+'%'))+'</div>' +
+        '<div style="text-align:center"><span style="background:'+(statusColors[h.status]||'#555c6e')+'22;color:'+(statusColors[h.status]||'#555c6e')+';font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;letter-spacing:.04em">'+(h.status||'Unknown')+'</span></div>' +
+        '<div><span style="background:'+(recColors[h.recommendation]||'#555c6e')+'22;color:'+(recColors[h.recommendation]||'#555c6e')+';font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;letter-spacing:.04em;white-space:nowrap">'+(h.recommendation||'Keep')+'</span></div>' +
+        '<div style="font-size:11px;line-height:1.4;overflow:hidden">'+overlays+noteShort+'</div>' +
+        '<div style="text-align:right" onclick="event.stopPropagation()">' +
+          '<button onclick="saRemove('+h.id+')" title="Remove" style="background:none;border:none;color:#555c6e;cursor:pointer;font-size:13px;padding:2px">✕</button>' +
+        '</div>' +
+      '</div>'
+
+    if(!expanded) return main
+
+    // Inline editor
+    const sel = (id, val, opts) => {
+      let s = '<select id="'+id+'" style="width:100%;background:#0a0c0f;border:1px solid rgba(255,255,255,.12);border-radius:4px;padding:5px 7px;font-size:12px;color:#e8eaf0;outline:none">'
+      for(const o of opts) s += '<option value="'+o+'"'+(val===o?' selected':'')+'>'+o+'</option>'
+      return s + '</select>'
+    }
+    const txt = (k, val, type, ph) => '<input id="sa-edit-'+k+'-'+h.id+'" type="'+(type||'text')+'" placeholder="'+(ph||'')+'" value="'+(val==null||val===0?'':String(val).replace(/"/g,'&quot;'))+'" style="width:100%;background:#0a0c0f;border:1px solid rgba(255,255,255,.12);border-radius:4px;padding:5px 7px;font-size:12px;color:#e8eaf0;outline:none">'
+    const ta  = (k, val, ph) => '<input id="sa-edit-'+k+'-'+h.id+'" type="text" placeholder="'+(ph||'')+'" value="'+(val||'').replace(/"/g,'&quot;')+'" style="width:100%;background:#0a0c0f;border:1px solid rgba(255,255,255,.12);border-radius:4px;padding:5px 7px;font-size:12px;color:#e8eaf0;outline:none">'
+
+    const editor =
+      '<div style="background:#0a0c0f;border-bottom:1px solid rgba(255,255,255,.04);padding:12px 14px 14px;font-size:11px">' +
+        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:10px">' +
+          '<div><label style="font-size:10px;color:#555c6e;text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:3px">Ticker</label>'+txt('ticker',h.ticker,'text','AAPL')+'</div>' +
+          '<div><label style="font-size:10px;color:#555c6e;text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:3px">Shares</label>'+txt('shares',h.shares,'number','100')+'</div>' +
+          '<div><label style="font-size:10px;color:#555c6e;text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:3px">Entry date</label>'+txt('edate',h.entryDate,'date','')+'</div>' +
+          '<div><label style="font-size:10px;color:#555c6e;text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:3px">Entry $</label>'+txt('epx',h.entryPx,'number','180.00')+'</div>' +
+          '<div><label style="font-size:10px;color:#555c6e;text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:3px">SA status</label>'+sel('sa-edit-status-'+h.id, h.status||'Unknown', ['Buy','Hold','Sell','Unknown'])+'</div>' +
+          '<div><label style="font-size:10px;color:#555c6e;text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:3px">Last alert</label>'+txt('adate',h.alertDate,'date','')+'</div>' +
+          '<div><label style="font-size:10px;color:#555c6e;text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:3px">Recommendation</label>'+sel('sa-edit-rec-'+h.id, h.recommendation||'Keep', ['Keep','Watch','Replace candidate','Sell review'])+'</div>' +
+          '<div style="display:flex;align-items:flex-end;gap:6px"><label style="font-size:10px;color:#ff4560;text-transform:uppercase;letter-spacing:.06em;cursor:pointer"><input type="checkbox" id="sa-edit-warn-'+h.id+'"'+(h.earlySellWarn?' checked':'')+' style="margin-right:4px;vertical-align:middle"> Early sell warning</label></div>' +
+          '<div style="grid-column:span 2"><label style="font-size:10px;color:#555c6e;text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:3px">Thesis</label>'+ta('thesis',h.thesis,'Why SA picked it...')+'</div>' +
+          '<div style="grid-column:span 2"><label style="font-size:10px;color:#555c6e;text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:3px">Notes</label>'+ta('notes',h.notes,'Free-form notes')+'</div>' +
+          '<div style="grid-column:span 2"><label style="font-size:10px;color:#555c6e;text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:3px">Fundamental / news risk</label>'+ta('risk',h.riskNotes,'Specific risk catalysts...')+'</div>' +
+        '</div>' +
+        // Overlays summary
+        '<div style="display:flex;flex-wrap:wrap;gap:14px;font-size:10px;color:#8b91a0;margin-bottom:10px;padding:8px 10px;background:rgba(255,255,255,.02);border-radius:4px">' +
+          '<span><b style="color:#e8eaf0">SG trend</b> '+(sg ? 'c5='+sg.c5+'/10 · total='+sg.total.toFixed(1)+' · '+sg.rec : '<span style="color:#555c6e">not in last screen</span>')+'</span>' +
+          '<span><b style="color:#e8eaf0">10-Bagger</b> '+(tx ? tx.score.toFixed(1)+' / 10 · '+tx.category : '<span style="color:#555c6e">not in TENX</span>')+'</span>' +
+          '<span><b style="color:#e8eaf0">Earnings</b> '+(eDays!=null ? (eDays<=0?'past':eDays+' days') : '<span style="color:#555c6e">unknown</span>')+'</span>' +
+          '<span><b style="color:#e8eaf0">Auto-warn?</b> '+(warn ? '<span style="color:#ff4560">YES</span>' : '<span style="color:#555c6e">no</span>')+'</span>' +
+        '</div>' +
+        '<div style="display:flex;gap:8px">' +
+          '<button class="btn btn-gold" style="font-size:11px;padding:5px 14px" onclick="saSaveEdit('+h.id+')">Save</button>' +
+          '<button class="btn btn-ghost" style="font-size:11px;padding:5px 12px" onclick="saToggleExpand('+h.id+')">Cancel</button>' +
+        '</div>' +
+      '</div>'
+    return main + editor
+  }
+
+  // Sort: warnings first, then Sell review > Replace > Watch > Keep, then by ticker
+  const recOrder = { 'Sell review':0, 'Replace candidate':1, 'Watch':2, 'Keep':3 }
+  const sorted = [...SA_HOLDINGS].sort((a,b) => {
+    const wa = saComputeEarlySellWarn(a) ? 0 : 1
+    const wb = saComputeEarlySellWarn(b) ? 0 : 1
+    if(wa !== wb) return wa - wb
+    const ra = recOrder[a.recommendation] != null ? recOrder[a.recommendation] : 9
+    const rb = recOrder[b.recommendation] != null ? recOrder[b.recommendation] : 9
+    if(ra !== rb) return ra - rb
+    return (a.ticker||'').localeCompare(b.ticker||'')
+  })
+  listEl.innerHTML = sorted.map(rowHtml).join('')
+
+  const sumEl = document.getElementById('sa-summary')
+  if(sumEl) sumEl.textContent = SA_HOLDINGS.length + ' holdings · ' + nWarn + ' warning' + (nWarn===1?'':'s')
+}
+
+// Init render on page load
+setTimeout(saRender, 1300)
 
 
 // ── BACKTEST ENGINE ────────────────────────────────────────────────────────────
