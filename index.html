@@ -1225,7 +1225,7 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 
   <!-- Legend -->
   <div style="margin-bottom:12px;padding:10px 12px;background:#111318;border-radius:6px;font-size:10px;color:#8b91a0">
-    <div style="font-weight:700;color:#e8eaf0;margin-bottom:6px;letter-spacing:.04em">TENX_SCORE = T1 (25%) + T2 (15%) + T3 (10%) + T4 (20%) + T5 (15%) + T6 (15%)  →  0–10</div>
+    <div style="font-weight:700;color:#e8eaf0;margin-bottom:6px;letter-spacing:.04em">TENX_SCORE = T1 (30%) + T2 (20%) + T3 (10%) + T4 (15%) + T5 (10%) + T6 (15%)  →  0–10  ·  small-cap ×1.25 (&lt;$5B) / ×1.15 (&lt;$10B)</div>
     <div style="display:flex;gap:14px;flex-wrap:wrap">
       <span><b style="color:#e8eaf0">T1</b> Revenue Growth (manual %)</span>
       <span><b style="color:#e8eaf0">T2</b> Narrative (manual)</span>
@@ -5488,8 +5488,16 @@ function tenxComponents(t) {
 
 function tenxScore(t) {
   const c = tenxComponents(t)
-  // Weighted 0..10
-  const s = c.T1*0.25 + c.T2*0.15 + c.T3*0.10 + c.T4*0.20 + c.T5*0.15 + c.T6*0.15
+  // Weighted 0..10  (T1 30 / T2 20 / T3 10 / T4 15 / T5 10 / T6 15)
+  let s = c.T1*0.30 + c.T2*0.20 + c.T3*0.10 + c.T4*0.15 + c.T5*0.10 + c.T6*0.15
+  // Small-cap multiplier — rewards true 10-bagger sizing
+  const mc = +t.marketCap || 0
+  if(mc > 0) {
+    if(mc < 5)        s *= 1.25
+    else if(mc < 10)  s *= 1.15
+  }
+  // Clamp to 0..10
+  s = Math.max(0, Math.min(10, s))
   return +s.toFixed(1)
 }
 
@@ -5572,6 +5580,10 @@ async function tenxRefreshAll() {
   }
 
   saveTenx()
+  // Snapshot current ranking as Δ baseline — updated only on explicit refresh
+  const baseline = [...TENX].sort((a,b)=>tenxScore(b)-tenxScore(a)).slice(0,15).map(t=>t.ticker)
+  localStorage.setItem('gt_tenx_rank_baseline', JSON.stringify(baseline))
+  tenxRender()
   const el = document.getElementById('tenx-last-refresh')
   if(el) el.textContent = 'Updated ' + new Date().toLocaleTimeString()
   if(btn) { btn.textContent = '⟳ Refresh Rankings'; btn.disabled = false }
@@ -5594,6 +5606,13 @@ function tenxRender() {
   const rest      = sortedAll.slice(15)
   const newSet    = new Set(window.__tenxNewEntrants || [])
 
+  // Δ rank: compare to gt_tenx_rank_baseline (only updated on explicit Refresh Rankings)
+  let prevRankMap = {}
+  try {
+    const baseline = JSON.parse(localStorage.getItem('gt_tenx_rank_baseline') || '[]')
+    baseline.forEach((tk, idx) => { prevRankMap[tk] = idx + 1 })
+  } catch(e) {}
+
   const themeColors = {
     'AI Infra':'#4da6ff','Energy':'#00d68f','Space':'#b47eff',
     'Semis':'#f0c040','Fintech':'#ff8c42','Biotech':'#ff4560',
@@ -5608,8 +5627,17 @@ function tenxRender() {
     const scoreColor = score >= 7.5 ? '#00d68f' : score >= 5.5 ? '#f0c040' : score >= 4.0 ? '#ff8c42' : '#ff4560'
     const themeColor = themeColors[t.theme] || '#555c6e'
     const isNew = isInTop15 && newSet.has(t.ticker)
+    // Δ rank vs prev snapshot
+    const currRank = i + 1
+    const prevRank = prevRankMap[t.ticker]
+    let deltaHtml = ''
+    if(isInTop15 && prevRank && prevRank !== currRank) {
+      const diff = prevRank - currRank   // positive = moved up
+      if(diff > 0)      deltaHtml = '<span style="color:#00d68f;font-size:9px;font-weight:700;margin-left:3px" title="Up '+diff+' from #'+prevRank+'">▲'+diff+'\x3C/span>'
+      else if(diff < 0) deltaHtml = '<span style="color:#ff4560;font-size:9px;font-weight:700;margin-left:3px" title="Down '+(-diff)+' from #'+prevRank+'">▼'+(-diff)+'\x3C/span>'
+    }
     const rankCell = isInTop15
-      ? '<span style="font-family:monospace;font-weight:700;color:#e8eaf0">' + (i+1) + '\x3C/span>'
+      ? '<span style="font-family:monospace;font-weight:700;color:#e8eaf0">' + currRank + '\x3C/span>' + deltaHtml
       : '<span style="color:#444b5c;font-size:10px">·\x3C/span>'
     const newBadge = isNew
       ? '<span style="margin-left:6px;font-size:8px;font-weight:700;padding:1px 5px;background:rgba(240,192,64,.18);color:#f0c040;border-radius:3px;letter-spacing:.06em">NEW\x3C/span>'
