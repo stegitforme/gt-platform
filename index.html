@@ -7641,7 +7641,14 @@ async function runInternalScreen() {
 
   if(loadBar) loadBar.style.display = 'none'
   if(progress) progress.textContent = ''
-  renderInternalResults(results)
+  // Apply the current filter controls (Trend, Min Score, Price, Vol,
+  // Spread, Sector, No Earnings) to the freshly-scored results so the
+  // table reflects the user's already-set filters without requiring a
+  // second click on Apply. Falls back to renderInternalResults(results)
+  // when the filter helper isn't available (defensive — runInternalFilter
+  // is defined in the same script block).
+  if(typeof runInternalFilter === 'function') runInternalFilter()
+  else                                         renderInternalResults(results)
 
   return { results: results, diag: diag }
 }
