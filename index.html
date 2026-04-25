@@ -3846,6 +3846,22 @@ async function saveAllToFirebase() {
     // done at least one "↻ Stock Prices" refresh, but syncing accelerates
     // population (especially useful when moving between browsers).
     price_history: JSON.parse(localStorage.getItem('gt_price_history') || 'null') || {},
+    // ── Fidelity-derived Trade Manager state (Audit SEVERITY 1 fix) ────
+    // Before this commit FID_OPEN / FID_CLOSED / FID_CREDITS were
+    // localStorage-only — sign in on a new device and Trade Manager
+    // went blank until the user re-uploaded both Fidelity CSVs and
+    // re-entered every position's manual credits/roll counts.
+    //
+    // Persistence model: store the full wrapper object that already
+    // lives in localStorage (lossless round-trip). FID_OPEN wraps
+    // { importedAt, source, count, positions:[…] }; FID_CLOSED wraps
+    // { lastImportAt, count, lots:[…] }; FID_CREDITS is a flat object
+    // keyed by position_id → { cumulativeCredits, rollCount, updatedAt }.
+    // Each is read straight from localStorage so the cloud copy always
+    // matches the device's last-saved state.
+    fid_open:    JSON.parse(localStorage.getItem('gt_fid_open')    || 'null'),
+    fid_closed:  JSON.parse(localStorage.getItem('gt_fid_closed')  || 'null'),
+    fid_credits: JSON.parse(localStorage.getItem('gt_fid_credits') || '{}'),
     savedAt:     Date.now()
   }
   const ok = await fbSave('platform', payload)
@@ -4031,6 +4047,79 @@ async function loadFromFirebase() {
     localStorage.setItem('gt_price_history', JSON.stringify(merged))
     console.log('[STOP-COMP] hydrated price history from Firebase:', Object.keys(merged).length, 'symbol(s)')
     if(typeof renderStopComparison === 'function') renderStopComparison()
+  })
+
+  // ═══════════════════════════════════════════════════════════════════
+  // FID_OPEN / FID_CLOSED / FID_CREDITS — SEVERITY 1 cross-device fix
+  // ═══════════════════════════════════════════════════════════════════
+  // Each block runs in its own _step() so a single malformed field
+  // can't break the others. Shape validation matches the audit spec:
+  //   • fid_open   wraps an array (positions)         — replace state
+  //   • fid_closed wraps an array (lots)              — replace state
+  //   • fid_credits is a plain object keyed by pid    — replace state
+  //
+  // "Replace state" semantics chosen deliberately: the Fidelity
+  // CSV import is the source of truth on a given device. If you re-
+  // import locally, that should win on the next save. If you switch
+  // devices, the cloud copy (whichever device synced last) should
+  // restore everything as it was. We do NOT merge per-position
+  // because the position_id is stable but qty/cost can change between
+  // imports — merging would corrupt the snapshot.
+  //
+  // We also protect against a missing Firebase field: when data.fid_*
+  // is undefined we leave the existing window state + localStorage
+  // alone (the early-return). This makes the load idempotent on devices
+  // that synced before this commit shipped (their cloud blob has no
+  // fid_* keys yet — they should KEEP whatever they imported locally).
+
+  // ── FID_OPEN restore ───────────────────────────────────────────────
+  _step('fid_open', () => {
+    var fo = data.fid_open
+    if(!fo) return                                                        // missing → keep local
+    if(typeof fo !== 'object' || Array.isArray(fo)) return                // wrong root shape → keep local
+    if(!Array.isArray(fo.positions)) return                               // positions must be array
+    window.FID_OPEN = fo
+    try { localStorage.setItem('gt_fid_open', JSON.stringify(fo)) } catch(e) {}
+    console.log('[FID-SYNC] hydrated FID_OPEN from Firebase: '+fo.positions.length+' position(s)' +
+                (fo.importedAt ? ' (imported '+new Date(fo.importedAt).toLocaleString()+')' : ''))
+  })
+
+  // ── FID_CLOSED restore ─────────────────────────────────────────────
+  _step('fid_closed', () => {
+    var fc = data.fid_closed
+    if(!fc) return
+    if(typeof fc !== 'object' || Array.isArray(fc)) return
+    if(!Array.isArray(fc.lots)) return
+    window.FID_CLOSED = fc
+    try { localStorage.setItem('gt_fid_closed', JSON.stringify(fc)) } catch(e) {}
+    console.log('[FID-SYNC] hydrated FID_CLOSED from Firebase: '+fc.lots.length+' lot(s)')
+  })
+
+  // ── FID_CREDITS restore ────────────────────────────────────────────
+  _step('fid_credits', () => {
+    var cr = data.fid_credits
+    if(!cr) return
+    if(typeof cr !== 'object' || Array.isArray(cr)) return                // must be object, not array
+    window.FID_CREDITS = cr
+    try { localStorage.setItem('gt_fid_credits', JSON.stringify(cr)) } catch(e) {}
+    console.log('[FID-SYNC] hydrated FID_CREDITS from Firebase: '+Object.keys(cr).length+' position(s) with manual credits/rolls')
+  })
+
+  // ── Post-FID-restore re-renders ────────────────────────────────────
+  // Every surface that reads from FID_OPEN / FID_CLOSED / FID_CREDITS
+  // needs a refresh so the just-hydrated data shows up without a manual
+  // page interaction. Wrapped in its own _step so a render error in
+  // one path doesn't abort the others. Each call is idempotent +
+  // already null-guarded internally.
+  _step('post_fid_restore_ui', () => {
+    if(typeof updateFidSyncUI       === 'function') updateFidSyncUI()
+    if(typeof renderTrades          === 'function') renderTrades()
+    if(typeof renderRollReview      === 'function') renderRollReview()
+    if(typeof renderStopComparison  === 'function') renderStopComparison()
+    if(typeof plannerCalc           === 'function') plannerCalc()
+    if(typeof renderCandidateTable  === 'function') renderCandidateTable()
+    if(typeof updateRiskMeter       === 'function') updateRiskMeter()
+    if(typeof updateTmRiskSummary   === 'function') updateTmRiskSummary()
   })
 
   // ── Post-restore UI refresh ────────────────────────────────────────
