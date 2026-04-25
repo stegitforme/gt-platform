@@ -642,16 +642,18 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 <div id="screener-internal-panel" style="display:none">
   <!-- Internal Command Bar -->
   <div style="display:flex;gap:8px;align-items:center;padding:10px 14px;background:#0d1117;border-radius:8px;border:1px solid #1e2d3d;margin-bottom:10px;flex-wrap:wrap">
-    <span style="font-size:12px;font-weight:700;color:#4da6ff">INTERNAL SCREENER</span>
-    <span style="font-size:10px;color:#555c6e">Independent universe · Transparent scoring</span>
+    <span style="font-size:12px;font-weight:700;color:#4da6ff">INTERNAL SCREENER · SG Score v1.4</span>
+    <span style="font-size:10px;color:#555c6e" title="SG Score weighted formula: C1(0.28) + C2(0.22) + C3(0.15) + C4(0.13) + C5(0.12) + C6(0.07) + C7(0.03). C1 risk-adj momentum · C2 RS vs SPY · C3 volume confirmation · C4 sector context · C5 trend quality · C6 options flow · C7 execution quality. Hard gates: earnings <7d, vol <1M, price <$20, OI <250, spread >10%, price < 10 EMA. Recommendations: STRONG BUY ≥8.5 · BUY 7.8–8.4 · WATCH 7.0–7.7 · SKIP <7 or any gate failed.">ⓘ</span>
     <button onclick="runInternalScreen()" class="btn" style="font-size:11px;padding:4px 14px;background:#1a2d4a;color:#4da6ff;border:1px solid #4da6ff">▶ Run Screen</button>
     <span id="int-progress" style="font-size:11px;color:#555c6e"></span>
     <span style="margin-left:auto;font-size:10px;color:#555c6e" id="int-last-run"></span>
   </div>
+  <!-- Regime banner — populated by renderInternalRegimeBanner after each Run Screen -->
+  <div id="int-regime-banner" style="display:none;margin-bottom:10px"></div>
   <!-- Internal Filters (compact) — price / volume / spread / trend / earnings / sector / score -->
   <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:8px 14px;background:#090d13;border-radius:6px;border:1px solid #1e2d3d;margin-bottom:10px;font-size:11px">
-    <span style="color:#555c6e">Min Score:</span>
-    <input type="number" id="int-f-score" value="0" step="5" min="0" max="100" style="width:50px;padding:3px 5px;font-size:11px" title="GT Score threshold (0–100). Raise to filter by quality.">
+    <span style="color:#555c6e">Min SG:</span>
+    <input type="number" id="int-f-score" value="0" step="0.5" min="0" max="10" style="width:50px;padding:3px 5px;font-size:11px" title="SG Score threshold (0–10 scale). 7.0 = WATCH+ · 7.8 = BUY+ · 8.5 = STRONG BUY only.">
     <span style="color:#555c6e">Price:</span>
     <input type="number" id="int-f-price-min" value="" placeholder="min" step="1" min="0" style="width:55px;padding:3px 5px;font-size:11px" title="Minimum last price (blank = no floor)">
     <span style="color:#555c6e">–</span>
@@ -661,10 +663,10 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
     <span style="color:#555c6e">Max Spread %:</span>
     <input type="number" id="int-f-spread" value="10" step="0.5" min="0" max="100" style="width:50px;padding:3px 5px;font-size:11px" title="Maximum bid/ask spread % (uses LIVE_PRICES when available; null-spread rows pass through). Default 10.">
     <span style="color:#555c6e">Trend:</span>
-    <select id="int-f-trend" style="font-size:11px;padding:3px 5px;background:#0d1117;color:#e8eaf0;border:1px solid #1e2d3d" title="Simple trend gate based on the trend subscore (0–25). ‘Up’ = trend ≥ 15, ‘Down’ = trend < 10.">
+    <select id="int-f-trend" style="font-size:11px;padding:3px 5px;background:#0d1117;color:#e8eaf0;border:1px solid #1e2d3d" title="Simple trend gate based on the C5 short-term-trend-quality subscore (0–10). ‘Up’ = C5 ≥ 6, ‘Down’ = C5 &lt; 4.">
       <option value="">All</option>
-      <option value="up">Uptrend (trend ≥ 15)</option>
-      <option value="down">Downtrend (trend &lt; 10)</option>
+      <option value="up">Uptrend (C5 ≥ 6)</option>
+      <option value="down">Downtrend (C5 &lt; 4)</option>
     </select>
     <span style="color:#555c6e">Sector:</span>
     <select id="int-f-sector" style="font-size:11px;padding:3px 5px;background:#0d1117;color:#e8eaf0;border:1px solid #1e2d3d">
@@ -689,23 +691,24 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
       <thead id="int-head" onclick="(function(e){var th=e.target.closest('th[data-sort-key]');if(th)setIntSort(th.getAttribute('data-sort-key'))})(event)">
         <tr style="color:#555c6e;font-size:10px;text-transform:uppercase;border-bottom:1px solid #1e2d3d">
         <th style="padding:6px 10px;text-align:left;width:24px">#</th>
-        <th data-sort-key="sym"      style="padding:6px 6px;text-align:left;cursor:pointer;user-select:none">Ticker<span class="int-sort-ind" style="margin-left:4px;color:#333a4a"></span></th>
-        <th data-sort-key="gtScore"  style="padding:6px 6px;text-align:left;cursor:pointer;user-select:none;color:#4da6ff">GT Score<span class="int-sort-ind" style="margin-left:4px;color:#333a4a"></span></th>
-        <th data-sort-key="price"    style="padding:6px 6px;text-align:right;cursor:pointer;user-select:none" title="Last price (close of most recent bar)">Price<span class="int-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
-        <th data-sort-key="volume"   style="padding:6px 6px;text-align:right;cursor:pointer;user-select:none" title="20d average daily volume (millions)">Vol<span class="int-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
-        <th data-sort-key="atr"      style="padding:6px 6px;text-align:right;cursor:pointer;user-select:none" title="14-period ATR">ATR<span class="int-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
-        <th data-sort-key="spreadPct" style="padding:6px 6px;text-align:right;cursor:pointer;user-select:none" title="Bid/ask spread % — from LIVE_PRICES; em-dash when unknown">Spr%<span class="int-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
-        <th data-sort-key="trendScore" style="padding:6px 6px;text-align:right;cursor:pointer;user-select:none" title="Trend subscore (0-25)">Trend<span class="int-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
-        <th style="padding:6px 6px;text-align:right" title="Momentum (0-40)">Mom</th>
-        <th style="padding:6px 6px;text-align:right" title="RSI sentiment (0-15)">Sent</th>
-        <th style="padding:6px 6px;text-align:right" title="Sector strength (0-10)">Sect</th>
-        <th style="padding:6px 6px;text-align:right" title="Execution quality (0-10)">Exec</th>
-        <th data-sort-key="sector"   style="padding:6px 6px;text-align:left;cursor:pointer;user-select:none">Sector<span class="int-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
-        <th data-sort-key="returnPct" style="padding:6px 6px;text-align:right;cursor:pointer;user-select:none">20d Ret<span class="int-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
-        <th data-sort-key="earningsDate" style="padding:6px 6px;text-align:center;cursor:pointer;user-select:none" title="Earnings within window — click to sort flagged-first">Earn<span class="int-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
+        <th data-sort-key="sym"        style="padding:6px 6px;text-align:left;cursor:pointer;user-select:none">Ticker<span class="int-sort-ind" style="margin-left:4px;color:#333a4a"></span></th>
+        <th data-sort-key="price"      style="padding:6px 6px;text-align:right;cursor:pointer;user-select:none" title="Last price (close of most recent bar)">Price<span class="int-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
+        <th data-sort-key="volume"     style="padding:6px 6px;text-align:right;cursor:pointer;user-select:none" title="20d average daily volume (millions)">Vol<span class="int-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
+        <th data-sort-key="atrPct"     style="padding:6px 6px;text-align:right;cursor:pointer;user-select:none" title="ATR% = ATR(14) / price × 100">ATR%<span class="int-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
+        <th data-sort-key="c1"         style="padding:6px 6px;text-align:right;cursor:pointer;user-select:none" title="C1: Risk-Adjusted Momentum (28% weight). Universe-percentile of 20d return / ATR%.">C1<span class="int-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
+        <th data-sort-key="c2"         style="padding:6px 6px;text-align:right;cursor:pointer;user-select:none" title="C2: Relative Strength vs SPY (22%). Excess 20d return.">C2<span class="int-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
+        <th data-sort-key="c3"         style="padding:6px 6px;text-align:right;cursor:pointer;user-select:none" title="C3: Volume Confirmation (15%). Up-day volume / down-day volume over 10 sessions.">C3<span class="int-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
+        <th data-sort-key="c4"         style="padding:6px 6px;text-align:right;cursor:pointer;user-select:none" title="C4: Sector Cluster Context (13%). Sector ETF 20d return vs SPY (partial — sector-vs-SPY only; breadth + F&G unavailable).">C4<span class="int-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
+        <th data-sort-key="c5"         style="padding:6px 6px;text-align:right;cursor:pointer;user-select:none" title="C5: Short-Term Trend Quality (12%). EMA stack 10/20/50, slope alignment, distance from 20 EMA. Hard remove if price < 10 EMA.">C5<span class="int-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
+        <th data-sort-key="c6"         style="padding:6px 6px;text-align:right;cursor:pointer;user-select:none" title="C6: Options Flow / Sentiment Proxy (7%). Neutral 5 — call volume / P/C ratio data not yet wired.">C6<span class="int-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
+        <th data-sort-key="c7"         style="padding:6px 6px;text-align:right;cursor:pointer;user-select:none" title="C7: Execution Quality (3%). OI + spread on the target option contract. Neutral 5 + PROVISIONAL when chain not fetched.">C7<span class="int-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
+        <th data-sort-key="sgScore"    style="padding:6px 6px;text-align:left;cursor:pointer;user-select:none;color:#4da6ff" title="SG Score = weighted sum 0-10. STRONG BUY ≥8.5 · BUY ≥7.8 · WATCH ≥7.0 · SKIP <7.">SG Score<span class="int-sort-ind" style="margin-left:4px;color:#333a4a"></span></th>
+        <th data-sort-key="gate"       style="padding:6px 6px;text-align:left;cursor:pointer;user-select:none" title="Hard gate result — PASS or the first failed-gate reason">Gate<span class="int-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
+        <th data-sort-key="rec"        style="padding:6px 6px;text-align:left;cursor:pointer;user-select:none">Rec<span class="int-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
+        <th style="padding:6px 6px;text-align:left">Flags</th>
         <th style="padding:6px 6px;text-align:right">Actions</th>
       </tr></thead>
-      <tbody id="int-body"><tr><td colspan="15" style="padding:20px;text-align:center;color:#555c6e">Click "Run Screen" to score the internal universe</td></tr></tbody>
+      <tbody id="int-body"><tr><td colspan="17" style="padding:20px;text-align:center;color:#555c6e">Click "Run Screen" to score the internal universe with SG Score v1.4</td></tr></tbody>
     </table>
     <div id="int-load-bar" style="display:none;padding:12px;text-align:center">
       <div style="background:#1e2d3d;border-radius:4px;height:6px;overflow:hidden;margin-bottom:6px">
@@ -7434,6 +7437,369 @@ function calcInternalScore(bars, spyBars, sectorBars, quote) {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+//  SG SCORE v1.4 — the canonical Internal Screener scoring engine.
+//  ─────────────────────────────────────────────────────────────────────────
+//  Replaces calcInternalScore for INTERNAL mode. 7 components C1–C7 each
+//  scored 0–10, weighted, final SG Score 0–10. Hard gates run BEFORE
+//  scoring; failed gates produce { gate, flags } but still emit a row
+//  (so the UI can show "DISQUALIFIED" reasons).
+//
+//  Runs in TWO phases:
+//   (a) per-ticker measurements (computeSGMeasurements) returns raw values
+//       including risk-adjusted momentum, %ret, distance-from-EMA, etc.
+//   (b) universe percentile pass + scoring (scoreSGFromMeasurements)
+//       — C1 needs the full universe distribution to bin top-10/25/50%.
+//
+//  This split also lets the caller log per-stage rejections cleanly.
+//
+//  Data fallbacks (per spec — never fabricate):
+//    • Earnings date unknown → "no earnings" path; no warning, no removal
+//    • Option OI / spread / bid / ask unknown → C7 = neutral 5,
+//      flags: ['EXECUTION PENDING', 'PROVISIONAL']
+//    • Call volume / P/C ratio always unknown in this build → C6 = 5,
+//      flags: ['DATA LIMITED']
+//    • Sector breadth / Fear-Greed momentum unavailable → C4 uses only
+//      the sector-vs-SPY signal that we can compute
+//    • Resistance data unavailable → C5 'no overhead resistance' bullet
+//      is skipped (not penalized)
+// ═══════════════════════════════════════════════════════════════════════════
+
+// EMA helper — returns null if insufficient data. Same Wilder-style as
+// in calcInternalScore so SG and legacy paths stay numerically aligned.
+function _sgEma(data, period) {
+  if(!data || data.length < period) return null
+  var k = 2 / (period + 1)
+  var val = 0
+  for(var i = 0; i < period; i++) val += data[i]
+  val = val / period
+  for(var j = period; j < data.length; j++) val = data[j] * k + val * (1 - k)
+  return val
+}
+// SMA helper for the 200-day check.
+function _sgSma(data, period) {
+  if(!data || data.length < period) return null
+  var s = 0
+  for(var i = data.length - period; i < data.length; i++) s += data[i]
+  return s / period
+}
+
+// Phase A: extract every raw measurement we need from the bar series.
+// Pure function; returns null if bars are too sparse to score.
+function computeSGMeasurements(bars, spyBars, sectorBars) {
+  if(!bars || bars.length < 30) return null
+  var closes = bars.map(function(b){ return +b.c || 0 })
+  var highs  = bars.map(function(b){ return +b.h || 0 })
+  var lows   = bars.map(function(b){ return +b.l || 0 })
+  var vols   = bars.map(function(b){ return +b.v || 0 })
+  var n = closes.length
+  var price = closes[n-1]
+  if(!(price > 0)) return null
+
+  // 14-period ATR
+  var atrPeriod = 14
+  var atr = 0
+  if(n > atrPeriod) {
+    var trSum = 0
+    for(var ai = n - atrPeriod; ai < n; ai++) {
+      var prevC = closes[ai-1]
+      var tr = Math.max(highs[ai] - lows[ai], Math.abs(highs[ai] - prevC), Math.abs(lows[ai] - prevC))
+      trSum += tr
+    }
+    atr = trSum / atrPeriod
+  }
+  var atrPct = price > 0 ? (atr / price * 100) : 0
+
+  // 20-day return
+  var ret20 = n > 20 ? (price - closes[n-21]) / closes[n-21] * 100 : 0
+  var spyRet20 = (spyBars && spyBars.length > 20)
+    ? (spyBars[spyBars.length-1].c - spyBars[spyBars.length-21].c) / spyBars[spyBars.length-21].c * 100
+    : 0
+
+  // Risk-adjusted momentum = ret20 / atrPct (C1 raw)
+  var rapm = atrPct > 0 ? ret20 / atrPct : 0
+
+  // EMAs
+  var e10  = _sgEma(closes, 10)
+  var e20  = _sgEma(closes, 20)
+  var e50  = (n >= 50)  ? _sgEma(closes, 50)  : null
+  var sma200 = (n >= 200) ? _sgSma(closes, 200) : null
+  // Slopes — compare current EMA to value 5 bars ago
+  var e10_5  = _sgEma(closes.slice(0, -5), 10)
+  var e20_5  = _sgEma(closes.slice(0, -5), 20)
+  var e50_5  = (n >= 55) ? _sgEma(closes.slice(0, -5), 50) : null
+  var slope10 = (e10  != null && e10_5  != null) ? e10  - e10_5  : 0
+  var slope20 = (e20  != null && e20_5  != null) ? e20  - e20_5  : 0
+  var slope50 = (e50  != null && e50_5  != null) ? e50  - e50_5  : 0
+
+  // Distance from 20 EMA (signed %)
+  var pctVs20 = (e20 && e20 > 0) ? (price - e20) / e20 * 100 : 0
+
+  // Volume confirmation ratio over last 10 sessions
+  var upVol = 0, dnVol = 0, upN = 0, dnN = 0
+  var lookback = Math.min(10, n - 1)
+  for(var vi = n - lookback; vi < n; vi++) {
+    var ch = closes[vi] - closes[vi-1]
+    if(ch > 0)      { upVol += vols[vi]; upN++ }
+    else if(ch < 0) { dnVol += vols[vi]; dnN++ }
+  }
+  var avgUpVol = upN > 0 ? upVol / upN : 0
+  var avgDnVol = dnN > 0 ? dnVol / dnN : 0
+  var volRatio = avgDnVol > 0 ? avgUpVol / avgDnVol : (avgUpVol > 0 ? 99 : 0)
+
+  // 30d average daily volume (gate 2)
+  var v30Sum = 0, v30N = 0
+  var v30Lookback = Math.min(30, n)
+  for(var vi2 = n - v30Lookback; vi2 < n; vi2++) { v30Sum += vols[vi2]; v30N++ }
+  var avgVol30 = v30N > 0 ? v30Sum / v30N : 0
+
+  // Sector vs SPY 20d return
+  var sectorRet20 = null
+  if(sectorBars && sectorBars.length > 20) {
+    sectorRet20 = (sectorBars[sectorBars.length-1].c - sectorBars[sectorBars.length-21].c) / sectorBars[sectorBars.length-21].c * 100
+  }
+
+  return {
+    price: price, atr: atr, atrPct: atrPct,
+    ret20: ret20, spyRet20: spyRet20, rsVsSpy: ret20 - spyRet20,
+    rapm: rapm,
+    e10: e10, e20: e20, e50: e50, sma200: sma200,
+    slope10: slope10, slope20: slope20, slope50: slope50,
+    pctVs20: pctVs20,
+    volRatio: volRatio,
+    avgVol30: avgVol30,
+    sectorRet20: sectorRet20
+  }
+}
+
+// Phase B: turn measurements into the 7 component scores + run the
+// hard gates + assemble the final SG Score and labels.
+//
+// universeRapmDist: sorted-ascending array of all ticker rapm values
+//   for percentile binning of C1.
+// regime: 'GREEN' | 'RISK-OFF'
+// earnings: { date, daysAway } | null
+// chain: { oi, bid, ask, premium } | null
+function scoreSGFromMeasurements(m, ctx) {
+  var flags = []
+  var gate = 'PASS'
+  var rec  = 'SKIP'
+  var dq   = false
+  var convictionParts = []
+  ctx = ctx || {}
+  var universeRapmDist = ctx.universeRapmDist || []
+  var regime           = ctx.regime || 'GREEN'
+  var earnings         = ctx.earnings || null   // { date, daysAway } | null
+  var chain            = ctx.chain || null      // { oi, bid, ask, premium } | null
+
+  // ── HARD GATES ───────────────────────────────────────────────────────
+  // Gate 1: Earnings
+  if(earnings && earnings.daysAway != null) {
+    if(earnings.daysAway < 7) {
+      gate = 'EARNINGS IMMINENT'; flags.push('EARNINGS IMMINENT'); dq = true
+    } else if(earnings.daysAway < 21) {
+      flags.push('EARNINGS WARNING')      // allow but flag
+    } else if(earnings.daysAway < 35) {
+      flags.push('EARNINGS NOTE')
+    }
+  }
+  // Gate 2: 30d avg vol < 1M
+  if(m.avgVol30 < 1e6) { if(!dq) gate = 'LOW VOLUME'; flags.push('LOW VOLUME (<1M)'); dq = true }
+  // Gate 3: price < $20
+  if(m.price < 20)     { if(!dq) gate = 'LOW PRICE';  flags.push('PRICE <$20'); dq = true }
+  // Gate 4 + 5 (option OI / spread) — only when chain data exists
+  if(chain && chain.oi != null) {
+    if(chain.oi < 250) { if(!dq) gate = 'LOW OI'; flags.push('OI <250'); dq = true }
+  } else {
+    // No chain data → label, do not remove (per spec)
+    flags.push('EXECUTION PENDING')
+  }
+  if(chain && chain.bid > 0 && chain.ask > 0) {
+    var sprPct = (chain.ask - chain.bid) / chain.bid * 100
+    if(sprPct > 10) { if(!dq) gate = 'WIDE SPREAD'; flags.push('SPREAD >10%'); dq = true }
+  }
+  // Gate 6: SPY < 20 EMA → RISK-OFF mode (label only; not a removal)
+  if(regime === 'RISK-OFF') flags.push('RISK-OFF')
+
+  // ── C5 INTERNAL HARD REMOVE: price below 10 EMA ─────────────────────
+  // Spec: "If price below 10 EMA: HARD REMOVE because it violates
+  // primary exit logic." This still runs even if chain data is missing.
+  if(m.e10 != null && m.price < m.e10) {
+    if(!dq) gate = 'BELOW 10 EMA'
+    flags.push('BELOW 10 EMA')
+    dq = true
+  }
+
+  // ── C1: RISK-ADJUSTED MOMENTUM (28%) ─────────────────────────────────
+  // Universe percentile binning over the rapm distribution.
+  var c1 = 1
+  if(universeRapmDist && universeRapmDist.length > 0) {
+    // rank position 0..1 (0 = worst, 1 = best)
+    var idx = 0
+    for(var ui = 0; ui < universeRapmDist.length; ui++) {
+      if(universeRapmDist[ui] <= m.rapm) idx = ui + 1; else break
+    }
+    var pctile = idx / universeRapmDist.length
+    if(m.rapm <= 0)         c1 = 1
+    else if(pctile >= 0.90) c1 = 10
+    else if(pctile >= 0.75) c1 = 8
+    else if(pctile >= 0.50) c1 = 6
+    else if(pctile >= 0.25) c1 = 4
+    else                    c1 = 2
+  } else {
+    c1 = m.rapm > 0 ? 5 : 2
+  }
+
+  // ── C2: RELATIVE STRENGTH vs SPY (22%) ───────────────────────────────
+  var rs = m.rsVsSpy
+  var c2 = rs > 5 ? 10 : rs >= 2 ? 8 : rs >= -2 ? 6 : rs >= -5 ? 4 : 2
+
+  // ── C3: VOLUME CONFIRMATION (15%) ────────────────────────────────────
+  var vr = m.volRatio
+  var c3 = vr > 2.5 ? 10 : vr >= 1.8 ? 8 : vr >= 1.2 ? 6 : vr >= 0.8 ? 4 : 2
+
+  // ── C4: SECTOR CLUSTER CONTEXT (13%) ─────────────────────────────────
+  // Without sector-breadth or sector/F&G momentum data, score off the
+  // single sector-vs-SPY signal we can compute. Conservative bins.
+  var c4 = 5  // neutral default
+  if(m.sectorRet20 != null) {
+    var sectorVsSpy = m.sectorRet20 - m.spyRet20
+    if(sectorVsSpy > 3)       c4 = 9   // strong outperformance — proxy for top-3
+    else if(sectorVsSpy > 1)  c4 = 7
+    else if(sectorVsSpy >= -1)c4 = 5
+    else if(sectorVsSpy >= -3)c4 = 3
+    else                      c4 = 2
+    // Note that we don't have sector breadth or F&G momentum, so we
+    // can't reach 10. Document it.
+    flags.push('C4 PARTIAL (sector vs SPY only)')
+  } else {
+    flags.push('C4 NO SECTOR DATA')
+  }
+
+  // ── C5: SHORT-TERM TREND QUALITY (12%) ───────────────────────────────
+  var c5 = 0
+  if(m.e10  != null && m.price > m.e10)  c5 += 2
+  if(m.e20  != null && m.price > m.e20)  c5 += 2
+  if(m.e50  != null && m.price > m.e50)  c5 += 1
+  // EMA stack aligned 10>20>50
+  if(m.e10 != null && m.e20 != null && m.e50 != null && m.e10 > m.e20 && m.e20 > m.e50) c5 += 1
+  // All three EMAs sloping up
+  if(m.slope10 > 0 && m.slope20 > 0 && m.slope50 > 0) c5 += 1
+  // 50 EMA > 200 SMA
+  if(m.e50 != null && m.sma200 != null && m.e50 > m.sma200) c5 += 1
+  // Within 8% of 20 EMA
+  if(m.e20 != null && Math.abs(m.pctVs20) < 8) c5 += 1
+  // Resistance bullet skipped (no resistance data available)
+  // Penalty: >15% above 20 EMA → -2 (over-extended)
+  if(m.pctVs20 > 15) { c5 -= 2; flags.push('EXTENDED >15% ABOVE 20 EMA') }
+  c5 = Math.max(0, Math.min(10, c5))
+
+  // ── C6: OPTIONS FLOW / SENTIMENT PROXY (7%) ──────────────────────────
+  // Real call volume + P/C ratio not currently fetched. Per spec: assign
+  // neutral 5 and flag DATA LIMITED.
+  var c6 = 5
+  flags.push('C6 DATA UNAVAILABLE — NEUTRAL ASSIGNED')
+
+  // ── C7: EXECUTION QUALITY (3%) ───────────────────────────────────────
+  var c7 = 5
+  if(chain && chain.oi != null && chain.bid > 0 && chain.ask > 0) {
+    var sprPct2 = (chain.ask - chain.bid) / chain.bid * 100
+    var oi = chain.oi
+    if      (oi > 2000 && sprPct2 < 3) c7 = 10
+    else if (oi >= 1000 && sprPct2 <= 5)  c7 = 8
+    else if (oi >= 500  && sprPct2 <= 7)  c7 = 6
+    else if (oi >= 250  && sprPct2 <= 10) c7 = 4
+    else                                  c7 = 2
+  } else {
+    flags.push('PROVISIONAL')
+  }
+
+  // ── FINAL SG SCORE (weighted) ────────────────────────────────────────
+  var sg = c1*0.28 + c2*0.22 + c3*0.15 + c4*0.13 + c5*0.12 + c6*0.07 + c7*0.03
+  sg = Math.round(sg * 10) / 10
+
+  // ── DERIVED FLAGS ────────────────────────────────────────────────────
+  // Sector environment risk: high score but weak sector
+  if(c4 < 5 && sg > 7.8) flags.push('SECTOR RISK')
+  // Unsustainable momentum: trend & momentum diverge by >3 pts
+  if(Math.abs(c5 - c1) > 3) flags.push('UNSUSTAINABLE MOMENTUM')
+
+  // ── RECOMMENDATION ───────────────────────────────────────────────────
+  if(dq)                     rec = 'SKIP'
+  else if(sg >= 8.5)         rec = 'STRONG BUY'
+  else if(sg >= 7.8)         rec = 'BUY'
+  else if(sg >= 7.0)         rec = 'WATCH'
+  else                       rec = 'SKIP'
+
+  // ── CONVICTION NOTE for STRONG BUY / BUY ─────────────────────────────
+  if(!dq && (rec === 'STRONG BUY' || rec === 'BUY')) {
+    // Identify primary score driver — the component contributing the
+    // most weighted points.
+    var contribs = [
+      { k:'Risk-adjusted momentum', v: c1*0.28 },
+      { k:'Relative strength',      v: c2*0.22 },
+      { k:'Volume confirmation',    v: c3*0.15 },
+      { k:'Sector context',         v: c4*0.13 },
+      { k:'Trend quality',          v: c5*0.12 },
+      { k:'Options flow',           v: c6*0.07 },
+      { k:'Execution quality',      v: c7*0.03 }
+    ].sort(function(a,b){ return b.v - a.v })
+    convictionParts.push('Driver: ' + contribs[0].k + ' (' + contribs[0].v.toFixed(1) + ' pts).')
+    // Surface the most actionable flags (skip the cosmetic ones)
+    var noteFlags = flags.filter(function(f){
+      return f.indexOf('PARTIAL') < 0 && f.indexOf('DATA UNAVAILABLE') < 0
+    })
+    if(noteFlags.length) convictionParts.push('Flags: ' + noteFlags.join(', ') + '.')
+    // Suggested option strike/expiry — generic guidance (no chain fetch)
+    convictionParts.push('Suggested option: 0.75–0.85 delta call, 20–40 DTE.')
+    // Strike approximation: ~0.80 delta is roughly 2–4% ITM for typical
+    // 1-month equity calls. Surface a concrete strike target so the user
+    // has something to type into the chain.
+    var strikeLow  = (m.price * 0.96).toFixed(0)
+    var strikeHigh = (m.price * 1.00).toFixed(0)
+    convictionParts.push('Strike ~$'+strikeLow+'–$'+strikeHigh+' (≈ at-the-money to 4% ITM).')
+    if(chain && chain.premium > 0) {
+      convictionParts.push('Est premium: $'+chain.premium.toFixed(2)+'.')
+    } else {
+      convictionParts.push('Premium: confirm in chain.')
+    }
+    if(c6 === 5 || c7 === 5) convictionParts.push('Note: C6/C7 neutral due to missing data.')
+  }
+
+  return {
+    total:   sg,
+    c1: c1, c2: c2, c3: c3, c4: c4, c5: c5, c6: c6, c7: c7,
+    rec:     rec,
+    gate:    gate,
+    flags:   flags,
+    disqualified:    dq,
+    convictionNote:  convictionParts.length ? convictionParts.join(' ') : '',
+    // Surfaced raw values for the table / debugging
+    atrPct:   m.atrPct,
+    rapm:     m.rapm,
+    rsVsSpy:  m.rsVsSpy,
+    volRatio: m.volRatio,
+    avgVol30: m.avgVol30,
+    pctVs20:  m.pctVs20,
+    sectorRet20: m.sectorRet20
+  }
+}
+
+// Convenience: full SG Score in one call (no universe percentiles —
+// uses a degraded C1 fallback). The runInternalScreen pipeline uses
+// the two-phase variant for accurate universe binning; this single-
+// call path exists for unit tests and console exploration.
+function calcSGScore(bars, spyBars, sectorBars, ctx) {
+  var m = computeSGMeasurements(bars, spyBars, sectorBars)
+  if(!m) return null
+  return scoreSGFromMeasurements(m, ctx || {})
+}
+if(typeof window !== 'undefined') {
+  window.calcSGScore             = calcSGScore
+  window.computeSGMeasurements   = computeSGMeasurements
+  window.scoreSGFromMeasurements = scoreSGFromMeasurements
+}
+
 // ── RUN THE INTERNAL SCREEN ───────────────────────────────────────────────────
 // Pipeline stages (all logged to [INT-SCREEN]):
 //   1. UNIVERSE       N tickers in INTERNAL_UNIVERSE minus ETFs
@@ -7483,6 +7849,22 @@ async function runInternalScreen() {
   if(!spyBars || !spyBars.length) console.warn('[INT-SCREEN] SPY returned 0 bars — relative-strength math will use 0 baseline')
   else console.log('[INT-SCREEN] 2/6 BASELINE · SPY bars='+spyBars.length)
 
+  // ── REGIME CHECK (SPY vs 20 EMA) ────────────────────────────────────
+  // SG Score v1.4: GREEN when SPY > 20 EMA, RISK-OFF otherwise. Risk-off
+  // does NOT block scoring — every row is still computed and labeled,
+  // but the overall regime is surfaced in the panel banner and on each
+  // row so the user can decide whether to override.
+  var regime = 'GREEN'
+  var spyClose = null, spyEma20 = null
+  if(spyBars && spyBars.length >= 20) {
+    spyClose = +spyBars[spyBars.length-1].c || 0
+    spyEma20 = _sgEma(spyBars.map(function(b){ return +b.c || 0 }), 20)
+    if(spyClose > 0 && spyEma20 != null && spyClose < spyEma20) regime = 'RISK-OFF'
+  }
+  console.log('[INT-SCREEN]            · regime='+regime+' (SPY='+(spyClose||'?')+' vs 20 EMA='+((spyEma20||0).toFixed(2))+')')
+  // Expose for the panel banner renderer
+  window.__INT_REGIME = { regime: regime, spy: spyClose, spyEma20: spyEma20, scoredAt: Date.now() }
+
   var sectorBarCache = {}
   var keyETFs = ['XLK','XLF','XLV','XLE','XLI','XLY','XLC']
   for(var ei=0;ei<keyETFs.length;ei++) {
@@ -7491,8 +7873,11 @@ async function runInternalScreen() {
   var sectHits = Object.keys(sectorBarCache).filter(function(k){return sectorBarCache[k] && sectorBarCache[k].length}).length
   console.log('[INT-SCREEN]            · sector ETFs loaded: '+sectHits+'/'+keyETFs.length)
 
-  // ── 3-5/6 FETCH + VALIDATE + SCORE ─────────────────────────────────────
-  var results = []
+  // ── 3-5/6 FETCH + MEASURE (phase A) ────────────────────────────────────
+  // SG Score v1.4 needs the universe-wide rapm distribution before C1
+  // can be percentile-binned, so we collect raw measurements first, then
+  // do a second pass to assign scores.
+  var measured = []   // [{ sym, sec, bars, m }]
   var total = stocks.length
   var done = 0
   var BATCH = 5
@@ -7514,14 +7899,61 @@ async function runInternalScreen() {
       var sec = getSector(sym)
       var sectorETF = (typeof SECTOR_ETFS !== 'undefined' ? SECTOR_ETFS : SECTOR_ETFS_INT)[sec]
       var sectorBars = sectorETF ? sectorBarCache[sectorETF] : null
-      var score
-      try {
-        score = calcInternalScore(bars, spyBars, sectorBars, null)
-      } catch(e) {
-        rejReason(sym, 'score-error'); return null
-      }
-      if(!score) { diag.scoreNull++; rejReason(sym, 'score-null'); return null }
+      var m
+      try { m = computeSGMeasurements(bars, spyBars, sectorBars) }
+      catch(e) { rejReason(sym, 'measure-error'); return null }
+      if(!m) { diag.scoreNull++; rejReason(sym, 'measure-null'); return null }
       diag.scored++
+      return { sym: sym, sec: sec, bars: bars, m: m }
+    }))
+    done += batch.length
+    var pct = Math.round(done/total*100)
+    if(barFill) barFill.style.width = pct+'%'
+    if(barLabel) barLabel.textContent = 'Measuring '+done+' / '+total+' tickers...'
+    if(progress) progress.textContent = pct+'%'
+    batchResults.filter(Boolean).forEach(function(r){ measured.push(r) })
+  }
+
+  // ── PHASE B: universe percentile + per-ticker SG Score ────────────────
+  // Sort the rapm distribution ascending so percentile lookup is just an
+  // index search. C1 reads top-10/25/50% bins from this distribution.
+  var rapmDist = measured.map(function(x){ return x.m.rapm }).sort(function(a,b){ return a-b })
+  if(barLabel) barLabel.textContent = 'Scoring SG Score · '+measured.length+' tickers...'
+
+  var results = measured.map(function(x) {
+    // Earnings context — { date, daysAway } when known
+    var earnings = null
+    try {
+      if(typeof LIVE_EARNINGS_DATE !== 'undefined' && LIVE_EARNINGS_DATE[x.sym]) {
+        var ed = String(LIVE_EARNINGS_DATE[x.sym])
+        var t  = Date.parse(ed)
+        if(isFinite(t)) {
+          var days = Math.round((t - Date.now()) / 864e5)
+          earnings = { date: ed, daysAway: days >= 0 ? days : null }
+        }
+      }
+    } catch(e) {}
+    // Option chain context — only LIVE_PRICES bid/ask is available
+    // routinely in this build. OI is not fetched per-symbol, so chain
+    // is null in the common case → C7 falls to neutral 5 + PROVISIONAL.
+    var chain = null
+    try {
+      var lp = (typeof LIVE_PRICES !== 'undefined') ? LIVE_PRICES[x.sym] : null
+      if(lp && +lp.bid > 0 && +lp.ask > 0) chain = { bid: +lp.bid, ask: +lp.ask, premium: (+lp.bid + +lp.ask)/2, oi: null }
+    } catch(e) {}
+    var sg
+    try {
+      sg = scoreSGFromMeasurements(x.m, {
+        universeRapmDist: rapmDist,
+        regime:           regime,
+        earnings:         earnings,
+        chain:            chain
+      })
+    } catch(e) { rejReason(x.sym, 'sg-score-error'); return null }
+    if(!sg) { rejReason(x.sym, 'sg-score-null'); return null }
+    var bars = x.bars
+    var sec = x.sec
+    var m = x.m
       // ── Standardized data shape per internal-screener spec ───────────
       // Each result object exposes top-level fields used by the filter
       // pipeline, the sortable table columns, and the Quick Add Trade
@@ -7537,73 +7969,69 @@ async function runInternalScreen() {
       // a fresh internal run isn't blocked when prices aren't cached).
       // Earnings date comes from LIVE_EARNINGS_DATE cache; null when
       // not known.
-      var lastBar = bars[bars.length - 1]
-      var price   = (+score.price) || (+lastBar.c) || 0
-      // 20d average volume — more stable than a single day
-      var vStart = Math.max(0, bars.length - 20)
-      var vSum = 0, vN = 0
-      for(var vi = vStart; vi < bars.length; vi++) { vSum += (+bars[vi].v || 0); vN++ }
-      var volume = vN > 0 ? Math.round(vSum / vN) : 0
-      // 14-period ATR
-      var atrPeriod = 14
-      var atr = 0
-      if(bars.length > atrPeriod) {
-        var trSum = 0
-        for(var ai = bars.length - atrPeriod; ai < bars.length; ai++) {
-          var cur = bars[ai], prev = bars[ai-1]
-          var tr = Math.max((cur.h||0) - (cur.l||0), Math.abs((cur.h||0) - (prev.c||0)), Math.abs((cur.l||0) - (prev.c||0)))
-          trSum += tr
-        }
-        atr = +(trSum / atrPeriod).toFixed(2)
+    var sym = x.sym
+    var lastBar = bars[bars.length - 1]
+    var price   = +m.price || (+lastBar.c) || 0
+    // 30d average volume — used by gate 2 already inside scoreSG, but
+    // surface volume in the table as 20d average for a stable display
+    var vStart = Math.max(0, bars.length - 20)
+    var vSum = 0, vN = 0
+    for(var vi = vStart; vi < bars.length; vi++) { vSum += (+bars[vi].v || 0); vN++ }
+    var volume = vN > 0 ? Math.round(vSum / vN) : 0
+    // ATR is already computed inside m.atr
+    var atr = +m.atr.toFixed(2)
+    // Spread % from LIVE_PRICES (when OVTLYR Fetch Prices has run)
+    var spreadPct = null
+    try {
+      var lp2 = (typeof LIVE_PRICES !== 'undefined') ? LIVE_PRICES[sym] : null
+      if(lp2 && lp2.bid > 0 && lp2.ask > 0) {
+        var mid = (lp2.bid + lp2.ask) / 2
+        if(mid > 0) spreadPct = +((lp2.ask - lp2.bid) / mid * 100).toFixed(2)
       }
-      // Spread % from LIVE_PRICES (OVTLYR-side cache). Null when unknown.
-      var spreadPct = null
-      try {
-        var lp = (typeof LIVE_PRICES !== 'undefined') ? LIVE_PRICES[sym] : null
-        if(lp && lp.bid > 0 && lp.ask > 0) {
-          var mid = (lp.bid + lp.ask) / 2
-          if(mid > 0) spreadPct = +((lp.ask - lp.bid) / mid * 100).toFixed(2)
-        }
-      } catch(e) {}
-      // Earnings date (string) from LIVE_EARNINGS_DATE cache when set.
-      var earningsDate = null
-      try {
-        if(typeof LIVE_EARNINGS_DATE !== 'undefined' && LIVE_EARNINGS_DATE[sym]) {
-          earningsDate = String(LIVE_EARNINGS_DATE[sym])
-        }
-      } catch(e) {}
-      return {
-        // Identity
-        sym:        sym,
-        symbol:     sym,
-        sector:     sec,
-        cluster:    (typeof getCluster === 'function' ? getCluster(sym) : sec),
-        // Standardized scalar fields
-        price:      price,
-        volume:     volume,
-        bid:        (function(){ try { var l=LIVE_PRICES[sym]; return (l && +l.bid) || null } catch(e) { return null } })(),
-        ask:        (function(){ try { var l=LIVE_PRICES[sym]; return (l && +l.ask) || null } catch(e) { return null } })(),
-        spreadPct:  spreadPct,
-        atr:        atr,
-        returnPct:  +score.ret20 || 0,
-        earningsDate: earningsDate,
-        trendScore: +score.trend || 0,
-        gtScore:    +score.total || 0,
-        // Full score block retained for back-compat with existing renderer
-        score:      score,
-        barCount:   bars.length
+    } catch(e) {}
+    // Earnings date string passthrough
+    var earningsDate = null
+    try {
+      if(typeof LIVE_EARNINGS_DATE !== 'undefined' && LIVE_EARNINGS_DATE[sym]) {
+        earningsDate = String(LIVE_EARNINGS_DATE[sym])
       }
-    }))
-    done += batch.length
-    var pct = Math.round(done/total*100)
-    if(barFill) barFill.style.width = pct+'%'
-    if(barLabel) barLabel.textContent = 'Scoring '+done+' / '+total+' tickers...'
-    if(progress) progress.textContent = pct+'%'
-    batchResults.filter(Boolean).forEach(function(r){ results.push(r) })
-  }
+    } catch(e) {}
+    return {
+      // Identity
+      sym:        sym,
+      symbol:     sym,
+      sector:     sec,
+      cluster:    (typeof getCluster === 'function' ? getCluster(sym) : sec),
+      // Standardized scalar fields (unchanged shape so the existing
+      // filter pipeline + Star/Quick Add buttons keep working)
+      price:      price,
+      volume:     volume,
+      bid:        (function(){ try { var l=LIVE_PRICES[sym]; return (l && +l.bid) || null } catch(e) { return null } })(),
+      ask:        (function(){ try { var l=LIVE_PRICES[sym]; return (l && +l.ask) || null } catch(e) { return null } })(),
+      spreadPct:  spreadPct,
+      atr:        atr,
+      atrPct:     +sg.atrPct.toFixed(2),
+      returnPct:  +m.ret20.toFixed(2),
+      earningsDate: earningsDate,
+      // SG Score v1.4 — primary fields. trendScore + gtScore aliases
+      // retained for back-compat with the sort/filter helpers (which
+      // were keyed off those names from the prior build).
+      sgScore:    sg.total,                   // 0–10
+      sg:         sg,                         // full breakdown { total, c1..c7, rec, gate, flags, ... }
+      gtScore:    sg.total * 10,              // legacy alias (0–100 view)
+      trendScore: sg.c5 * 2.5,                // legacy alias (rough 0–25 view)
+      regime:     regime,
+      barCount:   bars.length
+    }
+  }).filter(Boolean)
 
-  // Sort descending by total score
-  results.sort(function(a,b){ return b.score.total - a.score.total })
+  // Sort descending by SG Score (disqualified rows pushed to bottom)
+  results.sort(function(a,b){
+    var ad = (a.sg && a.sg.disqualified) ? 1 : 0
+    var bd = (b.sg && b.sg.disqualified) ? 1 : 0
+    if(ad !== bd) return ad - bd  // non-DQ first
+    return (b.sgScore || 0) - (a.sgScore || 0)
+  })
 
   // ── 6/6 RENDER + persist + diagnostics ─────────────────────────────────
   console.log('[INT-SCREEN] 3/6 FETCH    · '+diag.fetched+' ok · '+diag.fetchFails+' fail')
@@ -7612,15 +8040,15 @@ async function runInternalScreen() {
   if(Object.keys(diag.rejections).length) console.log('[INT-SCREEN]      rejections:', diag.rejections)
   console.log('[INT-SCREEN] 6/6 RENDER   · '+results.length+' candidates')
   if(results.length) {
-    console.log('[INT-SCREEN]      top 20 raw scores:')
+    console.log('[INT-SCREEN]      top 20 SG Scores ['+regime+']:')
     results.slice(0, 20).forEach(function(r, i) {
-      console.log('  '+String(i+1).padStart(2)+'. '+r.sym.padEnd(6)+' total='+String(r.score.total).padStart(3)+
-        '  mom='+String(r.score.mom).padStart(2)+
-        '  trend='+String(r.score.trend).padStart(2)+
-        '  sent='+String(r.score.sent).padStart(2)+
-        '  sect='+String(r.score.sect).padStart(2)+
-        '  exec='+String(r.score.exec).padStart(2)+
-        '  ret20='+r.score.ret20+'%  ('+r.sector+')')
+      var sg = r.sg || {}
+      console.log('  '+String(i+1).padStart(2)+'. '+r.sym.padEnd(6)+
+        ' SG='+String(r.sgScore.toFixed(1)).padStart(4)+
+        '  C1='+sg.c1+' C2='+sg.c2+' C3='+sg.c3+' C4='+sg.c4+' C5='+sg.c5+' C6='+sg.c6+' C7='+sg.c7+
+        '  rec='+(sg.rec||'').padEnd(11)+
+        '  gate='+(sg.gate||'').padEnd(18)+
+        '  ('+r.sector+')')
     })
   } else {
     console.error('[INT-SCREEN] ✗ zero candidates — check proxy health or baseline fetches. Diag:', diag)
@@ -7707,26 +8135,28 @@ function runInternalFilter() {
   var filtered = (INTERNAL_RESULTS || []).filter(function(r) {
     if(!r) return false
     counters.input++
-    // Trend score resolution — prefer top-level field (new shape),
-    // fall back to nested score.trend (legacy payloads). parseFloat
-    // handles stringified numbers; nullish → 0.
-    var gtRaw   = (r.gtScore != null) ? r.gtScore : (r.score && r.score.total)
-    var pxRaw   = (r.price   != null) ? r.price   : (r.score && r.score.price)
-    var trdRaw  = (r.trendScore != null) ? r.trendScore : (r.score && r.score.trend)
-    var gt  = parseFloat(gtRaw);  if(!isFinite(gt))  gt  = 0
+    // SG Score v1.4: Min Score gate now reads sgScore (0–10 scale) and
+    // Trend gate reads the C5 short-term-trend subscore (0–10 scale).
+    // Legacy gtScore (0–100) and trendScore (0–25) fields are kept on
+    // the result object as aliases so older sort/filter callers don't
+    // break, but the canonical filter inputs reference SG fields.
+    var sgRaw   = (r.sgScore != null) ? r.sgScore : ((r.gtScore != null) ? r.gtScore / 10 : 0)
+    var pxRaw   = (r.price   != null) ? r.price   : 0
+    var c5Raw   = (r.sg && r.sg.c5 != null) ? r.sg.c5 : 0
+    var sg  = parseFloat(sgRaw);  if(!isFinite(sg))  sg  = 0
     var px  = parseFloat(pxRaw);  if(!isFinite(px))  px  = 0
     var vol = parseFloat(r.volume); if(!isFinite(vol)) vol = 0
-    var trd = parseFloat(trdRaw); if(!isFinite(trd)) trd = 0
+    var c5  = parseFloat(c5Raw);  if(!isFinite(c5))  c5  = 0
     var sp  = (r.spreadPct == null) ? null : parseFloat(r.spreadPct)
     if(sp != null && !isFinite(sp)) sp = null
     // Gates — first-fail short-circuits
-    if(gt < minScore)                                       { counters.outScore++;  return false }
+    if(sg < minScore)                                       { counters.outScore++;  return false }
     if(priceMin != null && px < priceMin)                   { counters.outPrice++;  return false }
     if(priceMax != null && px > priceMax)                   { counters.outPrice++;  return false }
     if(minVolM > 0 && vol < minVolM * 1e6)                  { counters.outVol++;    return false }
     if(sp != null && sp > maxSpreadPct)                     { counters.outSpread++; return false }  // null-spread passes
-    if(trendSel === 'up'   && trd < 15)                     { counters.outTrend++;  return false }
-    if(trendSel === 'down' && trd >= 10)                    { counters.outTrend++;  return false }
+    if(trendSel === 'up'   && c5 < 6)                       { counters.outTrend++;  return false }
+    if(trendSel === 'down' && c5 >= 4)                      { counters.outTrend++;  return false }
     if(sector && r.sector !== sector && r.cluster !== sector){counters.outSector++; return false }
     if(noEarn && r.earningsDate)                            { counters.outEarn++;   return false }
     counters.passed++
@@ -7749,9 +8179,11 @@ function resetInternalFilters() {
 }
 window.resetInternalFilters = resetInternalFilters
 
-// Sort state for the internal results table. Default is gtScore desc
+// Sort state for the internal results table. Default is sgScore desc
 // (the canonical ranking; matches runInternalScreen's persisted order).
-window.__intSort = window.__intSort || { key: 'gtScore', dir: -1 }
+// Migrate any persisted 'gtScore' default from the prior build.
+window.__intSort = window.__intSort || { key: 'sgScore', dir: -1 }
+if(window.__intSort && window.__intSort.key === 'gtScore') window.__intSort.key = 'sgScore'
 function setIntSort(key) {
   if(!key) return
   var s = window.__intSort
@@ -7813,34 +8245,47 @@ function starInternalCandidate(sym) {
 window.starInternalCandidate = starInternalCandidate
 
 function renderInternalResults(results, filtered) {
+  // Always render the regime banner first — it's based on the cached
+  // regime info from the most recent runInternalScreen, independent of
+  // the current row set.
+  renderInternalRegimeBanner()
   var tbody = document.getElementById('int-body')
   if(!tbody) return
   if(!results || !results.length) {
     var msg = filtered
       ? 'No candidates match the current filter — try lowering Min Score or clearing the sector/trend filter. The raw results are still in <code>INTERNAL_RESULTS</code>.'
-      : 'No results yet. Click <b>▶ Run Screen</b> to score the universe. Check DevTools console for <code>[INT-SCREEN]</code> stage counts if results come back empty.'
-    tbody.innerHTML = '<tr><td colspan="15" style="padding:20px;text-align:center;color:#555c6e;font-size:12px;line-height:1.8">'+msg+'</td></tr>'
+      : 'No results yet. Click <b>▶ Run Screen</b> to score the universe with SG Score v1.4. Check DevTools console for <code>[INT-SCREEN]</code> stage counts if results come back empty.'
+    tbody.innerHTML = '<tr><td colspan="17" style="padding:20px;text-align:center;color:#555c6e;font-size:12px;line-height:1.8">'+msg+'</td></tr>'
     _updateIntSortIndicators()
     return
   }
-  // Sort by current window.__intSort state. gtScore desc is the default.
-  // Sortable keys: sym, gtScore, price, volume, atr, spreadPct,
-  // trendScore, sector, returnPct, earningsDate.
-  var sort = window.__intSort || { key: 'gtScore', dir: -1 }
+  // Sort by current window.__intSort state. sgScore desc is the default.
+  // Sortable keys: sym, sgScore, price, volume, atrPct, c1..c7, sector,
+  // returnPct, earningsDate, gate, rec. Legacy 'gtScore' / 'trendScore'
+  // accepted as aliases (sg.total / c5*2.5).
+  var sort = window.__intSort || { key: 'sgScore', dir: -1 }
   var sorted = results.slice().sort(function(a, b) {
     var av, bv
+    var sgA = a.sg || {}, sgB = b.sg || {}
     switch(sort.key) {
       case 'sym':          av = String(a.sym||''); bv = String(b.sym||''); break
       case 'sector':       av = String(a.sector||''); bv = String(b.sector||''); break
-      case 'earningsDate': av = String(a.earningsDate||'~'); bv = String(b.earningsDate||'~'); break   // '~' sorts last
+      case 'earningsDate': av = String(a.earningsDate||'~'); bv = String(b.earningsDate||'~'); break
+      case 'rec':          av = String(sgA.rec||'~'); bv = String(sgB.rec||'~'); break
+      case 'gate':         av = String(sgA.gate||''); bv = String(sgB.gate||''); break
       case 'price':        av = +a.price||0; bv = +b.price||0; break
       case 'volume':       av = +a.volume||0; bv = +b.volume||0; break
       case 'atr':          av = +a.atr||0; bv = +b.atr||0; break
+      case 'atrPct':       av = +a.atrPct||0; bv = +b.atrPct||0; break
       case 'spreadPct':    av = (a.spreadPct==null ? 999 : +a.spreadPct); bv = (b.spreadPct==null ? 999 : +b.spreadPct); break
-      case 'trendScore':   av = +a.trendScore||+(a.score&&a.score.trend)||0; bv = +b.trendScore||+(b.score&&b.score.trend)||0; break
-      case 'returnPct':    av = +a.returnPct||+(a.score&&a.score.ret20)||0; bv = +b.returnPct||+(b.score&&b.score.ret20)||0; break
+      case 'returnPct':    av = +a.returnPct||0; bv = +b.returnPct||0; break
+      case 'c1': case 'c2': case 'c3': case 'c4': case 'c5': case 'c6': case 'c7':
+        av = +sgA[sort.key]||0; bv = +sgB[sort.key]||0; break
+      // Legacy aliases — keep old links working
       case 'gtScore':
-      default:             av = +a.gtScore||+(a.score&&a.score.total)||0; bv = +b.gtScore||+(b.score&&b.score.total)||0; break
+      case 'trendScore':
+      case 'sgScore':
+      default:             av = +a.sgScore||+(a.gtScore/10)||0; bv = +b.sgScore||+(b.gtScore/10)||0; break
     }
     if(typeof av === 'string') { return sort.dir * av.localeCompare(bv) }
     return sort.dir * (av - bv)
@@ -7848,70 +8293,134 @@ function renderInternalResults(results, filtered) {
 
   var display = sorted.slice(0, 100)
   tbody.innerHTML = display.map(function(r, i) {
-    var sc = +r.gtScore || +(r.score && r.score.total) || 0
-    var scCol = sc>=80?'#00d68f':sc>=60?'#f0c040':sc>=40?'#ff8c42':'#ff4560';
-    var scBar = '<div style="display:flex;align-items:center;gap:5px"><span style="font-size:14px;font-weight:700;color:'+scCol+'">'+sc+'\x3C/span><div style="flex:1;background:#1e2d3d;border-radius:2px;height:4px;width:36px"><div style="width:'+sc+'%;height:100%;background:'+scCol+';border-radius:2px">\x3C/div>\x3C/div>\x3C/div>';
+    var sg = r.sg || {}
+    var sgVal = +r.sgScore || 0
+    var sgCol = sgVal>=8.5?'#00d68f':sgVal>=7.8?'#4da6ff':sgVal>=7.0?'#f0c040':'#ff8c42';
+    if(sg.disqualified) sgCol = '#555c6e'
+    var sgBar = '<div style="display:flex;align-items:center;gap:5px"><span style="font-size:14px;font-weight:700;color:'+sgCol+'">'+sgVal.toFixed(1)+'\x3C/span><div style="flex:1;background:#1e2d3d;border-radius:2px;height:4px;width:36px"><div style="width:'+(sgVal*10)+'%;height:100%;background:'+sgCol+';border-radius:2px">\x3C/div>\x3C/div>\x3C/div>';
     var ovMatch = OV[r.sym] ? '<span style="font-size:9px;color:#4da6ff;background:#0d1117;padding:1px 4px;border-radius:3px;margin-left:4px" title="Also in OVTLYR">OV\x3C/span>' : '';
-    var ret20 = +r.returnPct || +(r.score && r.score.ret20) || 0
-    var ret20Col = ret20>=10?'#00d68f':ret20>=0?'#f0c040':'#ff4560';
     var priceStr = (+r.price > 0) ? '$'+(+r.price).toFixed(2) : '<span style="color:#555c6e">—</span>'
     var volM = (+r.volume > 0) ? ((+r.volume) / 1e6).toFixed(1) + 'M' : '<span style="color:#555c6e">—</span>'
-    var atrStr = (+r.atr > 0) ? (+r.atr).toFixed(2) : '<span style="color:#555c6e">—</span>'
-    var spStr  = (r.spreadPct == null) ? '<span style="color:#555c6e">—</span>'
-                 : (+r.spreadPct).toFixed(1)+'%'
-    var spCol  = (r.spreadPct == null) ? '#555c6e' : (+r.spreadPct > 10 ? '#ff4560' : +r.spreadPct > 5 ? '#ff8c42' : '#8b91a0')
-    var earnStr = r.earningsDate ? '<span title="'+r.earningsDate+'" style="color:#ff8c42;font-size:10px">⚠</span>' : '<span style="color:#333a4a;font-size:10px">·</span>'
-    // Check Planner membership so the Star button reflects "already
-    // sent". Clicking Star now routes through starInternalCandidate,
-    // which calls sendToPlanner AND immediately re-renders the
-    // Internal Screener table so the button flips to ★ Starred
-    // without a page reload.
+    var atrPctStr = (+r.atrPct > 0) ? (+r.atrPct).toFixed(1)+'%' : '<span style="color:#555c6e">—</span>'
+
+    // Component cell — color-codes 0–10 score
+    var cell = function(v) {
+      var n = +v || 0
+      var col = n>=8?'#00d68f':n>=6?'#f0c040':n>=4?'#ff8c42':'#ff4560'
+      return '<td style="padding:4px 6px;text-align:right;font-size:11px;color:'+col+';font-weight:600;font-family:\'SF Mono\',monospace">'+n+'\x3C/td>'
+    }
+
+    // Gate badge
+    var gateText = sg.gate || 'PASS'
+    var gateCol  = gateText === 'PASS' ? '#8b91a0' : '#ff4560'
+    var gateBg   = gateText === 'PASS' ? 'transparent' : 'rgba(255,69,96,.10)'
+    var gateBd   = gateText === 'PASS' ? 'transparent' : 'rgba(255,69,96,.35)'
+    var gatePill = '<span style="background:'+gateBg+';color:'+gateCol+';border:1px solid '+gateBd+';font-size:10px;padding:1px 6px;border-radius:3px;white-space:nowrap">'+gateText+'</span>'
+
+    // Recommendation badge
+    var rec = sg.rec || 'SKIP'
+    var recColors = {
+      'STRONG BUY': { bg:'rgba(0,214,143,.18)', fg:'#00d68f', bd:'rgba(0,214,143,.5)' },
+      'BUY':        { bg:'rgba(77,166,255,.18)',fg:'#4da6ff', bd:'rgba(77,166,255,.5)' },
+      'WATCH':      { bg:'rgba(240,192,64,.16)',fg:'#f0c040', bd:'rgba(240,192,64,.45)' },
+      'SKIP':       { bg:'rgba(139,145,160,.10)',fg:'#8b91a0',bd:'rgba(139,145,160,.30)' }
+    }
+    var rc = recColors[rec] || recColors.SKIP
+    var recPill = '<span style="background:'+rc.bg+';color:'+rc.fg+';border:1px solid '+rc.bd+';font-size:10px;font-weight:700;padding:1px 6px;border-radius:3px;letter-spacing:.04em;white-space:nowrap">'+rec+'</span>'
+
+    // Flags — short pills (top 3 by importance)
+    var flagPriority = ['EARNINGS IMMINENT','LOW VOLUME (<1M)','PRICE <$20','OI <250','SPREAD >10%','BELOW 10 EMA',
+                         'EARNINGS WARNING','EXTENDED >15% ABOVE 20 EMA','SECTOR RISK','UNSUSTAINABLE MOMENTUM',
+                         'RISK-OFF','PROVISIONAL','EXECUTION PENDING','EARNINGS NOTE']
+    var flags = (sg.flags || []).slice()
+    flags.sort(function(a,b){
+      var ai = flagPriority.indexOf(a); if(ai<0) ai = 999
+      var bi = flagPriority.indexOf(b); if(bi<0) bi = 999
+      return ai - bi
+    })
+    var topFlags = flags.slice(0, 3).map(function(f) {
+      var col = (f.indexOf('EARNINGS IMMINENT')===0 || f.indexOf('LOW ')===0 || f.indexOf('PRICE <')===0 || f.indexOf('OI <')===0 || f.indexOf('SPREAD >')===0 || f.indexOf('BELOW ')===0)
+        ? '#ff4560'
+        : (f === 'RISK-OFF' || f === 'EARNINGS WARNING' || f === 'SECTOR RISK' || f === 'UNSUSTAINABLE MOMENTUM' || f === 'EXTENDED >15% ABOVE 20 EMA')
+          ? '#ff8c42'
+          : '#8b91a0'
+      return '<span style="display:inline-block;font-size:9px;color:'+col+';border:1px solid '+col+'4d;padding:1px 4px;border-radius:2px;margin-right:3px;margin-bottom:2px;white-space:nowrap" title="'+f+'">'+f+'</span>'
+    }).join('')
+    if(flags.length > 3) topFlags += '<span style="font-size:9px;color:#555c6e" title="'+flags.slice(3).join(', ')+'">+'+(flags.length-3)+'</span>'
+
+    // Star + Quick Add buttons (unchanged behavior — uses sgScore now via gtScore alias)
     var sentAlready = (typeof PLANNER_CANDIDATES !== 'undefined' && Array.isArray(PLANNER_CANDIDATES))
       ? PLANNER_CANDIDATES.some(function(c){ return c && c.sym === r.sym })
       : false
     var starBtn = sentAlready
       ? '<button onclick="event.stopPropagation();goSize(\''+r.sym+'\')" title="Already in Planner — click to open in Sizer" style="background:rgba(0,214,143,.14);color:#00d68f;border:1px solid rgba(0,214,143,.45);border-radius:3px;padding:2px 7px;font-size:11px;font-weight:700;cursor:pointer;margin-right:3px;font-family:inherit">★ Starred</button>'
-      : '<button onclick="event.stopPropagation();starInternalCandidate(\''+r.sym+'\');this.blur()" title="Send to Planner (adds to PLANNER_CANDIDATES with price + gtScore + auto-fetch ATR)" style="background:transparent;color:#f0c040;border:1px solid rgba(240,192,64,.45);border-radius:3px;padding:2px 7px;font-size:11px;font-weight:700;cursor:pointer;margin-right:3px;font-family:inherit">☆ Star</button>'
+      : '<button onclick="event.stopPropagation();starInternalCandidate(\''+r.sym+'\');this.blur()" title="Send to Planner (adds to PLANNER_CANDIDATES with price + SG Score + auto-fetch ATR)" style="background:transparent;color:#f0c040;border:1px solid rgba(240,192,64,.45);border-radius:3px;padding:2px 7px;font-size:11px;font-weight:700;cursor:pointer;margin-right:3px;font-family:inherit">☆ Star</button>'
     var quickBtn = '<button onclick="event.stopPropagation();quickAddInternalTrade(\''+r.sym+'\')" title="Send to Planner + jump to Quick Size sizer (stop/R1/R2 use current Stop ATR setting)" style="background:#00d68f;color:#0a0c0f;border:none;border-radius:3px;padding:2px 8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">⚡ Quick Add</button>'
-    return '<tr style="border-bottom:1px solid #0d1117;cursor:pointer" onclick="goSize(\''+r.sym+'\')">'+
+
+    // Conviction note row (only for STRONG BUY / BUY) appears as a
+    // collapsed second-row span underneath the main row.
+    var convictionRow = ''
+    if(sg.convictionNote && (rec === 'STRONG BUY' || rec === 'BUY')) {
+      convictionRow = '<tr style="background:rgba(77,166,255,.03)"><td colspan="17" style="padding:4px 10px 6px 32px;font-size:10.5px;color:#8b91a0;line-height:1.5;border-bottom:1px solid #0d1117"><span style="color:'+rc.fg+';font-weight:700;margin-right:6px">'+rec+'</span>'+sg.convictionNote+'\x3C/td>\x3C/tr>'
+    }
+
+    return '<tr style="border-bottom:1px solid #0d1117;cursor:pointer'+(sg.disqualified?';opacity:0.55':'')+'" onclick="goSize(\''+r.sym+'\')">'+
       '<td style="padding:4px 10px;color:#555c6e;font-size:10px">'+(i+1)+'\x3C/td>'+
       '<td style="padding:4px 6px"><b>'+r.sym+'\x3C/b>'+ovMatch+'\x3C/td>'+
-      '<td style="padding:4px 6px">'+scBar+'\x3C/td>'+
       '<td style="padding:4px 6px;text-align:right;font-size:11px;font-family:\'SF Mono\',monospace;color:#e8eaf0">'+priceStr+'\x3C/td>'+
       '<td style="padding:4px 6px;text-align:right;font-size:11px;color:#8b91a0">'+volM+'\x3C/td>'+
-      '<td style="padding:4px 6px;text-align:right;font-size:11px;font-family:\'SF Mono\',monospace;color:#8b91a0">'+atrStr+'\x3C/td>'+
-      '<td style="padding:4px 6px;text-align:right;font-size:11px;color:'+spCol+'">'+spStr+'\x3C/td>'+
-      '<td style="padding:4px 6px;text-align:right;color:#8b91a0;font-size:11px">'+(+r.trendScore||+(r.score&&r.score.trend)||0)+'\x3C/td>'+
-      '<td style="padding:4px 6px;text-align:right;color:#8b91a0;font-size:11px">'+(r.score?r.score.mom:'')+'\x3C/td>'+
-      '<td style="padding:4px 6px;text-align:right;color:#8b91a0;font-size:11px">'+(r.score?r.score.sent:'')+'\x3C/td>'+
-      '<td style="padding:4px 6px;text-align:right;color:#8b91a0;font-size:11px">'+(r.score?r.score.sect:'')+'\x3C/td>'+
-      '<td style="padding:4px 6px;text-align:right;color:#8b91a0;font-size:11px">'+(r.score?r.score.exec:'')+'\x3C/td>'+
-      '<td style="padding:4px 6px;font-size:11px;color:#555c6e">'+r.sector+'\x3C/td>'+
-      '<td style="padding:4px 6px;text-align:right;font-size:11px;color:'+ret20Col+'">'+ret20+'%\x3C/td>'+
-      '<td style="padding:4px 6px;text-align:center">'+earnStr+'\x3C/td>'+
+      '<td style="padding:4px 6px;text-align:right;font-size:11px;font-family:\'SF Mono\',monospace;color:#8b91a0">'+atrPctStr+'\x3C/td>'+
+      cell(sg.c1) + cell(sg.c2) + cell(sg.c3) + cell(sg.c4) + cell(sg.c5) + cell(sg.c6) + cell(sg.c7) +
+      '<td style="padding:4px 6px">'+sgBar+'\x3C/td>'+
+      '<td style="padding:4px 6px">'+gatePill+'\x3C/td>'+
+      '<td style="padding:4px 6px">'+recPill+'\x3C/td>'+
+      '<td style="padding:4px 6px">'+topFlags+'\x3C/td>'+
       '<td style="padding:4px 6px;text-align:right;white-space:nowrap">'+starBtn+quickBtn+'\x3C/td>'+
-      '\x3C/tr>'
+      '\x3C/tr>' + convictionRow
   }).join('')
 
   _updateIntSortIndicators()
 
-  // Top strip
+  // Top strip (top 5 by SG Score)
   var topChips = document.getElementById('int-top-chips')
   var topStrip = document.getElementById('int-top-strip')
   if(topChips && sorted.length) {
     topChips.innerHTML = sorted.slice(0,5).map(function(r) {
-      var tot = +r.gtScore || +(r.score && r.score.total) || 0
-      var col = tot>=80?'#00d68f':tot>=60?'#f0c040':'#ff8c42';
-      var ret = +r.returnPct || +(r.score && r.score.ret20) || 0
+      var tot = +r.sgScore || 0
+      var col = tot>=8.5?'#00d68f':tot>=7.8?'#4da6ff':tot>=7.0?'#f0c040':'#ff8c42';
       return '<span onclick="goSize(\''+r.sym+'\')" style="cursor:pointer;background:#0d1117;border:1px solid '+col+';border-radius:4px;padding:3px 8px;font-size:11px;display:inline-flex;gap:6px;align-items:center">'+
         '<b style="color:'+col+'">'+r.sym+'\x3C/b>'+
-        '<span style="color:#555c6e">'+tot+'\x3C/span>'+
-        '<span style="color:#8b91a0;font-size:10px">'+ret+'%\x3C/span>'+
+        '<span style="color:#555c6e">SG '+tot.toFixed(1)+'\x3C/span>'+
+        '<span style="color:#8b91a0;font-size:10px">'+(r.sg && r.sg.rec || '')+'\x3C/span>'+
         '\x3C/span>'
     }).join('')
     if(topStrip) topStrip.style.display = 'block'
   }
 }
+
+// Render the regime banner above the results table. Reads from
+// window.__INT_REGIME (set by runInternalScreen). Hidden when no regime
+// info is cached yet (first boot before any Run Screen).
+function renderInternalRegimeBanner() {
+  var el = document.getElementById('int-regime-banner')
+  if(!el) return
+  var info = window.__INT_REGIME
+  if(!info) { el.style.display = 'none'; return }
+  var isOff = info.regime === 'RISK-OFF'
+  var bg = isOff ? 'rgba(255,69,96,.10)' : 'rgba(0,214,143,.08)'
+  var bd = isOff ? 'rgba(255,69,96,.45)' : 'rgba(0,214,143,.30)'
+  var fg = isOff ? '#ff4560'              : '#00d68f'
+  var label = isOff ? '⚠ RISK-OFF MODE'  : '✓ GREEN MODE — Full system active'
+  var detail = isOff
+    ? 'SPY '+(info.spy ? info.spy.toFixed(2) : '?')+' is BELOW 20 EMA '+(info.spyEma20 ? info.spyEma20.toFixed(2) : '?')+'. New INTERNAL trades blocked by default. Existing trades not force-closed. Rows still scored and labeled RISK-OFF.'
+    : 'SPY '+(info.spy ? info.spy.toFixed(2) : '?')+' is ABOVE 20 EMA '+(info.spyEma20 ? info.spyEma20.toFixed(2) : '?')+'. New INTERNAL trades allowed.'
+  el.style.display = 'block'
+  el.innerHTML = '<div style="padding:8px 12px;background:'+bg+';border:1px solid '+bd+';border-radius:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">' +
+    '<span style="font-size:11px;font-weight:700;color:'+fg+';letter-spacing:.05em">'+label+'</span>' +
+    '<span style="font-size:10.5px;color:#8b91a0">'+detail+'</span>' +
+  '</div>'
+}
+window.renderInternalRegimeBanner = renderInternalRegimeBanner
 // Refresh the sort arrows in the table head after each render.
 function _updateIntSortIndicators() {
   var sort = window.__intSort || { key: 'gtScore', dir: -1 }
