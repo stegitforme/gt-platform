@@ -724,25 +724,25 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
     <table style="width:100%;border-collapse:collapse;font-size:12px">
       <thead id="int-head" onclick="(function(e){var th=e.target.closest('th[data-sort-key]');if(th)setIntSort(th.getAttribute('data-sort-key'))})(event)">
         <tr style="color:#555c6e;font-size:10px;text-transform:uppercase;border-bottom:1px solid #1e2d3d">
-        <th style="padding:6px 10px;text-align:left;width:24px">#</th>
+        <!-- Default columns: Rank, Ticker, Price, Vol, ATR%, SG Score,
+             Gate, Rec, Flags, Actions. C1-C7 column headers + cells
+             intentionally hidden in default view; revealed via the
+             per-row "▶ Details" toggle (see toggleIntDetails). The
+             SG Score data model still carries every component — the
+             hidden cells just live inside the expandable details row. -->
+        <th style="padding:6px 6px;width:18px"></th>
+        <th style="padding:6px 10px;text-align:left;width:30px">#</th>
         <th data-sort-key="sym"        style="padding:6px 6px;text-align:left;cursor:pointer;user-select:none">Ticker<span class="int-sort-ind" style="margin-left:4px;color:#333a4a"></span></th>
         <th data-sort-key="price"      style="padding:6px 6px;text-align:right;cursor:pointer;user-select:none" title="Last price (close of most recent bar)">Price<span class="int-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
         <th data-sort-key="volume"     style="padding:6px 6px;text-align:right;cursor:pointer;user-select:none" title="20d average daily volume (millions)">Vol<span class="int-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
         <th data-sort-key="atrPct"     style="padding:6px 6px;text-align:right;cursor:pointer;user-select:none" title="ATR% = ATR(14) / price × 100">ATR%<span class="int-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
-        <th data-sort-key="c1"         style="padding:6px 6px;text-align:right;cursor:pointer;user-select:none" title="C1: Risk-Adjusted Momentum (28% weight). Universe-percentile of 20d return / ATR%.">C1<span class="int-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
-        <th data-sort-key="c2"         style="padding:6px 6px;text-align:right;cursor:pointer;user-select:none" title="C2: Relative Strength vs SPY (22%). Excess 20d return.">C2<span class="int-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
-        <th data-sort-key="c3"         style="padding:6px 6px;text-align:right;cursor:pointer;user-select:none" title="C3: Volume Confirmation (15%). Up-day volume / down-day volume over 10 sessions.">C3<span class="int-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
-        <th data-sort-key="c4"         style="padding:6px 6px;text-align:right;cursor:pointer;user-select:none" title="C4: Sector Cluster Context (13%). Sector ETF 20d return vs SPY (partial — sector-vs-SPY only; breadth + F&G unavailable).">C4<span class="int-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
-        <th data-sort-key="c5"         style="padding:6px 6px;text-align:right;cursor:pointer;user-select:none" title="C5: Short-Term Trend Quality (12%). EMA stack 10/20/50, slope alignment, distance from 20 EMA. Hard remove if price < 10 EMA.">C5<span class="int-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
-        <th data-sort-key="c6"         style="padding:6px 6px;text-align:right;cursor:pointer;user-select:none" title="C6: Options Flow / Sentiment Proxy (7%). Neutral 5 — call volume / P/C ratio data not yet wired.">C6<span class="int-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
-        <th data-sort-key="c7"         style="padding:6px 6px;text-align:right;cursor:pointer;user-select:none" title="C7: Execution Quality (3%). OI + spread on the target option contract. Neutral 5 + PROVISIONAL when chain not fetched.">C7<span class="int-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
-        <th data-sort-key="sgScore"    style="padding:6px 6px;text-align:left;cursor:pointer;user-select:none;color:#4da6ff" title="SG Score = weighted sum 0-10. STRONG BUY ≥8.5 · BUY ≥7.8 · WATCH ≥7.0 · SKIP <7.">SG Score<span class="int-sort-ind" style="margin-left:4px;color:#333a4a"></span></th>
+        <th data-sort-key="sgScore"    style="padding:6px 6px;text-align:left;cursor:pointer;user-select:none;color:#4da6ff" title="SG Score = weighted sum 0-10. STRONG BUY ≥8.5 · BUY ≥7.8 · WATCH ≥7.0 · SKIP <7. Click the ▶ on a row to see C1-C7 breakdown.">SG Score<span class="int-sort-ind" style="margin-left:4px;color:#333a4a"></span></th>
         <th data-sort-key="gate"       style="padding:6px 6px;text-align:left;cursor:pointer;user-select:none" title="Hard gate result — PASS or the first failed-gate reason">Gate<span class="int-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
         <th data-sort-key="rec"        style="padding:6px 6px;text-align:left;cursor:pointer;user-select:none">Rec<span class="int-sort-ind" style="margin-left:3px;color:#333a4a"></span></th>
         <th style="padding:6px 6px;text-align:left">Flags</th>
         <th style="padding:6px 6px;text-align:right">Actions</th>
       </tr></thead>
-      <tbody id="int-body"><tr><td colspan="17" style="padding:20px;text-align:center;color:#555c6e">Click "Run Screen" to score the internal universe with SG Score v1.4</td></tr></tbody>
+      <tbody id="int-body"><tr><td colspan="11" style="padding:20px;text-align:center;color:#555c6e">Click "Run Screen" to score the internal universe with SG Score v1.4</td></tr></tbody>
     </table>
     <div id="int-load-bar" style="display:none;padding:12px;text-align:center">
       <div style="background:#1e2d3d;border-radius:4px;height:6px;overflow:hidden;margin-bottom:6px">
@@ -5987,14 +5987,71 @@ function rootTicker(raw) {
   return (raw || "").split(" ")[0].replace(/[$]/g,"").toUpperCase()
 }
 var SECTOR_FALLBACK = {'LUNR':'Space','VRT':'Tech','GLW':'Tech','SMCI':'Tech','DELL':'Tech','HPE':'Tech','CRWD':'Tech','PANW':'Tech','ZS':'Tech','ANET':'Tech','CDNS':'Tech','SNPS':'Tech'}
-var SECTOR_NORMALIZE = {'Technology':'Tech','Communications':'Communication','Consumer Discretionary':'Discretionary','Consumer Staples':'Staples','Health Care':'Healthcare','Real Estate':'REIT'}
+// Comprehensive sector map for the INTERNAL_UNIVERSE. Until this map
+// landed, getSector returned '—' for any ticker not in OV[sym] and
+// not in the 12-entry SECTOR_FALLBACK above — which is why C4 read
+// "NO SECTOR DATA" for everyday tickers like NVDA/AAPL/MSFT/META on
+// any device that hadn't yet loaded an OVTLYR snapshot. This map is
+// queried as the THIRD fallback (after OV and SECTOR_FALLBACK), so
+// OVTLYR data still wins when present and the historic SECTOR_FALLBACK
+// entries are preserved for back-compat. Sectors here use the same
+// canonical names that SECTOR_ETFS_INT keys off ('Tech', 'Healthcare',
+// 'Financials', etc. — see SECTOR_NORMALIZE).
+var INTERNAL_SECTOR_MAP = {
+  // Tech (XLK)
+  'NVDA':'Tech','AAPL':'Tech','MSFT':'Tech','AMD':'Tech','AVGO':'Tech','TSM':'Tech',
+  'QCOM':'Tech','ORCL':'Tech','INTC':'Tech','CRM':'Tech','ADBE':'Tech','NOW':'Tech',
+  'SNPS':'Tech','CDNS':'Tech','MU':'Tech','LRCX':'Tech','AMAT':'Tech','KLAC':'Tech',
+  'TXN':'Tech','PLTR':'Tech','SNOW':'Tech','NET':'Tech','DDOG':'Tech','ZS':'Tech',
+  'CRWD':'Tech','PANW':'Tech','ARM':'Tech','DELL':'Tech','IBM':'Tech','CLS':'Tech',
+  'VRT':'Tech','SMCI':'Tech','GLW':'Tech','ANET':'Tech','HPE':'Tech',
+  // Communication (XLC)
+  'GOOGL':'Communication','GOOG':'Communication','META':'Communication',
+  'NFLX':'Communication','DIS':'Communication','CMCSA':'Communication',
+  // Consumer Discretionary (XLY)
+  'AMZN':'Discretionary','TSLA':'Discretionary','ABNB':'Discretionary',
+  'UBER':'Discretionary','NKE':'Discretionary','MCD':'Discretionary',
+  'SBUX':'Discretionary','HD':'Discretionary','TGT':'Discretionary',
+  'MELI':'Discretionary',
+  // Consumer Staples (XLP)
+  'WMT':'Staples','COST':'Staples','PG':'Staples','KO':'Staples','PEP':'Staples',
+  // Financials / Payments / Brokers / Crypto-finance (XLF)
+  'JPM':'Financials','BAC':'Financials','GS':'Financials','MS':'Financials',
+  'WFC':'Financials','BLK':'Financials','SCHW':'Financials','HOOD':'Financials',
+  'V':'Financials','MA':'Financials','PYPL':'Financials','COIN':'Financials',
+  'IBKR':'Financials','GGAL':'Financials',
+  // Healthcare (XLV)
+  'JNJ':'Healthcare','UNH':'Healthcare','LLY':'Healthcare','ABBV':'Healthcare',
+  'PFE':'Healthcare','MRK':'Healthcare','HIMS':'Healthcare',
+  // Energy (XLE)
+  'XOM':'Energy','CVX':'Energy','COP':'Energy',
+  // Industrials / Aerospace / Space (XLI)
+  'BA':'Industrials','CAT':'Industrials','HON':'Industrials','GE':'Industrials',
+  'RTX':'Industrials','LMT':'Industrials','HWM':'Industrials','RKLB':'Industrials',
+  'LUNR':'Industrials','ASTS':'Industrials',
+  // Utilities (XLU)
+  'NEE':'Utilities',
+  // Real Estate (XLRE)
+  'AMT':'Real Estate','EQIX':'Real Estate'
+}
+var SECTOR_NORMALIZE = {'Technology':'Tech','Communications':'Communication','Communication Services':'Communication','Consumer Discretionary':'Discretionary','Consumer Staples':'Staples','Health Care':'Healthcare','Real Estate':'REIT','Financial Services':'Financials','Financial':'Financials'}
 function normalizeSector(s) {
   if(!s||s==='—') return '—';
   return SECTOR_NORMALIZE[s] || s
 }
 function getSector(sym) {
+  // Resolution chain (first non-empty wins):
+  //   1. OV[sym].s             — OVTLYR sector when loaded
+  //   2. SECTOR_FALLBACK[sym]   — historic 12-ticker overrides
+  //   3. INTERNAL_SECTOR_MAP[sym] — full INTERNAL_UNIVERSE coverage
+  //   4. '—'                    — truly unknown
+  // Both name + rootTicker (handles "AMD May-15-25 90C" → "AMD") are
+  // tried at each step.
   var d = OV[sym] || OV[rootTicker(sym)]
-  var s = d?.s || SECTOR_FALLBACK[sym] || SECTOR_FALLBACK[rootTicker(sym)] || '—';
+  var s = d?.s
+        || SECTOR_FALLBACK[sym]      || SECTOR_FALLBACK[rootTicker(sym)]
+        || INTERNAL_SECTOR_MAP[sym]  || INTERNAL_SECTOR_MAP[rootTicker(sym)]
+        || '—';
   return normalizeSector(s)
 }
 
@@ -7335,7 +7392,8 @@ var INTERNAL_UNIVERSE = ['NVDA','AAPL','MSFT','GOOGL','GOOG','META','AMZN','TSLA
 var SECTOR_ETFS_INT = {
   'Tech':'XLK','Communication':'XLC','Financials':'XLF','Finance':'XLF',
   'Healthcare':'XLV','Industrials':'XLI','Consumer':'XLY','Discretionary':'XLY',
-  'Energy':'XLE','Utilities':'XLU','Materials':'XLB','Real Estate':'XLRE'
+  'Energy':'XLE','Utilities':'XLU','Materials':'XLB','Real Estate':'XLRE',
+  'Staples':'XLP'   // Consumer Staples — was missing; XLP now also in keyETFs fetch list
 }
 
 // ── MODE TOGGLE ───────────────────────────────────────────────────────────────
@@ -7656,6 +7714,7 @@ function scoreSGFromMeasurements(m, ctx) {
   var rec  = 'SKIP'
   var dq   = false
   var convictionParts = []
+  var convictionLong  = ''
   ctx = ctx || {}
   var universeRapmDist = ctx.universeRapmDist || []
   var regime           = ctx.regime || 'GREEN'
@@ -7744,17 +7803,32 @@ function scoreSGFromMeasurements(m, ctx) {
   // ── C4: SECTOR CLUSTER CONTEXT (13%) ─────────────────────────────────
   // Without sector-breadth or sector/F&G momentum data, score off the
   // single sector-vs-SPY signal we can compute. Conservative bins.
+  //
+  // Flag policy (post-cleanup):
+  //   • sectorRet20 present                        → no flag (silent;
+  //                                                  legend documents
+  //                                                  that breadth/F&G
+  //                                                  aren't wired)
+  //   • sectorRet20 missing BUT sector mapped      → C4 PARTIAL (ETF
+  //                                                  fetch failed for
+  //                                                  this run)
+  //   • sectorRet20 missing AND sector unmapped    → C4 NO SECTOR DATA
+  //                                                  (the only case
+  //                                                  the user can act
+  //                                                  on — extend the
+  //                                                  static map)
   var c4 = 5  // neutral default
+  var sectorMapped = !!(ctx.sector && ctx.sector !== '—' && ctx.sector !== 'Other')
   if(m.sectorRet20 != null) {
     var sectorVsSpy = m.sectorRet20 - m.spyRet20
-    if(sectorVsSpy > 3)       c4 = 9   // strong outperformance — proxy for top-3
+    if(sectorVsSpy > 3)       c4 = 9
     else if(sectorVsSpy > 1)  c4 = 7
     else if(sectorVsSpy >= -1)c4 = 5
     else if(sectorVsSpy >= -3)c4 = 3
     else                      c4 = 2
-    // Note that we don't have sector breadth or F&G momentum, so we
-    // can't reach 10. Document it.
-    flags.push('C4 PARTIAL (sector vs SPY only)')
+    // Silent — breadth/F&G unavailable is documented in the legend
+  } else if(sectorMapped) {
+    flags.push('C4 PARTIAL')
   } else {
     flags.push('C4 NO SECTOR DATA')
   }
@@ -7779,11 +7853,14 @@ function scoreSGFromMeasurements(m, ctx) {
 
   // ── C6: OPTIONS FLOW / SENTIMENT PROXY (7%) ──────────────────────────
   // Real call volume + P/C ratio not currently fetched. Per spec: assign
-  // neutral 5 and flag DATA LIMITED.
+  // neutral 5. NO inline flag — the legend documents this is system-
+  // wide and surfacing it on every row was just noise.
   var c6 = 5
-  flags.push('C6 DATA UNAVAILABLE — NEUTRAL ASSIGNED')
 
   // ── C7: EXECUTION QUALITY (3%) ───────────────────────────────────────
+  // EXECUTION PENDING is the canonical flag for "no chain data". The
+  // earlier code emitted PROVISIONAL too — same condition, redundant
+  // chip. Now: ONE flag (EXECUTION PENDING) when chain is missing.
   var c7 = 5
   if(chain && chain.oi != null && chain.bid > 0 && chain.ask > 0) {
     var sprPct2 = (chain.ask - chain.bid) / chain.bid * 100
@@ -7793,9 +7870,9 @@ function scoreSGFromMeasurements(m, ctx) {
     else if (oi >= 500  && sprPct2 <= 7)  c7 = 6
     else if (oi >= 250  && sprPct2 <= 10) c7 = 4
     else                                  c7 = 2
-  } else {
-    flags.push('PROVISIONAL')
   }
+  // Note: EXECUTION PENDING was already pushed above (gate 4 fallback)
+  // when chain data was missing for this row, so we don't double-add it.
 
   // ── FINAL SG SCORE (weighted) ────────────────────────────────────────
   var sg = c1*0.28 + c2*0.22 + c3*0.15 + c4*0.13 + c5*0.12 + c6*0.07 + c7*0.03
@@ -7827,26 +7904,30 @@ function scoreSGFromMeasurements(m, ctx) {
       { k:'Options flow',           v: c6*0.07 },
       { k:'Execution quality',      v: c7*0.03 }
     ].sort(function(a,b){ return b.v - a.v })
-    convictionParts.push('Driver: ' + contribs[0].k + ' (' + contribs[0].v.toFixed(1) + ' pts).')
-    // Surface the most actionable flags (skip the cosmetic ones)
-    var noteFlags = flags.filter(function(f){
-      return f.indexOf('PARTIAL') < 0 && f.indexOf('DATA UNAVAILABLE') < 0
-    })
-    if(noteFlags.length) convictionParts.push('Flags: ' + noteFlags.join(', ') + '.')
-    // Suggested option strike/expiry — generic guidance (no chain fetch)
-    convictionParts.push('Suggested option: 0.75–0.85 delta call, 20–40 DTE.')
-    // Strike approximation: ~0.80 delta is roughly 2–4% ITM for typical
-    // 1-month equity calls. Surface a concrete strike target so the user
-    // has something to type into the chain.
+    // Short note (default visible): one line — driver + top flags only.
+    // Filters out cosmetic flags (PARTIAL/DATA UNAVAILABLE) so the line
+    // shows what's ACTIONABLE.
+    var shortFlagWhitelist = ['EARNINGS IMMINENT','EARNINGS WARNING','LOW VOLUME (<1M)',
+                              'PRICE <$20','OI <250','SPREAD >10%','BELOW 10 EMA',
+                              'HIGH RISK · BELOW 10 EMA','EXTENDED >15% ABOVE 20 EMA',
+                              'SECTOR RISK','UNSUSTAINABLE MOMENTUM','RISK-OFF',
+                              'EARNINGS NOTE','EXECUTION PENDING']
+    var shortFlags = flags.filter(function(f){ return shortFlagWhitelist.indexOf(f) >= 0 })
+    var shortLine = 'Driver: ' + contribs[0].k + '.'
+    if(shortFlags.length) shortLine += ' Flags: ' + shortFlags.slice(0, 3).join(', ') + '.'
+    convictionParts.push(shortLine)
+
+    // Long note (revealed in Details expand). Built as a separate
+    // string so the row render can keep the default view tight.
     var strikeLow  = (m.price * 0.96).toFixed(0)
     var strikeHigh = (m.price * 1.00).toFixed(0)
-    convictionParts.push('Strike ~$'+strikeLow+'–$'+strikeHigh+' (≈ at-the-money to 4% ITM).')
-    if(chain && chain.premium > 0) {
-      convictionParts.push('Est premium: $'+chain.premium.toFixed(2)+'.')
-    } else {
-      convictionParts.push('Premium: confirm in chain.')
-    }
-    if(c6 === 5 || c7 === 5) convictionParts.push('Note: C6/C7 neutral due to missing data.')
+    var longParts = []
+    longParts.push('Score driver: ' + contribs[0].k + ' contributes ' + contribs[0].v.toFixed(1) + ' of ' + sg.toFixed(1) + ' pts.')
+    longParts.push('Suggested option: 0.75–0.85 delta call, 20–40 DTE. Strike ~$' + strikeLow + '–$' + strikeHigh + ' (ATM to 4% ITM).')
+    if(chain && chain.premium > 0) longParts.push('Est premium: $' + chain.premium.toFixed(2) + '.')
+    else                            longParts.push('Premium: confirm in chain.')
+    if(c6 === 5 || c7 === 5)        longParts.push('Note: C6/C7 neutral due to missing options-flow + execution-quality data — score is provisional pending chain fetch.')
+    convictionLong = longParts.join(' ')
   }
 
   return {
@@ -7857,6 +7938,7 @@ function scoreSGFromMeasurements(m, ctx) {
     flags:   flags,
     disqualified:    dq,
     convictionNote:  convictionParts.length ? convictionParts.join(' ') : '',
+    convictionLong:  convictionLong,
     // Surfaced raw values for the table / debugging
     atrPct:   m.atrPct,
     rapm:     m.rapm,
@@ -7949,7 +8031,12 @@ async function runInternalScreen() {
   window.__INT_REGIME = { regime: regime, spy: spyClose, spyEma20: spyEma20, scoredAt: Date.now() }
 
   var sectorBarCache = {}
-  var keyETFs = ['XLK','XLF','XLV','XLE','XLI','XLY','XLC']
+  // Sector ETF baseline fetch list. Each ETF backs C4's
+  // sector-vs-SPY signal; missing ETFs cause C4 to flag PARTIAL for
+  // tickers in those sectors. Expanded from 7 → 11 to cover Staples,
+  // Utilities, Materials, and Real Estate (otherwise PG / NEE / AMT /
+  // EQIX etc. always read PARTIAL even with a perfect sector map).
+  var keyETFs = ['XLK','XLF','XLV','XLE','XLI','XLY','XLC','XLP','XLU','XLB','XLRE']
   for(var ei=0;ei<keyETFs.length;ei++) {
     try { sectorBarCache[keyETFs[ei]] = await tBars(keyETFs[ei], 280) } catch(e) {}
   }
@@ -8030,7 +8117,12 @@ async function runInternalScreen() {
         universeRapmDist: rapmDist,
         regime:           regime,
         earnings:         earnings,
-        chain:            chain
+        chain:            chain,
+        // Pass the resolved sector so scoreSG can distinguish:
+        //   • sector mapped + ETF bars present     → no flag
+        //   • sector mapped + ETF bars missing     → C4 PARTIAL
+        //   • sector unmapped (truly unknown)      → C4 NO SECTOR DATA
+        sector:           x.sec
       })
     } catch(e) { rejReason(x.sym, 'sg-score-error'); return null }
     if(!sg) { rejReason(x.sym, 'sg-score-null'); return null }
@@ -8277,6 +8369,21 @@ function setIntSort(key) {
 }
 window.setIntSort = setIntSort
 
+// Per-row Details toggle for the Internal Screener table. Flips
+// display:none on the hidden int-det-<sym> sub-row that holds the
+// C1-C7 component breakdown + long-form conviction note. Updates the
+// caret button so the user has a clear collapsed/expanded indicator.
+// Pure DOM read/write — no global state, no re-render.
+window.toggleIntDetails = function(sym, btn) {
+  try {
+    var row = document.getElementById('int-det-'+sym)
+    if(!row) return
+    var open = row.style.display === 'none' || !row.style.display
+    row.style.display = open ? 'table-row' : 'none'
+    if(btn) btn.textContent = open ? '▼' : '▶'
+  } catch(e) {}
+}
+
 // SG Score legend toggle — opens / closes the inline help block in
 // the INTERNAL panel header. Pure DOM toggle; no state to persist.
 window.toggleSGLegend = function() {
@@ -8386,7 +8493,7 @@ function renderInternalResults(results, filtered) {
     var msg = filtered
       ? 'No candidates match the current filter — try lowering Min Score or clearing the sector/trend filter. The raw results are still in <code>INTERNAL_RESULTS</code>.'
       : 'No results yet. Click <b>▶ Run Screen</b> to score the universe with SG Score v1.4. Check DevTools console for <code>[INT-SCREEN]</code> stage counts if results come back empty.'
-    tbody.innerHTML = '<tr><td colspan="17" style="padding:20px;text-align:center;color:#555c6e;font-size:12px;line-height:1.8">'+msg+'</td></tr>'
+    tbody.innerHTML = '<tr><td colspan="11" style="padding:20px;text-align:center;color:#555c6e;font-size:12px;line-height:1.8">'+msg+'</td></tr>'
     _updateIntSortIndicators()
     return
   }
@@ -8509,26 +8616,65 @@ function renderInternalResults(results, filtered) {
       : '<button onclick="event.stopPropagation();starInternalCandidate(\''+r.sym+'\');this.blur()" title="Send to Planner (adds to PLANNER_CANDIDATES with price + SG Score + auto-fetch ATR)" style="background:transparent;color:#f0c040;border:1px solid rgba(240,192,64,.45);border-radius:3px;padding:2px 7px;font-size:11px;font-weight:700;cursor:pointer;margin-right:3px;font-family:inherit">☆ Star</button>'
     var quickBtn = '<button onclick="event.stopPropagation();quickAddInternalTrade(\''+r.sym+'\')" title="Send to Planner + jump to Quick Size sizer (stop/R1/R2 use current Stop ATR setting)" style="background:#00d68f;color:#0a0c0f;border:none;border-radius:3px;padding:2px 8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">⚡ Quick Add</button>'
 
-    // Conviction note row (only for STRONG BUY / BUY) appears as a
-    // collapsed second-row span underneath the main row.
+    // Conviction note row (only for STRONG BUY / BUY) — uses the SHORT
+    // one-line version. Full text lives in the Details expand below.
     var convictionRow = ''
     if(sg.convictionNote && (rec === 'STRONG BUY' || rec === 'BUY')) {
-      convictionRow = '<tr style="background:rgba(77,166,255,.03)"><td colspan="17" style="padding:4px 10px 6px 32px;font-size:10.5px;color:#8b91a0;line-height:1.5;border-bottom:1px solid #0d1117"><span style="color:'+rc.fg+';font-weight:700;margin-right:6px">'+rec+'</span>'+sg.convictionNote+'\x3C/td>\x3C/tr>'
+      convictionRow = '<tr style="background:rgba(77,166,255,.03)"><td colspan="11" style="padding:4px 10px 6px 50px;font-size:10.5px;color:#8b91a0;line-height:1.5;border-bottom:1px solid #0d1117"><span style="color:'+rc.fg+';font-weight:700;margin-right:6px">'+rec+'</span>'+sg.convictionNote+'\x3C/td>\x3C/tr>'
     }
 
+    // Details sub-row — collapsed by default. Reveals C1-C7 component
+    // breakdown + the long-form conviction note + the strike/premium
+    // suggestion. Toggled by the ▶ button in the first cell. Each row's
+    // details get id="int-det-<sym>" so toggleIntDetails(sym) can flip
+    // display:none without re-rendering the whole table.
+    var compRow = function(label, value, weight, desc) {
+      var col = value >= 8 ? '#00d68f' : value >= 6 ? '#f0c040' : value >= 4 ? '#ff8c42' : '#ff4560'
+      return '<div style="display:grid;grid-template-columns:120px 50px 60px 1fr;gap:10px;padding:3px 0;font-size:11px;align-items:center">' +
+        '<span style="color:#e8eaf0">'+label+'</span>' +
+        '<span style="color:'+col+';font-weight:700;font-family:\'SF Mono\',monospace;text-align:right">'+value+' / 10</span>' +
+        '<span style="color:#555c6e;font-size:10px;text-align:right">×'+weight+'</span>' +
+        '<span style="color:#8b91a0;font-size:10px">'+desc+'</span>' +
+      '</div>'
+    }
+    var detailsHtml =
+      '<tr id="int-det-'+r.sym+'" style="display:none;background:#0a0c0f"><td colspan="11" style="padding:10px 14px 14px 50px;border-bottom:1px solid #1e2d3d">' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">' +
+          '<div>' +
+            '<div style="color:#4da6ff;font-weight:700;letter-spacing:.06em;text-transform:uppercase;font-size:9px;margin-bottom:5px">SG Score components — '+r.sym+' = '+(+r.sgScore).toFixed(2)+'</div>' +
+            compRow('C1 Risk-Adj Mom',    sg.c1, '0.28', '20d return ÷ ATR%, percentile-binned') +
+            compRow('C2 RS vs SPY',       sg.c2, '0.22', 'excess 20d return') +
+            compRow('C3 Volume Confirm',  sg.c3, '0.15', 'up-day vol ÷ down-day vol over 10 sessions') +
+            compRow('C4 Sector Context',  sg.c4, '0.13', 'sector ETF vs SPY 20d return') +
+            compRow('C5 Trend Quality',   sg.c5, '0.12', 'EMA stack 10/20/50 + slope alignment') +
+            compRow('C6 Options Flow',    sg.c6, '0.07', 'NEUTRAL — call vol/PC ratio not wired') +
+            compRow('C7 Execution Q.',    sg.c7, '0.03', 'OI + spread on target option') +
+          '</div>' +
+          '<div>' +
+            '<div style="color:#4da6ff;font-weight:700;letter-spacing:.06em;text-transform:uppercase;font-size:9px;margin-bottom:5px">Note &amp; suggestion</div>' +
+            '<div style="font-size:11px;color:#e8eaf0;line-height:1.55">'+(sg.convictionLong || sg.convictionNote || '<span style="color:#555c6e">No conviction note generated for '+rec+' rows.</span>')+'</div>' +
+            (flags.length ? '<div style="margin-top:10px;font-size:10px;color:#555c6e;line-height:1.55"><b style="color:#8b91a0">All flags:</b> '+flags.join(', ')+'</div>' : '') +
+          '</div>' +
+        '</div>' +
+      '</td></tr>'
+
+    // Details toggle (▶ when collapsed, ▼ when expanded — see
+    // toggleIntDetails). Cheap inline toggle — no per-render state.
+    var detailsBtn = '<button onclick="event.stopPropagation();toggleIntDetails(\''+r.sym+'\',this)" title="Show / hide C1-C7 component breakdown" style="background:transparent;color:#555c6e;border:none;cursor:pointer;font-size:11px;padding:2px 4px;font-family:inherit">▶</button>'
+
     return '<tr style="border-bottom:1px solid #0d1117;cursor:pointer'+(sg.disqualified?';opacity:0.55':'')+'" onclick="goSize(\''+r.sym+'\')">'+
+      '<td style="padding:4px 0 4px 6px">'+detailsBtn+'\x3C/td>'+
       '<td style="padding:4px 10px;color:#555c6e;font-size:10px">'+(i+1)+'\x3C/td>'+
       '<td style="padding:4px 6px"><b>'+r.sym+'\x3C/b>'+ovMatch+'\x3C/td>'+
       '<td style="padding:4px 6px;text-align:right;font-size:11px;font-family:\'SF Mono\',monospace;color:#e8eaf0">'+priceStr+'\x3C/td>'+
       '<td style="padding:4px 6px;text-align:right;font-size:11px;color:#8b91a0">'+volM+'\x3C/td>'+
       '<td style="padding:4px 6px;text-align:right;font-size:11px;font-family:\'SF Mono\',monospace;color:#8b91a0">'+atrPctStr+'\x3C/td>'+
-      cell(sg.c1) + cell(sg.c2) + cell(sg.c3) + cell(sg.c4) + cell(sg.c5) + cell(sg.c6) + cell(sg.c7) +
       '<td style="padding:4px 6px">'+sgBar+'\x3C/td>'+
       '<td style="padding:4px 6px">'+gatePill+'\x3C/td>'+
       '<td style="padding:4px 6px">'+recPill+'\x3C/td>'+
       '<td style="padding:4px 6px">'+topFlags+'\x3C/td>'+
       '<td style="padding:4px 6px;text-align:right;white-space:nowrap">'+starBtn+quickBtn+'\x3C/td>'+
-      '\x3C/tr>' + convictionRow
+      '\x3C/tr>' + convictionRow + detailsHtml
   }).join('')
 
   _updateIntSortIndicators()
