@@ -277,6 +277,9 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
       // Hydrate Polygon API key from Firebase (source of truth) before
       // any downstream call that needs it. localStorage stays as cache.
       if(typeof hydratePolygonKeyFromFirebase === 'function') hydratePolygonKeyFromFirebase()
+      // Hydrate the rest of the app_config tokens (Tradier / GitHub /
+      // OVTLYR) the same way. Mirrors the Polygon flow.
+      if(typeof hydrateAppConfigTokens === 'function') hydrateAppConfigTokens()
       if(typeof loadFromFirebase === 'function') loadFromFirebase()
       try {
         const pendingRef = ref(db, 'pending_ov')
@@ -2933,7 +2936,10 @@ const LIVE_EARNINGS_DATE = {}  // ISO 'YYYY-MM-DD' per ticker, populated alongsi
 async function fetchOVTLYRApi() {
   const key = localStorage.getItem('gt_ovtlyr_api_key') || prompt('Enter your OVTLYR API key:')
   if(!key) return
-  localStorage.setItem('gt_ovtlyr_api_key', key)
+  // Persist to localStorage AND Firebase app_config (when auth resolved)
+  // so the next device that signs in inherits the key without prompting.
+  if(typeof window.setAppConfigToken === 'function') { try { window.setAppConfigToken('ovtlyr_api_key', key) } catch(e) {} }
+  else { localStorage.setItem('gt_ovtlyr_api_key', key) }
   setApi('Fetching from OVTLYR API...', 'ok')
   try {
     // Try OVTLYR API endpoints - update if they provide official API docs
@@ -3822,6 +3828,104 @@ async function hydratePolygonKeyFromFirebase() {
   }
 }
 
+// ── App-config token hydration (Tradier / GitHub / OVTLYR) ──────────
+// Mirrors hydratePolygonKeyFromFirebase for the three additional
+// secrets surfaced by the audit (Severity 2). Each follows the same
+// precedence rules:
+//   1. Firebase app_config/<name>   — source of truth, cross-device
+//   2. localStorage[<gt_*>]         — cache; used when Firebase is
+//                                     missing the key OR auth hasn't
+//                                     resolved
+// localStorage is mirrored from Firebase on every successful load
+// so offline reloads keep working. Manual writes (when the user
+// pastes a new token) write BOTH paths so the back-fill is implicit.
+//
+// Safety:
+//   • All Firebase reads are wrapped in try/catch — a network error
+//     or an `fbConfigGet` returning null leaves the local cache
+//     untouched.
+//   • Cloud values are only adopted when typeof === 'string' and
+//     length > 0 (rejects accidental `{}` or null writes).
+//   • Empty cloud + empty local → silent (no popup, no error).
+async function hydrateAppConfigTokens() {
+  if(!window.FBUID) return
+  // Tradier — broker token used for option-chain + bar fetches
+  try {
+    var cloudTradier = await fbConfigGet('tradier_token')
+    if(typeof cloudTradier === 'string' && cloudTradier.length > 0) {
+      try { localStorage.setItem('gt_tradier_token', cloudTradier) } catch(e) {}
+      try { TRADIER_TOKEN = cloudTradier } catch(e) {}
+      console.info('[APP-CONFIG] hydrated tradier_token from Firebase (len=' + cloudTradier.length + ')')
+    } else {
+      // Cloud has nothing — back-fill from local cache so the next
+      // device that signs in inherits it.
+      var localTradier = localStorage.getItem('gt_tradier_token')
+      if(localTradier && localTradier.length > 0) {
+        await fbConfigSet('tradier_token', localTradier)
+        console.info('[APP-CONFIG] back-filled tradier_token to Firebase from localStorage')
+      }
+    }
+  } catch(e) { console.warn('[APP-CONFIG] tradier_token hydrate failed:', e.message) }
+
+  // GitHub — token used for OV publish/sync to the repo
+  try {
+    var cloudGithub = await fbConfigGet('github_token')
+    if(typeof cloudGithub === 'string' && cloudGithub.length > 0) {
+      try { localStorage.setItem('gt_github_token', cloudGithub) } catch(e) {}
+      console.info('[APP-CONFIG] hydrated github_token from Firebase (len=' + cloudGithub.length + ')')
+    } else {
+      var localGithub = localStorage.getItem('gt_github_token')
+      if(localGithub && localGithub.length > 0) {
+        await fbConfigSet('github_token', localGithub)
+        console.info('[APP-CONFIG] back-filled github_token to Firebase from localStorage')
+      }
+    }
+  } catch(e) { console.warn('[APP-CONFIG] github_token hydrate failed:', e.message) }
+
+  // OVTLYR — third-party screener API key
+  try {
+    var cloudOv = await fbConfigGet('ovtlyr_api_key')
+    if(typeof cloudOv === 'string' && cloudOv.length > 0) {
+      try { localStorage.setItem('gt_ovtlyr_api_key', cloudOv) } catch(e) {}
+      console.info('[APP-CONFIG] hydrated ovtlyr_api_key from Firebase (len=' + cloudOv.length + ')')
+    } else {
+      var localOv = localStorage.getItem('gt_ovtlyr_api_key')
+      if(localOv && localOv.length > 0) {
+        await fbConfigSet('ovtlyr_api_key', localOv)
+        console.info('[APP-CONFIG] back-filled ovtlyr_api_key to Firebase from localStorage')
+      }
+    }
+  } catch(e) { console.warn('[APP-CONFIG] ovtlyr_api_key hydrate failed:', e.message) }
+}
+if(typeof window !== 'undefined') window.hydrateAppConfigTokens = hydrateAppConfigTokens
+
+// Convenience writer — kept on window so any code path that prompts
+// the user for one of these tokens can persist BOTH to localStorage
+// AND to Firebase in one call. localStorage write is unconditional;
+// Firebase write only fires when auth is resolved.
+async function setAppConfigToken(name, value) {
+  if(!name) return
+  // Map our app-config name to the legacy localStorage key so the
+  // existing readers (refreshAllPnL, fetchOVTLYR, GitHub publish path)
+  // pick up the new value without further wiring.
+  var lsKey = ({ tradier_token: 'gt_tradier_token',
+                 github_token:  'gt_github_token',
+                 ovtlyr_api_key:'gt_ovtlyr_api_key' })[name]
+  if(!lsKey) { console.warn('[APP-CONFIG] unknown token name:', name); return }
+  try {
+    if(value && typeof value === 'string') {
+      localStorage.setItem(lsKey, value)
+      if(name === 'tradier_token') { try { TRADIER_TOKEN = value } catch(e) {} }
+    } else {
+      localStorage.removeItem(lsKey)
+    }
+    if(typeof fbConfigSet === 'function' && window.FBUID) {
+      await fbConfigSet(name, value || '')
+    }
+  } catch(e) { console.warn('[APP-CONFIG] setAppConfigToken('+name+') failed:', e.message) }
+}
+if(typeof window !== 'undefined') window.setAppConfigToken = setAppConfigToken
+
 // Save ALL platform data to Firebase
 async function saveAllToFirebase() {
   if(!window.FBUID) return
@@ -3862,6 +3966,16 @@ async function saveAllToFirebase() {
     fid_open:    JSON.parse(localStorage.getItem('gt_fid_open')    || 'null'),
     fid_closed:  JSON.parse(localStorage.getItem('gt_fid_closed')  || 'null'),
     fid_credits: JSON.parse(localStorage.getItem('gt_fid_credits') || '{}'),
+    // ── Audit Severity 3 closures ────────────────────────────────────
+    // sg_strict_mode  : the INTERNAL screener "Strict mode" toggle
+    //   stored locally as gt_sg_strict ('1' / '0'). Cloud value is a
+    //   boolean — saner shape across devices than the legacy ASCII
+    //   flag. Hydration accepts either form.
+    // custom_screener_preset : the user's saved Screener filter preset
+    //   stored locally as gt_custom_preset (JSON object). Cloud value
+    //   is the same JSON object shape.
+    sg_strict_mode:         (function(){ try { return localStorage.getItem('gt_sg_strict') === '1' } catch(e) { return false } })(),
+    custom_screener_preset: (function(){ try { return JSON.parse(localStorage.getItem('gt_custom_preset') || 'null') } catch(e) { return null } })(),
     savedAt:     Date.now()
   }
   const ok = await fbSave('platform', payload)
@@ -4105,6 +4219,36 @@ async function loadFromFirebase() {
     console.log('[FID-SYNC] hydrated FID_CREDITS from Firebase: '+Object.keys(cr).length+' position(s) with manual credits/rolls')
   })
 
+  // ── SG strict mode (audit Severity 3) ──────────────────────────────
+  // Cloud value should be a boolean. Accepts the legacy '1'/'0' strings
+  // for back-compat. Anything else → keep local.
+  _step('sg_strict_mode', () => {
+    if(!('sg_strict_mode' in data)) return                  // missing → keep local
+    var v = data.sg_strict_mode
+    var on
+    if(typeof v === 'boolean')      on = v
+    else if(v === '1' || v === 1)   on = true
+    else if(v === '0' || v === 0)   on = false
+    else                            return                  // wrong type → keep local
+    if(!window.GT) window.GT = {}
+    window.GT.SG_STRICT_MODE = on
+    try { localStorage.setItem('gt_sg_strict', on ? '1' : '0') } catch(e) {}
+    if(typeof window.syncSGStrictBtn === 'function') window.syncSGStrictBtn()
+    console.log('[APP-CONFIG] hydrated sg_strict_mode from Firebase →', on)
+  })
+
+  // ── Custom screener preset (audit Severity 3) ──────────────────────
+  // Stored as a plain object keyed by filter name (sig, fgMin, fgMax,
+  // spread, earn, bull, wide). Validates as non-array object before
+  // applying.
+  _step('custom_screener_preset', () => {
+    var pr = data.custom_screener_preset
+    if(!pr) return                                          // missing or null → keep local
+    if(typeof pr !== 'object' || Array.isArray(pr)) return  // wrong shape → keep local
+    try { localStorage.setItem('gt_custom_preset', JSON.stringify(pr)) } catch(e) {}
+    console.log('[APP-CONFIG] hydrated custom_screener_preset from Firebase')
+  })
+
   // ── Post-FID-restore re-renders ────────────────────────────────────
   // Every surface that reads from FID_OPEN / FID_CLOSED / FID_CREDITS
   // needs a refresh so the just-hydrated data shows up without a manual
@@ -4191,6 +4335,9 @@ function loadPreset(name) {
 function saveCurrentPreset() {
   var pr = {sig:+document.getElementById('f-sig').value||0,fgMin:+document.getElementById('f-fg-min').value||0,fgMax:+document.getElementById('f-fg-max').value||100,spread:+document.getElementById('f-spread').value||((window.GT&&window.GT.MAX_SPREAD_PCT)||10),earn:document.getElementById('f-earn').checked,bull:document.getElementById('f-bull').checked,wide:document.getElementById('f-wide').checked}
   localStorage.setItem('gt_custom_preset', JSON.stringify(pr))
+  // Cloud-sync the preset (audit Severity 3) so the user's custom
+  // filter set follows them across devices on the next sign-in.
+  if(typeof fbAutoSave === 'function') fbAutoSave(1500)
   setApi('Filter preset saved ✓', 'ok')
 }
 function resetFilters() {
@@ -8501,6 +8648,8 @@ window.toggleSGStrictMode = function() {
   // change in their flags/gate until a fresh ▶ Run Screen — that's
   // intentional (no implicit re-scoring on toggle).
   try { if(typeof runInternalFilter === 'function') runInternalFilter() } catch(e) {}
+  // Cloud-sync the toggle so other devices inherit it on next load.
+  if(typeof fbAutoSave === 'function') fbAutoSave(1500)
   console.log('[SG] strict mode →', next, '— click ▶ Run Screen to re-score open positions with the new mode')
 }
 
@@ -15574,9 +15723,10 @@ function initPlatform() {
 async function deployToGitHub() {
   const token = localStorage.getItem('gt_github_token')
   if(!token) {
-    const t = prompt('Enter your GitHub token (stored locally, never sent anywhere else):\n\nNeeds repo scope. Generate at github.com/settings/tokens')
+    const t = prompt('Enter your GitHub token (stored locally + synced to Firebase app_config so other signed-in devices inherit it):\n\nNeeds repo scope. Generate at github.com/settings/tokens')
     if(!t) return
-    localStorage.setItem('gt_github_token', t)
+    if(typeof window.setAppConfigToken === 'function') { try { window.setAppConfigToken('github_token', t) } catch(e) {} }
+    else { localStorage.setItem('gt_github_token', t) }
     const inp = document.getElementById('gh-token-input')
     if(inp) inp.value = t
   }
@@ -15650,7 +15800,8 @@ async function deployToGitHub() {
     // Clear bad token if auth error
     if(e.message.includes('401') || e.message.includes('token')) {
       if(confirm('Auth error. Clear saved token and try again?')) {
-        localStorage.removeItem('gt_github_token')
+        if(typeof window.setAppConfigToken === 'function') { try { window.setAppConfigToken('github_token', '') } catch(_) {} }
+        else { localStorage.removeItem('gt_github_token') }
         const inp = document.getElementById('gh-token-input')
         if(inp) inp.value = ''
       }
