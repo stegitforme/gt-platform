@@ -643,10 +643,44 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
   <!-- Internal Command Bar -->
   <div style="display:flex;gap:8px;align-items:center;padding:10px 14px;background:#0d1117;border-radius:8px;border:1px solid #1e2d3d;margin-bottom:10px;flex-wrap:wrap">
     <span style="font-size:12px;font-weight:700;color:#4da6ff">INTERNAL SCREENER · SG Score v1.4</span>
-    <span style="font-size:10px;color:#555c6e" title="SG Score weighted formula: C1(0.28) + C2(0.22) + C3(0.15) + C4(0.13) + C5(0.12) + C6(0.07) + C7(0.03). C1 risk-adj momentum · C2 RS vs SPY · C3 volume confirmation · C4 sector context · C5 trend quality · C6 options flow · C7 execution quality. Hard gates: earnings <7d, vol <1M, price <$20, OI <250, spread >10%, price < 10 EMA. Recommendations: STRONG BUY ≥8.5 · BUY 7.8–8.4 · WATCH 7.0–7.7 · SKIP <7 or any gate failed.">ⓘ</span>
+    <button id="int-help-btn" onclick="toggleSGLegend()" title="Show / hide SG Score formula + component glossary" style="background:transparent;color:#4da6ff;border:1px solid rgba(77,166,255,.45);border-radius:3px;padding:2px 8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">ⓘ Help</button>
+    <button id="int-strict-btn" onclick="toggleSGStrictMode()" title="Strict mode: price-below-10-EMA fails as a hard gate (DQ row). Soft mode (default): row stays visible with HIGH RISK flag." style="background:transparent;color:#8b91a0;border:1px solid rgba(255,255,255,.10);border-radius:3px;padding:2px 8px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">Strict mode: OFF</button>
     <button onclick="runInternalScreen()" class="btn" style="font-size:11px;padding:4px 14px;background:#1a2d4a;color:#4da6ff;border:1px solid #4da6ff">▶ Run Screen</button>
     <span id="int-progress" style="font-size:11px;color:#555c6e"></span>
     <span style="margin-left:auto;font-size:10px;color:#555c6e" id="int-last-run"></span>
+  </div>
+  <!-- SG Score legend — collapsible. Hidden by default; opened via the
+       ⓘ Help button. Single source of truth for what each component
+       means and how the weighted formula combines them. -->
+  <div id="int-sg-legend" style="display:none;margin-bottom:10px;padding:12px 14px;background:rgba(77,166,255,.04);border:1px solid rgba(77,166,255,.25);border-radius:8px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+      <div>
+        <div style="font-size:11px;font-weight:700;color:#4da6ff;letter-spacing:.06em;text-transform:uppercase;margin-bottom:3px">SG Score v1.4 — formula &amp; components</div>
+        <div style="font-size:11px;color:#e8eaf0;font-family:'SF Mono',monospace;background:#0a0c0f;padding:6px 10px;border-radius:4px;border:1px solid rgba(255,255,255,.06);line-height:1.5">
+          SG Score &nbsp;=&nbsp; C1×0.28 + C2×0.22 + C3×0.15 + C4×0.13 + C5×0.12 + C6×0.07 + C7×0.03
+        </div>
+      </div>
+      <button onclick="toggleSGLegend()" style="background:transparent;color:#555c6e;border:none;cursor:pointer;font-size:14px;padding:2px 6px" title="Close">×</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:6px 14px;font-size:11px;line-height:1.45">
+      <div><span style="color:#f0c040;font-weight:700;font-family:'SF Mono',monospace">C1 · 28%</span> <span style="color:#e8eaf0">Risk-Adjusted Momentum</span><br><span style="color:#8b91a0;font-size:10px">20d return / ATR%, percentile-binned across the live universe. Capped to ±5.0 to suppress low-vol outliers.</span></div>
+      <div><span style="color:#f0c040;font-weight:700;font-family:'SF Mono',monospace">C2 · 22%</span> <span style="color:#e8eaf0">Relative Strength vs SPY</span><br><span style="color:#8b91a0;font-size:10px">Stock 20d return − SPY 20d return. Bins at +5/+2/-2/-5%.</span></div>
+      <div><span style="color:#f0c040;font-weight:700;font-family:'SF Mono',monospace">C3 · 15%</span> <span style="color:#e8eaf0">Volume Confirmation</span><br><span style="color:#8b91a0;font-size:10px">Up-day vol / down-day vol over last 10 sessions.</span></div>
+      <div><span style="color:#f0c040;font-weight:700;font-family:'SF Mono',monospace">C4 · 13%</span> <span style="color:#e8eaf0">Sector Context</span><br><span style="color:#8b91a0;font-size:10px">Sector ETF 20d return vs SPY. Currently PARTIAL — breadth + F&amp;G data not wired (C4 capped at 9).</span></div>
+      <div><span style="color:#f0c040;font-weight:700;font-family:'SF Mono',monospace">C5 · 12%</span> <span style="color:#e8eaf0">Trend Quality</span><br><span style="color:#8b91a0;font-size:10px">EMA stack 10/20/50, slope alignment, distance from 20 EMA, 50 vs 200 SMA. −2 if extended &gt;15% above 20 EMA.</span></div>
+      <div><span style="color:#f0c040;font-weight:700;font-family:'SF Mono',monospace">C6 · 7%</span> <span style="color:#e8eaf0">Options Flow / Sentiment</span><br><span style="color:#8b91a0;font-size:10px">Currently NEUTRAL 5 — call volume / P/C ratio data not yet fetched. Flagged DATA LIMITED.</span></div>
+      <div><span style="color:#f0c040;font-weight:700;font-family:'SF Mono',monospace">C7 · 3%</span> <span style="color:#e8eaf0">Execution Quality</span><br><span style="color:#8b91a0;font-size:10px">OI + spread on the target option. NEUTRAL 5 + PROVISIONAL when chain not fetched. Run OVTLYR Fetch Prices to populate spreads.</span></div>
+    </div>
+    <div style="margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,.06);display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:10.5px;line-height:1.5">
+      <div>
+        <div style="font-weight:700;color:#8b91a0;letter-spacing:.05em;text-transform:uppercase;font-size:9px;margin-bottom:3px">Hard gates (DQ unless soft mode)</div>
+        <div style="color:#8b91a0">earnings &lt;7d · 30d avg vol &lt;1M · price &lt;$20 · OI &lt;250 · spread &gt;10% · <span title="Soft mode (default): row stays visible with HIGH RISK flag. Strict mode: hard remove.">price &lt; 10 EMA</span></div>
+      </div>
+      <div>
+        <div style="font-weight:700;color:#8b91a0;letter-spacing:.05em;text-transform:uppercase;font-size:9px;margin-bottom:3px">Recommendations</div>
+        <div><span style="color:#00d68f;font-weight:700">STRONG BUY</span> ≥ 8.5 &nbsp; · &nbsp; <span style="color:#4da6ff;font-weight:700">BUY</span> ≥ 7.8 &nbsp; · &nbsp; <span style="color:#f0c040;font-weight:700">WATCH</span> ≥ 7.0 &nbsp; · &nbsp; <span style="color:#8b91a0;font-weight:700">SKIP</span> &lt; 7 or any DQ</div>
+      </div>
+    </div>
   </div>
   <!-- Regime banner — populated by renderInternalRegimeBanner after each Run Screen -->
   <div id="int-regime-banner" style="display:none;margin-bottom:10px"></div>
@@ -7543,7 +7577,17 @@ function computeSGMeasurements(bars, spyBars, sectorBars) {
     : 0
 
   // Risk-adjusted momentum = ret20 / atrPct (C1 raw)
-  var rapm = atrPct > 0 ? ret20 / atrPct : 0
+  // CAPS to suppress low-volatility outliers:
+  //   • Floor atrPct at 0.25% so a near-flat ticker doesn't divide
+  //     ret20 by ~0 and dominate the universe percentile bins.
+  //   • Cap |rapm| at SG_RAPM_CAP (default ±5.0) so a single
+  //     low-vol mover can't sit at the +∞ end of the distribution
+  //     and crush every other bucket. Tunable on window.GT.
+  var atrPctEff = Math.max(0.25, atrPct)
+  var rapmCap = (window.GT && +window.GT.SG_RAPM_CAP) || 5.0
+  var rapm = ret20 / atrPctEff
+  if(rapm > rapmCap)        rapm = rapmCap
+  else if(rapm < -rapmCap)  rapm = -rapmCap
 
   // EMAs
   var e10  = _sgEma(closes, 10)
@@ -7647,13 +7691,26 @@ function scoreSGFromMeasurements(m, ctx) {
   // Gate 6: SPY < 20 EMA → RISK-OFF mode (label only; not a removal)
   if(regime === 'RISK-OFF') flags.push('RISK-OFF')
 
-  // ── C5 INTERNAL HARD REMOVE: price below 10 EMA ─────────────────────
-  // Spec: "If price below 10 EMA: HARD REMOVE because it violates
-  // primary exit logic." This still runs even if chain data is missing.
+  // ── BELOW 10 EMA — warn by default, hard-remove only in strict mode ──
+  // Original spec was a hard remove (violates primary exit logic).
+  // Per user feedback: many short-term setups dip below the 10 EMA mid-
+  // pullback and recover; auto-removing them hides actionable
+  // information. Now:
+  //   • Default mode: row stays visible, gets HIGH-RISK / AVOID ENTRY
+  //     flag, and the gate column still shows the warning so the user
+  //     sees the risk at a glance.
+  //   • Strict mode (window.GT.SG_STRICT_MODE = true, toggleable in
+  //     the panel header): restores original hard-remove behavior.
   if(m.e10 != null && m.price < m.e10) {
-    if(!dq) gate = 'BELOW 10 EMA'
-    flags.push('BELOW 10 EMA')
-    dq = true
+    if((window.GT && window.GT.SG_STRICT_MODE) === true) {
+      if(!dq) gate = 'BELOW 10 EMA'
+      flags.push('BELOW 10 EMA')
+      dq = true
+    } else {
+      // Soft warn: visible flag, no DQ, no gate label change unless
+      // some other gate fired (in which case its label wins anyway).
+      flags.push('HIGH RISK · BELOW 10 EMA')
+    }
   }
 
   // ── C1: RISK-ADJUSTED MOMENTUM (28%) ─────────────────────────────────
@@ -8220,6 +8277,54 @@ function setIntSort(key) {
 }
 window.setIntSort = setIntSort
 
+// SG Score legend toggle — opens / closes the inline help block in
+// the INTERNAL panel header. Pure DOM toggle; no state to persist.
+window.toggleSGLegend = function() {
+  var el = document.getElementById('int-sg-legend')
+  if(!el) return
+  el.style.display = (el.style.display === 'none' || !el.style.display) ? 'block' : 'none'
+}
+
+// SG Score strict-mode toggle — flips window.GT.SG_STRICT_MODE,
+// persists to localStorage, repaints the button label, and re-applies
+// the current filter so any below-10-EMA rows immediately move from
+// the soft-warn tier to DQ (or back). No re-fetch required — the
+// scoring path reads SG_STRICT_MODE on every scoreSGFromMeasurements
+// call. To take effect on already-scored INTERNAL_RESULTS, the user
+// can click ▶ Run Screen again. The toggle re-render uses the
+// existing client-side filter for instant feedback.
+window.toggleSGStrictMode = function() {
+  var cur = !!(window.GT && window.GT.SG_STRICT_MODE)
+  var next = !cur
+  if(!window.GT) window.GT = {}
+  window.GT.SG_STRICT_MODE = next
+  try { localStorage.setItem('gt_sg_strict', next ? '1' : '0') } catch(e) {}
+  if(typeof window.syncSGStrictBtn === 'function') window.syncSGStrictBtn()
+  // Re-apply filter so the label flip is visible immediately. The
+  // already-scored INTERNAL_RESULTS won't reflect the strict-mode
+  // change in their flags/gate until a fresh ▶ Run Screen — that's
+  // intentional (no implicit re-scoring on toggle).
+  try { if(typeof runInternalFilter === 'function') runInternalFilter() } catch(e) {}
+  console.log('[SG] strict mode →', next, '— click ▶ Run Screen to re-score open positions with the new mode')
+}
+
+// Repaint the Strict-mode button to match window.GT.SG_STRICT_MODE.
+// Called on boot (after the segmented control sync) and whenever the
+// toggle fires. Active state uses orange (matches the warning flag
+// color tier) so it's clearly a stricter / more cautious mode.
+window.syncSGStrictBtn = function() {
+  try {
+    var btn = document.getElementById('int-strict-btn')
+    if(!btn) return
+    var on = !!(window.GT && window.GT.SG_STRICT_MODE)
+    btn.textContent = 'Strict mode: ' + (on ? 'ON' : 'OFF')
+    btn.style.background = on ? 'rgba(255,140,66,.14)' : 'transparent'
+    btn.style.color      = on ? '#ff8c42'              : '#8b91a0'
+    btn.style.borderColor= on ? 'rgba(255,140,66,.5)'  : 'rgba(255,255,255,.10)'
+    btn.style.fontWeight = on ? '700'                  : '600'
+  } catch(e) {}
+}
+
 // Quick Add Trade for an internal result row. Calls sendToPlanner (which
 // stamps price, gtScore, and auto-fetches ATR if missing), then jumps
 // to the Planner sizer via goSize so the user can confirm/execute.
@@ -8356,6 +8461,7 @@ function renderInternalResults(results, filtered) {
 
     // Flags — short pills (top 3 by importance)
     var flagPriority = ['EARNINGS IMMINENT','LOW VOLUME (<1M)','PRICE <$20','OI <250','SPREAD >10%','BELOW 10 EMA',
+                         'HIGH RISK · BELOW 10 EMA',
                          'EARNINGS WARNING','EXTENDED >15% ABOVE 20 EMA','SECTOR RISK','UNSUSTAINABLE MOMENTUM',
                          'RISK-OFF','PROVISIONAL','EXECUTION PENDING','EARNINGS NOTE']
     var flags = (sg.flags || []).slice()
@@ -8365,12 +8471,32 @@ function renderInternalResults(results, filtered) {
       return ai - bi
     })
     var topFlags = flags.slice(0, 3).map(function(f) {
-      var col = (f.indexOf('EARNINGS IMMINENT')===0 || f.indexOf('LOW ')===0 || f.indexOf('PRICE <')===0 || f.indexOf('OI <')===0 || f.indexOf('SPREAD >')===0 || f.indexOf('BELOW ')===0)
-        ? '#ff4560'
-        : (f === 'RISK-OFF' || f === 'EARNINGS WARNING' || f === 'SECTOR RISK' || f === 'UNSUSTAINABLE MOMENTUM' || f === 'EXTENDED >15% ABOVE 20 EMA')
-          ? '#ff8c42'
-          : '#8b91a0'
-      return '<span style="display:inline-block;font-size:9px;color:'+col+';border:1px solid '+col+'4d;padding:1px 4px;border-radius:2px;margin-right:3px;margin-bottom:2px;white-space:nowrap" title="'+f+'">'+f+'</span>'
+      // Color tiers (most-severe first):
+      //   red    #ff4560 — hard-fail gates (DQ in standard mode)
+      //   orange #ff8c42 — actionable warnings (RISK-OFF, sector risk,
+      //                    extended, high-risk-below-10-EMA, etc.)
+      //   amber  #f0c040 — DATA QUALITY (PROVISIONAL / EXECUTION
+      //                    PENDING) — promoted from grey so the user
+      //                    sees that the score is incomplete and
+      //                    can't be trusted as fully-validated
+      //   grey   #8b91a0 — notes / informational (EARNINGS NOTE,
+      //                    C4 PARTIAL, C6 DATA UNAVAILABLE)
+      var col
+      if(f.indexOf('EARNINGS IMMINENT')===0 || f.indexOf('LOW VOLUME')===0 || f.indexOf('PRICE <')===0 || f.indexOf('OI <')===0 || f.indexOf('SPREAD >')===0 || f === 'BELOW 10 EMA') {
+        col = '#ff4560'
+      } else if(f === 'RISK-OFF' || f === 'EARNINGS WARNING' || f === 'SECTOR RISK' || f === 'UNSUSTAINABLE MOMENTUM' || f === 'EXTENDED >15% ABOVE 20 EMA' || f === 'HIGH RISK · BELOW 10 EMA') {
+        col = '#ff8c42'
+      } else if(f === 'PROVISIONAL' || f === 'EXECUTION PENDING') {
+        col = '#f0c040'
+      } else {
+        col = '#8b91a0'
+      }
+      // Bold weight + slightly larger padding for amber/orange/red so
+      // they don't visually flatten against the grey notes alongside.
+      var heavy = (col === '#ff4560' || col === '#ff8c42' || col === '#f0c040')
+      var pad = heavy ? '2px 6px' : '1px 4px'
+      var wt  = heavy ? '700'    : '500'
+      return '<span style="display:inline-block;font-size:9px;color:'+col+';border:1px solid '+col+'4d;padding:'+pad+';border-radius:2px;margin-right:3px;margin-bottom:2px;white-space:nowrap;font-weight:'+wt+'" title="'+f+'">'+f+'</span>'
     }).join('')
     if(flags.length > 3) topFlags += '<span style="font-size:9px;color:#555c6e" title="'+flags.slice(3).join(', ')+'">+'+(flags.length-3)+'</span>'
 
@@ -9119,7 +9245,13 @@ window.syncStopMultSegmented = function() {
 // active multiplier is different).
 window.updateStopMultLabels = function() {
   var n = (window.GT && window.GT.STOP_MULT) || 1.25
-  var txt = '−' + n
+  // Use the canonical STRING key for display so 1.0 / 2.0 stay as
+  // "1.0" / "2.0" instead of being coerced to "1" / "2" by JS toString.
+  // 1.25 / 0.5 / 1.5 are unaffected.
+  var keyDisp = (typeof window.normalizeStopMult === 'function')
+    ? (window.normalizeStopMult(n) || String(n))
+    : String(n)
+  var txt = '−' + keyDisp
   try {
     var el = document.getElementById('pl-stop-mult-lbl')
     if(el) el.textContent = txt
@@ -9128,7 +9260,7 @@ window.updateStopMultLabels = function() {
   // "entry − 1.0 · ATR") so the hover reads the same as the label.
   try {
     var th = document.getElementById('pl-stop-th')
-    if(th) th.title = 'Golden Ticket hard stop = entry − ' + n + ' · ATR (mechanical, no exceptions)'
+    if(th) th.title = 'Golden Ticket hard stop = entry − ' + keyDisp + ' · ATR (mechanical, no exceptions)'
   } catch(e) {}
   // Helper text under the segmented selector. Resolves an ATR from any
   // reasonable current context (focused trade → selected Planner
@@ -9143,7 +9275,7 @@ window.updateStopMultLabels = function() {
   try {
     var helper = document.getElementById('gt-stop-mult-helper')
     if(helper) {
-      var line = 'Active stop: ' + n + ' × ATR'
+      var line = 'Active stop: ' + keyDisp + ' × ATR'
       var ctx = (typeof window.resolveStopMultATRContext === 'function')
         ? window.resolveStopMultATRContext()
         : null
@@ -9155,7 +9287,7 @@ window.updateStopMultLabels = function() {
                      : ctx.src === 'open'    ? 'open trade '       + (ctx.sym || '')
                      : (ctx.sym || 'context')
         line += ' · ≈ Risk/contract: $' + Math.round(rpc).toLocaleString() +
-                ' (100 × ' + delta.toFixed(2) + ' × ' + n + ' × $' + ctx.atr.toFixed(2) + ' ATR · ' + srcLabel + ')'
+                ' (100 × ' + delta.toFixed(2) + ' × ' + keyDisp + ' × $' + ctx.atr.toFixed(2) + ' ATR · ' + srcLabel + ')'
       }
       helper.textContent = line
     }
@@ -10288,6 +10420,16 @@ window.runRollDetection              = runRollDetection
 
 // Tunables — exposed so the Roll Review panel can reference them in the
 // limitations callout and users can tweak them if needed.
+// Internal Screener / SG Score tunables
+window.GT.SG_RAPM_CAP            = 5.0   // |risk-adj momentum| ceiling
+                                          // before universe-percentile binning
+window.GT.SG_STRICT_MODE         = (function(){
+  // Persisted gate: when true, price-below-10-EMA causes a hard remove
+  // (the original spec). When false (default), it only fires a flag so
+  // users can still see the row + its scores. Toggled from the panel
+  // header "Strict mode" button. Restored from localStorage on boot.
+  try { return localStorage.getItem('gt_sg_strict') === '1' } catch(e) { return false }
+})()
 window.GT.HIST_ROLL_DAY_WINDOW   = 5     // ± trading days between close and new open
 window.GT.HIST_ROLL_CONF_MIN     = 50    // threshold to emit an event (historical)
 window.GT.HIST_ROLL_QTY_TOL      = 0.25  // ±25% qty match still scores (a touch
@@ -13198,6 +13340,8 @@ setTimeout(() => { renderTrades(); renderPortfolioRisk(); if(typeof updateFidSyn
   } catch(e) {}
   // Paint the segmented control's active segment.
   try { if(typeof window.syncStopMultSegmented === 'function') window.syncStopMultSegmented() } catch(e) {}
+  // Paint the SG Score strict-mode button label from the persisted setting.
+  try { if(typeof window.syncSGStrictBtn === 'function') window.syncSGStrictBtn() } catch(e) {}
   // Refresh any "−1.25" style label so it reflects the active
   // multiplier after hard-reload (e.g. header shows "STOP −1.0" when
   // the persisted value is 1.0).
