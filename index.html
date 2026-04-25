@@ -6722,6 +6722,23 @@ function renderCandidateTable() {
     var roll05  = (stockPx > 0 && atr > 0) ? (stockPx + _gt.ROLL_1_MULT * atr) : 0
     var roll10  = (stockPx > 0 && atr > 0) ? (stockPx + _gt.ROLL_2_MULT * atr) : 0
     var roll20  = (stockPx > 0 && atr > 0) ? (stockPx + _gt.ROLL_3_MULT * atr) : 0
+    // Adaptive Stop suggestion (advisory only — does NOT auto-change sizing)
+    var adv = (typeof window.getAdaptiveStopMult === 'function' && atr > 0 && stockPx > 0)
+      ? window.getAdaptiveStopMult({ atr:atr, price:stockPx, symbol:sym })
+      : null
+    var advMatchesActive = adv && adv.mult != null && (parseFloat(adv.label) === parseFloat(_gt.STOP_MULT))
+    var advHtml = ''
+    if(adv && adv.mult != null) {
+      var advCol = advMatchesActive ? '#555c6e' : '#f0c040'
+      // Use double-quoted attributes throughout; escape inner double-quotes
+      // for the JS string literal in the inline onclick handler.
+      var advTitleTip = ('Adaptive: ATR% '+adv.atrPct+'% → '+adv.reason).replace(/"/g,'&quot;')
+      var btnTitleTip = (adv.reason+' — sets global Stop ATR to '+adv.label+'. Sizing recalculates immediately.').replace(/"/g,'&quot;')
+      var btn = advMatchesActive
+        ? ''
+        : '<button onclick="event.stopPropagation();window.setGTStopMult(\''+adv.label+'\')" title="'+btnTitleTip+'" style="background:transparent;color:#f0c040;border:1px solid rgba(240,192,64,.5);border-radius:3px;padding:0 5px;font-size:9px;font-weight:700;cursor:pointer;margin-left:4px;font-family:inherit">Use '+adv.label+'</button>'
+      advHtml = '<div style="font-size:9px;color:'+advCol+';margin-top:2px;text-align:right;white-space:nowrap" title="'+advTitleTip+'">sug '+adv.label+(advMatchesActive?' ✓':'')+btn+'</div>'
+    }
     // GT_SCORES[sym].score is the raw 0-10 integer produced by
     // calcGTScore (weighted sum: trend 30% + mom 25% + RS 20% + struct 15% +
     // vol 10%, each sub-score 0-10). Displayed raw — same scale the
@@ -6739,7 +6756,7 @@ function renderCandidateTable() {
       "<td style='padding:5px 4px;text-align:right;font-family:\"SF Mono\",monospace;font-size:11px;color:"+(stockPx>0?"#e8eaf0":"#555c6e")+"' title='Live stock price (LIVE_PRICES → candidate fallback)'>"+(stockPx>0?"$"+stockPx.toFixed(2):"—")+"\x3C/td>"+
       "<td style='padding:5px 4px;text-align:right'>"+(atr>0?"$"+atr.toFixed(2):"—")+"\x3C/td>"+
       "<td style='padding:5px 4px;text-align:right;font-weight:700;color:"+gtCol+"' title='GT Score'>"+(gtScore==null?"—":gtScore)+"\x3C/td>"+
-      "<td style='padding:5px 4px;text-align:right;color:#ff4560;font-family:\"SF Mono\",monospace;font-size:11px;font-weight:600' title='Golden Ticket hard stop = entry − "+stopMult+"·ATR (" + (stockPx>0?"based on $"+stockPx.toFixed(2):"need price") + ")'>"+(stop125>0?"$"+stop125.toFixed(2):"—")+"\x3C/td>"+
+      "<td style='padding:5px 4px;text-align:right;color:#ff4560;font-family:\"SF Mono\",monospace;font-size:11px;font-weight:600' title='Golden Ticket hard stop = entry − "+stopMult+"·ATR (" + (stockPx>0?"based on $"+stockPx.toFixed(2):"need price") + ")'>"+(stop125>0?"$"+stop125.toFixed(2):"—")+advHtml+"\x3C/td>"+
       "<td style='padding:5px 4px;text-align:right;color:#00d68f;font-family:\"SF Mono\",monospace;font-size:11px' title='Roll 1 marker = entry + 0.5·ATR'>"+(roll05>0?"$"+roll05.toFixed(2):"—")+"\x3C/td>"+
       "<td style='padding:5px 4px;text-align:right;color:#00b080;font-family:\"SF Mono\",monospace;font-size:11px' title='Roll 2 marker = entry + 1.0·ATR'>"+(roll10>0?"$"+roll10.toFixed(2):"—")+"\x3C/td>"+
       "<td style='padding:5px 4px;text-align:right;color:#008c60;font-family:\"SF Mono\",monospace;font-size:11px' title='Roll 3 marker = entry + 2.0·ATR'>"+(roll20>0?"$"+roll20.toFixed(2):"—")+"\x3C/td>"+
@@ -9037,6 +9054,26 @@ function renderInternalResults(results, filtered) {
           '<div>' +
             '<div style="color:#4da6ff;font-weight:700;letter-spacing:.06em;text-transform:uppercase;font-size:9px;margin-bottom:5px">Note &amp; suggestion</div>' +
             '<div style="font-size:11px;color:#e8eaf0;line-height:1.55">'+(sg.convictionLong || sg.convictionNote || '<span style="color:#555c6e">No conviction note generated for '+rec+' rows.</span>')+'</div>' +
+            // Adaptive Stop suggestion — advisory only, computed from ATR%
+            (function(){
+              var adv = (typeof window.getAdaptiveStopMult === 'function')
+                ? window.getAdaptiveStopMult({ atr:+r.atr||0, price:+r.price||0, atrPct:+r.atrPct||0, symbol:r.sym })
+                : null
+              if(!adv || adv.mult == null) return ''
+              var activeKey = (window.GT && window.GT.STOP_MULT) || 1.25
+              var activeStr = (typeof window.normalizeStopMult === 'function')
+                ? (window.normalizeStopMult(activeKey) || String(activeKey))
+                : String(activeKey)
+              var sameAsActive = (parseFloat(adv.label) === parseFloat(activeStr))
+              var col = sameAsActive ? '#8b91a0' : '#f0c040'
+              return '<div style="margin-top:10px;padding:6px 8px;background:rgba(240,192,64,.06);border:1px solid rgba(240,192,64,.18);border-radius:4px;font-size:10.5px;color:#e8eaf0;line-height:1.5">' +
+                '<b style="color:'+col+';letter-spacing:.04em">Suggested Stop: '+adv.label+' ATR</b>' +
+                ' <span style="color:#555c6e">· ATR% '+adv.atrPct+'% · '+adv.reason+'</span>' +
+                (sameAsActive
+                  ? ' <span style="color:#555c6e;font-size:10px">(matches active)</span>'
+                  : ' <span style="color:#8b91a0;font-size:10px">(active: '+activeStr+' ATR)</span>') +
+              '</div>'
+            })() +
             (flags.length ? '<div style="margin-top:10px;font-size:10px;color:#555c6e;line-height:1.55"><b style="color:#8b91a0">All flags:</b> '+flags.join(', ')+'</div>' : '') +
           '</div>' +
         '</div>' +
@@ -9745,6 +9782,45 @@ window.setGTStopMult = function(v) {
   try { if(typeof renderTrades === 'function') renderTrades() } catch(e) {}
   if(typeof fbAutoSave === 'function') fbAutoSave(1500)
   console.log('[GT] STOP_MULT set to', n, '(key "'+key+'")')
+}
+
+// ── ADAPTIVE STOP RECOMMENDATION (advisory only) ─────────────────────────
+// getAdaptiveStopMult({ atr, price, atrPct, symbol }) → { mult, label, reason }
+//
+// Maps ATR% (volatility relative to price) to a suggested stop multiplier so
+// quiet trends get tighter stops and noisy names get wider ones. ADVISORY
+// ONLY — does NOT mutate window.GT.STOP_MULT. The user's segmented selector
+// remains the single source of truth for sizing/Planner/Trade Manager math.
+// To accept the suggestion, the caller must explicitly invoke
+// setGTStopMult(mult) (e.g., a "Use Suggested" button click).
+//
+// Rules v1:
+//   ATR% < 2.0%    → 1.0  ATR  ("Low ATR% / smoother trend")
+//   ATR% 2.0–4.0%  → 1.25 ATR  ("Normal volatility")
+//   ATR% 4.0–6.0%  → 1.5  ATR  ("High ATR% / wider stop suggested")
+//   ATR% > 6.0%    → 2.0  ATR  ("Extreme ATR% / avoid tight stop")
+//
+// Inputs are tolerant: pass atrPct directly when known, OR pass atr+price
+// and the helper will compute it. Returns null-shaped object when there's
+// not enough data ({ mult:null, ... }).
+window.getAdaptiveStopMult = function(opts) {
+  opts = opts || {}
+  var atrPct = (typeof opts.atrPct === 'number' && isFinite(opts.atrPct) && opts.atrPct > 0)
+    ? opts.atrPct
+    : (opts.atr > 0 && opts.price > 0 ? (opts.atr / opts.price * 100) : 0)
+  if(!(atrPct > 0)) {
+    return { mult: null, label: '—', reason: 'ATR% unavailable', atrPct: 0 }
+  }
+  var mult, reason
+  if(atrPct < 2.0)      { mult = 1.0;  reason = 'Low ATR% / smoother trend' }
+  else if(atrPct < 4.0) { mult = 1.25; reason = 'Normal volatility' }
+  else if(atrPct < 6.0) { mult = 1.5;  reason = 'High ATR% / wider stop suggested' }
+  else                  { mult = 2.0;  reason = 'Extreme ATR% / avoid tight stop' }
+  // Canonical KEY string for setGTStopMult round-trip + display.
+  var label = (typeof window.normalizeStopMult === 'function')
+    ? (window.normalizeStopMult(mult) || String(mult))
+    : String(mult)
+  return { mult: mult, label: label, reason: reason, atrPct: +atrPct.toFixed(2) }
 }
 
 // Repaint the segmented control's active state. Runs on every setGTStopMult
@@ -14781,13 +14857,30 @@ function renderTrades() {
           '</div>' +
         '</div>'
     })() : ''
+    // Adaptive Stop suggestion (advisory only — does NOT auto-change sizing)
+    // Compute from the FROZEN entry snapshot so the suggestion reflects the
+    // volatility regime at trade open, not transient intraday noise.
+    const _advAtr   = +t.entryATR || +t.atr || 0
+    const _advPx    = +t.entry || 0
+    const _adv      = (typeof window.getAdaptiveStopMult === 'function' && _advAtr > 0 && _advPx > 0)
+      ? window.getAdaptiveStopMult({ atr:_advAtr, price:_advPx, symbol:underlying })
+      : null
+    const _activeStopKey = (window.GT && window.GT.STOP_MULT) || 1.25
+    const _activeStopStr = (typeof window.normalizeStopMult === 'function')
+      ? (window.normalizeStopMult(_activeStopKey) || String(_activeStopKey))
+      : String(_activeStopKey)
+    const _advMatches = _adv && _adv.mult != null && (parseFloat(_adv.label) === parseFloat(_activeStopStr))
+    const advBadgeHtml = (_adv && _adv.mult != null)
+      ? ('<span title="'+(_adv.reason+' · ATR% '+_adv.atrPct+'% · advisory only — does not change sizing').replace(/"/g,'&quot;')+'" style="color:'+(_advMatches?'#555c6e':'#f0c040')+';font-weight:600;letter-spacing:.05em;text-transform:none">Adaptive: '+_adv.label+' ATR'+(_advMatches?' ✓':'')+'</span>')
+      : ''
     const miniChartHtml = hasEntrySnap
       ? (
         '<div style="background:#0a0c0f;border:1px solid rgba(255,255,255,.06);border-radius:8px;padding:8px 10px 6px;position:relative">' +
-          // Top status strip: Phase · Day X/25 · live refresh timestamp
-          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;font-size:8px;font-weight:700;letter-spacing:.08em;text-transform:uppercase">' +
+          // Top status strip: Phase · Day X/25 · Adaptive · live refresh timestamp
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;font-size:8px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;gap:8px;flex-wrap:wrap">' +
             '<span style="color:'+phaseCol+'">'+phaseLbl+'</span>' +
             '<span style="color:'+dayCol+'">'+dayIcon+'Day '+dayN+'/'+dayStop+'</span>' +
+            advBadgeHtml +
             (refreshedLbl ? '<span style="color:#333a4a;font-weight:400;letter-spacing:.03em;text-transform:none">live · '+refreshedLbl+'</span>' : '<span></span>') +
           '</div>' +
           '<canvas id="mini-chart-' + t.id + '" style="width:100%;height:140px;display:block"></canvas>' +
