@@ -970,6 +970,15 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
            preserved for metadata but not displayed when FID_OPEN is the
            active snapshot. -->
       <button class="btn btn-gold" style="width:auto" onclick="openAddTrade()" title="Journal a manual / non-Fidelity trade (notes only — does not override Fidelity snapshot)">+ New Trade (legacy journal)</button>
+      <!-- Position-type view filter — default Options Only.
+           VIEW-ONLY: filters which trade cards render. Does NOT change
+           trade data, sizing math, roll logic, FID_OPEN/FID_CLOSED, or
+           the SA tab. -->
+      <div id="tm-pos-filter" role="radiogroup" aria-label="Position type filter" style="display:inline-flex;background:#0a0c0f;border:1px solid rgba(255,255,255,.12);border-radius:6px;overflow:hidden">
+        <button type="button" data-pos-filter="options" onclick="setTmPosFilter('options')" class="tm-pos-seg" title="Show option trades only (default)" style="background:transparent;border:none;color:#8b91a0;padding:4px 12px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;border-right:1px solid rgba(255,255,255,.07)">Options Only</button>
+        <button type="button" data-pos-filter="stocks"  onclick="setTmPosFilter('stocks')"  class="tm-pos-seg" title="Show stock positions only" style="background:transparent;border:none;color:#8b91a0;padding:4px 12px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;border-right:1px solid rgba(255,255,255,.07)">Stocks Only</button>
+        <button type="button" data-pos-filter="all"     onclick="setTmPosFilter('all')"     class="tm-pos-seg" title="Show both options and stocks" style="background:transparent;border:none;color:#8b91a0;padding:4px 12px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">All</button>
+      </div>
       <span id="trade-count" style="font-size:12px;color:#555c6e">0 open</span>
       <span id="total-pnl-display" style="font-size:12px;color:#555c6e"></span>
       <button id="pnl-refresh-btn" class="btn btn-ghost" style="font-size:11px;padding:4px 10px" onclick="refreshAllPnL()">Refresh P&amp;L</button>
@@ -15870,6 +15879,26 @@ function mkLevel(cls, dot, label, price, dist) {
 +price.toFixed(2)+'\x3C/div><div class="level-dist" style="font-size:10px">'+(dist>=0?'+':'')+dist+'%\x3C/div>\x3C/div>'
 }
 
+// ── Trade Manager position-type view filter ────────────────────────────────
+// Persisted to localStorage as 'gt_tm_pos_filter'. Default 'options' on
+// first load so the user (whose primary use is options) doesn't have
+// stock positions cluttering the cards. Toggle via the segmented control
+// in the TM header — calls setTmPosFilter('options'|'stocks'|'all') →
+// renderTrades(). VIEW-only — no trade data, calculations, or SA-tab
+// state is touched.
+function getTmPosFilter() {
+  try {
+    const v = localStorage.getItem('gt_tm_pos_filter')
+    if(v === 'options' || v === 'stocks' || v === 'all') return v
+  } catch(e) {}
+  return 'options'
+}
+function setTmPosFilter(mode) {
+  if(mode !== 'options' && mode !== 'stocks' && mode !== 'all') mode = 'options'
+  try { localStorage.setItem('gt_tm_pos_filter', mode) } catch(e) {}
+  if(typeof renderTrades === 'function') renderTrades()
+}
+
 function renderTrades() {
   const sortVal = document.getElementById('tm-sort')?.value || 'date-desc';
   const sortFn = (a, b) => {
@@ -15941,7 +15970,29 @@ function renderTrades() {
   // Closed-trades path intentionally unchanged — analytics/closed migration
   // to FID_CLOSED is a future step (getClosedLotsNormalized() is the
   // already-scaffolded accessor for when that pivot happens).
-  const closed = TRADES.filter(t => t.status === 'closed').sort(sortFn)
+  let closed = TRADES.filter(t => t.status === 'closed').sort(sortFn)
+
+  // ── POSITION-TYPE VIEW FILTER ────────────────────────────────────────────
+  // VIEW-only filter — does not mutate TRADES, FID_OPEN, FID_CLOSED, sizing
+  // math, roll logic, or the SA tab. Default = 'options' so the user lands
+  // on the option book (their primary use case here); stocks are tracked
+  // for completeness but hidden by default.
+  //   'options' → hide rows where t.isStock || t.type === 'Stock'
+  //   'stocks'  → keep only stock rows
+  //   'all'     → no filter
+  const _tmPosFilter = (typeof getTmPosFilter === 'function') ? getTmPosFilter() : 'options'
+  const _isStockTrade = t => !!(t && (t.isStock || t.type === 'Stock'))
+  if(_tmPosFilter === 'options')      { open = open.filter(t => !_isStockTrade(t)); closed = closed.filter(t => !_isStockTrade(t)) }
+  else if(_tmPosFilter === 'stocks')  { open = open.filter(t =>  _isStockTrade(t)); closed = closed.filter(t =>  _isStockTrade(t)) }
+  // Sync the segmented control highlight to the active filter
+  try {
+    document.querySelectorAll('#tm-pos-filter .tm-pos-seg').forEach(b => {
+      const active = b.getAttribute('data-pos-filter') === _tmPosFilter
+      b.style.background = active ? 'rgba(240,192,64,.15)' : 'transparent'
+      b.style.color      = active ? '#f0c040' : '#8b91a0'
+    })
+  } catch(e) {}
+
   // Total P&L pill reflects the SAME open book that renders cards, so the
   // header sum can never disagree with the cards below it.
   const _openForTotals = open
