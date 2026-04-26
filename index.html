@@ -1392,6 +1392,27 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
   </div>
   <div id="sa-list" style="min-height:60px"></div>
 
+  <!-- ═══ ALPHA PICKS RANKING (decision-quality bench) ═══════════════════════ -->
+  <div style="margin-top:24px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:8px">
+      <div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#555c6e;margin-bottom:3px">Alpha Picks Ranking</div>
+        <div style="font-size:11px;color:#555c6e">Long-term portfolio-upgrade engine · ALL universe entries scored 0–10 · top 3 unowned flagged TOP REPLACEMENT</div>
+      </div>
+      <div style="font-size:10px;color:#555c6e">SA Rating 30% · Trend 25% · Return 20% · Recency 15% · TENX 10%</div>
+    </div>
+    <div id="sa-rank-table-header" style="display:grid;grid-template-columns:38px 70px 70px 90px 130px 70px 130px;gap:6px;padding:6px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e;border-bottom:1px solid rgba(255,255,255,.08)">
+      <div style="text-align:center">Rank</div>
+      <div>Ticker</div>
+      <div style="text-align:center">Score</div>
+      <div style="text-align:center">SA Rating</div>
+      <div>Trend Health</div>
+      <div style="text-align:right">Return</div>
+      <div>Status</div>
+    </div>
+    <div id="sa-rank-list" style="min-height:60px"></div>
+  </div>
+
 </div>
 
 
@@ -6338,52 +6359,154 @@ function saComputeAction(h) {
   }
 }
 
-// ── REPLACEMENT SUGGESTIONS ───────────────────────────────────────────────────
-// For a holding marked REPLACE CANDIDATE or SELL REVIEW, find better picks
-// from SA_UNIVERSE (excluding tickers the user already holds).
-// Filters: SA rating Strong Buy / Buy AND (trend health >= 7 OR no trend
-// data but Strong Buy). Sorted by trend score desc (with rating tiebreaker).
-// Returns top N { ticker, rating, trendLabel, trendScore, reason }.
-function saSuggestReplacements(h, count) {
-  count = count || 3
-  if(!Array.isArray(SA_UNIVERSE) || !SA_UNIVERSE.length) return []
-  const heldSet = new Set(SA_HOLDINGS.map(x => (x.ticker||'').toUpperCase()))
-  const ratingRank = { 'Strong Buy':3, 'Buy':2, 'Hold':1, 'Unknown':0, 'Sell':-1, 'Strong Sell':-2 }
-  const cur = saTrendHealth(h.ticker)
-  const curScore  = (cur && cur.score != null) ? cur.score : -1
-  const curRating = ratingRank[h.status] != null ? ratingRank[h.status] : 0
+// ── ALPHA PICKS RANK SCORE — SA-specific 0–10 quality score ──────────────────
+// Purpose: rank EVERY entry in SA_UNIVERSE on a single decision-quality scale
+// for the "Alpha Picks Bench" view. NOT SG Score, NOT TENX Score, NOT a
+// trading signal — this is a long-term portfolio-upgrade metric tuned to
+// SA Alpha Picks methodology (rating + trend + return + freshness).
+//
+// Reads only:
+//   - the universe entry itself (sa_rating, sa_return_pct, picked_date)
+//   - INTERNAL_RESULTS via saTrendHealth() (read-only)
+//   - TENX[] via saGetTenxScore() (optional, read-only, weak signal)
+//
+// No sector diversification penalty. No same-sector requirement. No automatic
+// sell triggers — purely advisory ranking.
+//
+// Components (all 0–10) and weights:
+//   1) SA Rating       30%
+//   2) Trend Health    25%
+//   3) Return Strength 20%
+//   4) Recency         15%
+//   5) TENX Boost      10%   (optional — defaults to 5 when no TENX data)
+//
+// Returns: { score, rating, trend, return, recency, tenx, hasTenx,
+//            ratingLabel, trendScore, returnPct, monthsSincePick }
+function saRankScore(u) {
+  if(!u || !u.ticker) {
+    return { score:0, rating:0, trend:0, return:0, recency:0, tenx:5,
+             hasTenx:false, ratingLabel:'Unknown', trendScore:null,
+             returnPct:null, monthsSincePick:null }
+  }
 
-  const candidates = SA_UNIVERSE
-    .filter(u => u && u.ticker && !heldSet.has(u.ticker.toUpperCase()))
-    .filter(u => u.sa_rating === 'Strong Buy' || u.sa_rating === 'Buy')
+  // 1) SA Rating (30%)
+  const ratingMap = { 'Strong Buy':10, 'Buy':7, 'Hold':4, 'Sell':1, 'Strong Sell':1, 'Unknown':5 }
+  const ratingLabel = u.sa_rating || 'Unknown'
+  const cRating = ratingMap[ratingLabel] != null ? ratingMap[ratingLabel] : 5
+
+  // 2) Trend Health (25%) — reuse saTrendHealth (SG total) but rebucket
+  const th = saTrendHealth(u.ticker)
+  let cTrend
+  if(th.score == null)        cTrend = 5
+  else if(th.score >= 8)      cTrend = 10
+  else if(th.score >= 6)      cTrend = 7
+  else if(th.score >= 4)      cTrend = 4
+  else                        cTrend = 1
+
+  // 3) Return Strength (20%)
+  const ret = (typeof u.sa_return_pct === 'number' && isFinite(u.sa_return_pct)) ? u.sa_return_pct : null
+  let cRet
+  if(ret == null)             cRet = 5
+  else if(ret > 100)          cRet = 10
+  else if(ret >= 50)          cRet = 8
+  else if(ret >= 20)          cRet = 6
+  else if(ret >= 0)           cRet = 5
+  else                        cRet = 3
+
+  // 4) Recency (15%) — months since picked_date
+  let monthsSincePick = null
+  let cRec = 5
+  if(u.picked_date) {
+    const d = new Date(u.picked_date)
+    if(!isNaN(d)) {
+      monthsSincePick = (Date.now() - d.getTime()) / (1000 * 60 * 60 * 24 * 30.44)
+      if(monthsSincePick < 3)        cRec = 10
+      else if(monthsSincePick < 6)   cRec = 8
+      else if(monthsSincePick < 12)  cRec = 6
+      else                           cRec = 4
+    }
+  }
+
+  // 5) TENX Boost (10%) — optional weak signal
+  const tx = saGetTenxScore(u.ticker)
+  const hasTenx = !!tx
+  const cTenx = hasTenx ? Math.max(0, Math.min(10, tx.score)) : 5
+
+  // Weighted sum, clamped to 0..10
+  let score = cRating*0.30 + cTrend*0.25 + cRet*0.20 + cRec*0.15 + cTenx*0.10
+  score = Math.max(0, Math.min(10, score))
+
+  return {
+    score: +score.toFixed(2),
+    rating: cRating, trend: cTrend, return: cRet, recency: cRec, tenx: cTenx,
+    hasTenx: hasTenx,
+    ratingLabel: ratingLabel,
+    trendScore: th.score,           // raw SG total, may be null
+    trendLabel: th.label,
+    trendColor: th.color,
+    returnPct: ret,
+    monthsSincePick: monthsSincePick
+  }
+}
+
+// ── RANK ALL UNIVERSE ENTRIES + ANNOTATE STATUS ──────────────────────────────
+// Returns an array of universe entries augmented with:
+//   { score, components..., status: 'HELD' | 'CANDIDATE' | 'TOP REPLACEMENT' }
+// Sorted: score desc → rating priority → return desc.
+// "TOP REPLACEMENT" = the top-3 highest-scoring CANDIDATEs (not held).
+function saRankAll() {
+  if(!Array.isArray(SA_UNIVERSE) || !SA_UNIVERSE.length) return []
+  const heldSet = new Set(SA_HOLDINGS.map(x => String(x.ticker||'').toUpperCase()))
+  const ratingPriority = { 'Strong Buy':5, 'Buy':4, 'Hold':3, 'Unknown':2, 'Sell':1, 'Strong Sell':0 }
+  const ranked = SA_UNIVERSE
+    .filter(u => u && u.ticker)
     .map(u => {
-      const th = saTrendHealth(u.ticker)
-      return {
-        ticker: u.ticker,
-        rating: u.sa_rating,
-        trendScore: th.score,
-        trendLabel: th.label,
-        trendColor: th.color,
-        sector: u.sector || '—',
-        company: u.company || ''
-      }
-    })
-    // Better than current = higher trend score OR same trend + higher rating
-    .filter(c => {
-      if(c.trendScore == null) return c.rating === 'Strong Buy'   // no data, but Strong Buy
-      if(curScore < 0)         return c.trendScore >= 7           // current unknown → require ≥7
-      const better = c.trendScore > curScore + 0.4 ||
-                     (c.trendScore >= 7 && (ratingRank[c.rating] > curRating))
-      return better
+      const r = saRankScore(u)
+      return Object.assign({}, u, r, {
+        status: heldSet.has(String(u.ticker).toUpperCase()) ? 'HELD' : 'CANDIDATE'
+      })
     })
     .sort((a, b) => {
-      const sb = (b.trendScore == null ? -1 : b.trendScore)
-      const sa = (a.trendScore == null ? -1 : a.trendScore)
-      if(sb !== sa) return sb - sa
-      return (ratingRank[b.rating]||0) - (ratingRank[a.rating]||0)
+      if(b.score !== a.score) return b.score - a.score
+      const rb = ratingPriority[b.ratingLabel] || 0
+      const ra = ratingPriority[a.ratingLabel] || 0
+      if(rb !== ra) return rb - ra
+      return (b.returnPct || 0) - (a.returnPct || 0)
     })
+  // Mark top-3 CANDIDATEs as TOP REPLACEMENT (in-place upgrade of status)
+  let nMarked = 0
+  for(const r of ranked) {
+    if(r.status === 'CANDIDATE') {
+      r.status = 'TOP REPLACEMENT'
+      nMarked++
+      if(nMarked >= 3) break
+    }
+  }
+  return ranked
+}
+
+// ── REPLACEMENT SUGGESTIONS — refactored to use saRankScore ──────────────────
+// For a holding marked REPLACE CANDIDATE or SELL REVIEW, return top-N
+// CANDIDATE rows (excluding tickers already held + Sell/Strong Sell ratings)
+// from the unified ranking. Sorted by saRankScore.
+function saSuggestReplacements(h, count) {
+  count = count || 3
+  const ranked = saRankAll()
+  if(!ranked.length) return []
+  return ranked
+    .filter(r => r.status !== 'HELD')
+    .filter(r => r.ratingLabel !== 'Sell' && r.ratingLabel !== 'Strong Sell')
     .slice(0, count)
-  return candidates
+    .map(r => ({
+      ticker:     r.ticker,
+      rating:     r.ratingLabel,
+      trendScore: r.trendScore,
+      trendLabel: r.trendLabel,
+      trendColor: r.trendColor,
+      sector:     r.sector || '—',
+      company:    r.company || '',
+      rankScore:  r.score
+    }))
 }
 
 // ── REFRESH LIVE PRICES ──────────────────────────────────────────────────────
@@ -6722,10 +6845,69 @@ function saRenderUniverse() {
     '</div>' + rows.join('')
 }
 
+// ── ALPHA PICKS RANKING — render the bench ───────────────────────────────────
+// Reads SA_UNIVERSE + saRankAll(); paints the ranked table beneath the
+// holdings grid. Top 5 visually highlighted; HELD vs CANDIDATE vs TOP
+// REPLACEMENT shown in the Status column.
+function saRenderRanking() {
+  const el = document.getElementById('sa-rank-list')
+  if(!el) return
+  const ranked = saRankAll()
+  if(!ranked.length) {
+    el.innerHTML = '<div style="text-align:center;padding:24px;color:#555c6e;font-size:11px">SA Universe is empty — open the ⚙ Universe panel to seed candidates.</div>'
+    return
+  }
+  const ratingColors = {
+    'Strong Buy':'#00d68f','Buy':'#4da6ff','Hold':'#f0c040',
+    'Sell':'#ff8c42','Strong Sell':'#ff4560','Unknown':'#555c6e'
+  }
+  const statusColors = {
+    'HELD':            { bg:'rgba(139,145,160,.15)', fg:'#8b91a0', bd:'rgba(139,145,160,.3)' },
+    'CANDIDATE':       { bg:'rgba(77,166,255,.10)',  fg:'#4da6ff', bd:'rgba(77,166,255,.3)'  },
+    'TOP REPLACEMENT': { bg:'rgba(0,214,143,.15)',   fg:'#00d68f', bd:'rgba(0,214,143,.45)'  }
+  }
+  function scoreColor(s) {
+    if(s >= 8) return '#00d68f'
+    if(s >= 6.5) return '#4da6ff'
+    if(s >= 5) return '#f0c040'
+    if(s >= 3.5) return '#ff8c42'
+    return '#ff4560'
+  }
+  const rows = ranked.map((r, i) => {
+    const rank = i + 1
+    const isTop5 = rank <= 5
+    const rowBg = isTop5 ? 'background:rgba(240,192,64,.04);' : ''
+    const rankCol = rank === 1 ? '#f0c040' : rank <= 3 ? '#e8eaf0' : isTop5 ? '#8b91a0' : '#555c6e'
+    const sCol = scoreColor(r.score)
+    const trendCell = r.trendScore != null
+      ? '<span style="font-family:monospace;color:'+r.trendColor+';font-weight:700">'+r.trendScore.toFixed(1)+'</span> <span style="color:'+r.trendColor+';font-size:10px;font-weight:600">· '+r.trendLabel+'</span>'
+      : '<span style="color:#555c6e;font-size:11px">— · Unknown</span>'
+    const retCell = r.returnPct != null
+      ? '<span style="font-family:monospace;font-weight:700;color:'+(r.returnPct>=50?'#00d68f':r.returnPct>=0?'#4da6ff':'#ff4560')+'">'+(r.returnPct>=0?'+':'')+r.returnPct.toFixed(0)+'%</span>'
+      : '<span style="color:#555c6e">—</span>'
+    const rt = ratingColors[r.ratingLabel] || '#555c6e'
+    const sc = statusColors[r.status] || statusColors.CANDIDATE
+    // Component breakdown tooltip — useful when comparing two close scores
+    const tip = ('Score '+r.score.toFixed(2)+' = SA '+r.rating+'×0.30 + Trend '+r.trend+'×0.25 + Return '+r.return+'×0.20 + Recency '+r.recency+'×0.15 + TENX '+r.tenx+'×0.10' + (r.hasTenx?'':' (TENX neutral)')).replace(/"/g,'&quot;')
+    return '<div style="display:grid;grid-template-columns:38px 70px 70px 90px 130px 70px 130px;gap:6px;padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.04);font-size:12px;align-items:center;'+rowBg+'" title="'+tip+'">' +
+      '<div style="text-align:center;font-family:monospace;font-weight:700;color:'+rankCol+'">'+rank+'</div>' +
+      '<div style="font-family:monospace;font-weight:700;color:#f0c040">'+r.ticker+(r.company?' <span title="'+(r.company||'').replace(/"/g,'&quot;')+'" style="font-size:9px;color:#555c6e;font-weight:400;font-family:inherit">ⓘ</span>':'')+'</div>' +
+      '<div style="text-align:center"><span style="font-family:monospace;font-weight:700;font-size:14px;color:'+sCol+'">'+r.score.toFixed(1)+'</span><div style="height:2px;background:rgba(255,255,255,.06);border-radius:1px;margin-top:2px"><div style="height:100%;width:'+(r.score*10)+'%;background:'+sCol+';border-radius:1px"></div></div></div>' +
+      '<div style="text-align:center"><span style="background:'+rt+'22;color:'+rt+';font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;letter-spacing:.04em;white-space:nowrap">'+r.ratingLabel+'</span></div>' +
+      '<div>'+trendCell+'</div>' +
+      '<div style="text-align:right">'+retCell+'</div>' +
+      '<div><span style="background:'+sc.bg+';color:'+sc.fg+';border:1px solid '+sc.bd+';font-size:9px;font-weight:800;padding:2px 7px;border-radius:3px;letter-spacing:.05em;white-space:nowrap">'+r.status+'</span></div>' +
+    '</div>'
+  })
+  el.innerHTML = rows.join('')
+}
+
 // ── MAIN RENDER — decision-first table ───────────────────────────────────────
 function saRender() {
   // Universe panel always rendered (cheap, allows live updates)
   saRenderUniverse()
+  // Alpha Picks Ranking always rendered
+  saRenderRanking()
 
   const listEl = document.getElementById('sa-list')
   if(!listEl) return
