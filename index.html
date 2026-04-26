@@ -6000,8 +6000,10 @@ setTimeout(tenxRender, 1200)
 //   thesis          string
 //   notes           string               (free-form)
 //   riskNotes       string               (fundamental/news risk, manual)
-//   earlySellWarn   boolean              (manual flag; engine also escalates
-//                                         action if any auto-trigger fires)
+//   earlySellWarn   boolean              (manual review flag; engine
+//                                         escalates winner-aware — winners
+//                                         go to WATCH/SELL REVIEW, never to
+//                                         REPLACE CANDIDATE)
 //   lastFetched     number (ms)
 //
 // SCHEMA — candidate universe (per row in SA_UNIVERSE):
@@ -6152,9 +6154,22 @@ function saTrendHealth(ticker) {
 // - Unknown rating → WATCH (annotate "needs SA rating update")
 // - Risk-flag escalations:
 //     P/L <= -25% (large drawdown)        → escalate to ≥ SELL REVIEW
-//     earlySellWarn manual flag           → escalate to ≥ REPLACE CANDIDATE
+//     earlySellWarn — winner-aware:
+//       winner OR P/L > 50%               → WATCH (or SELL REVIEW if trend
+//                                            Weakening/Broken). NEVER REPLACE
+//                                            CANDIDATE — profitable positions
+//                                            are reviewed for trim, not swap.
+//       non-winner + Weakening/Broken     → REPLACE CANDIDATE
+//       non-winner + Healthy/Strong/Unk.  → WATCH
 //     earnings within 7d                  → annotate flag, no escalation
 //     trend Weakening on Strong Buy/Buy   → annotate flag (already in matrix)
+//
+// Winner-protection guard (post-escalation):
+//     If perf=winner and current action=REPLACE CANDIDATE, downgrade to:
+//       Broken trend OR Sell/Strong Sell  → SELL REVIEW (trim/exit, not swap)
+//       Weakening trend                   → SELL REVIEW (consider trim)
+//       Strong/Healthy trend              → KEEP
+//       Unknown trend                     → WATCH
 //
 // Sector diversification is intentionally NOT considered (per user spec).
 const SA_ACTION_SEVERITY = {
@@ -6260,10 +6275,51 @@ function saComputeAction(h) {
     action = saEscalate(action, 'SELL REVIEW')
     reasons.push('Large drawdown ('+pl.toFixed(0)+'%) → escalated to SELL REVIEW')
   }
+  // earlySellWarn — winner-aware escalation
+  // - Winner OR P/L > 50%       → escalate to WATCH or SELL REVIEW (NEVER REPLACE
+  //                               CANDIDATE), labeled "manual review", because a
+  //                               profitable position should be reviewed for trim,
+  //                               not flagged for swap. SELL REVIEW only when
+  //                               trend is Weakening or Broken; otherwise WATCH.
+  // - Non-winner with weak trend  → REPLACE CANDIDATE (search for upgrade)
+  // - Non-winner with healthy/unknown trend → WATCH
   if(h.earlySellWarn) {
-    action = saEscalate(action, 'REPLACE CANDIDATE')
-    reasons.push('Manual early-sell warning flag set')
+    const isWinnerOrBigGain = (perf === 'winner') || (pl != null && pl > 50)
+    if(isWinnerOrBigGain) {
+      const target = (trend.label === 'Weakening' || trend.label === 'Broken')
+        ? 'SELL REVIEW' : 'WATCH'
+      action = saEscalate(action, target)
+      reasons.push('Manual review flag set (P/L '+(pl!=null?(pl>=0?'+':'')+pl.toFixed(0)+'%':'n/a')+
+                   ') → '+target+' (winner protected from REPLACE CANDIDATE)')
+    } else if(trend.label === 'Weakening' || trend.label === 'Broken') {
+      action = saEscalate(action, 'REPLACE CANDIDATE')
+      reasons.push('Manual review flag set on '+trend.label.toLowerCase()+' trend → REPLACE CANDIDATE')
+    } else {
+      action = saEscalate(action, 'WATCH')
+      reasons.push('Manual review flag set → WATCH')
+    }
   }
+
+  // 4b) Winner protection guard — winners are NEVER REPLACE CANDIDATE unless
+  // Trend Health is Broken (<4) OR SA rating is Sell/Strong Sell. Falls back
+  // to SELL REVIEW for Weakening trend (consider trim), KEEP/WATCH otherwise.
+  if(perf === 'winner' && action === 'REPLACE CANDIDATE') {
+    const sellRating = (rating === 'Sell' || rating === 'Strong Sell')
+    if(trend.label === 'Broken' || sellRating) {
+      // Legitimate downgrade — but for a winner, SELL REVIEW is the right
+      // bucket (trim/exit decision), not REPLACE CANDIDATE (basket swap).
+      action = 'SELL REVIEW'
+      reasons.push('Winner-protection: Broken trend or '+rating+' rating → SELL REVIEW (not REPLACE)')
+    } else if(trend.label === 'Weakening') {
+      action = 'SELL REVIEW'
+      reasons.push('Winner-protection: Weakening trend on winner → SELL REVIEW (consider trim)')
+    } else {
+      // Healthy / Strong / Unknown trend on a winner → never REPLACE
+      action = (trend.label === 'Strong' || trend.label === 'Healthy') ? 'KEEP' : 'WATCH'
+      reasons.push('Winner-protection: '+trend.label+' trend → '+action+' (winners are not REPLACE candidates)')
+    }
+  }
+
   // 5) Annotate-only flags
   const eDays = saGetEarningsDays(h.ticker)
   if(eDays != null && eDays >= 0 && eDays <= 7) {
@@ -6773,7 +6829,7 @@ function saRender() {
     if(d.performance === 'winner')
       flags.push('<span style="background:rgba(0,214,143,.15);color:#00d68f;font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px">★ WIN</span>')
     if(h.earlySellWarn)
-      flags.push('<span style="background:rgba(255,140,66,.15);color:#ff8c42;font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px">manual ⚠</span>')
+      flags.push('<span title="Manual review flag — winner-aware: profitable positions stay in WATCH/SELL REVIEW, not REPLACE CANDIDATE" style="background:rgba(255,140,66,.15);color:#ff8c42;font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em">MANUAL REVIEW</span>')
     if(h.notFoundInFidelity)
       flags.push('<span title="Last Fidelity sync did not find this ticker in Open Positions" style="background:rgba(255,140,66,.12);color:#ff8c42;font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px">⚠ NOT IN FIDELITY</span>')
     if(d.override)
