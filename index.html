@@ -1360,6 +1360,7 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
             <option value="true">Yes</option>
           </select>
         </div>
+        <div class="field" style="margin:0;grid-column:span 3"><label>Notes</label><input type="text" id="sa-univ-new-notes" placeholder="Thesis, catalyst, why on the bench..."></div>
       </div>
       <div style="display:flex;gap:8px;margin-top:8px">
         <button class="btn btn-gold" style="font-size:11px;padding:5px 14px" onclick="saUnivAdd()">Add</button>
@@ -1392,23 +1393,25 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
   </div>
   <div id="sa-list" style="min-height:60px"></div>
 
-  <!-- ═══ ALPHA PICKS RANKING (decision-quality bench) ═══════════════════════ -->
+  <!-- ═══ ALPHA PICKS BENCH (decision-quality replacement candidates) ═══════ -->
   <div style="margin-top:24px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:8px">
       <div>
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#555c6e;margin-bottom:3px">Alpha Picks Ranking</div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#555c6e;margin-bottom:3px">Alpha Picks Bench</div>
         <div style="font-size:11px;color:#555c6e">Long-term portfolio-upgrade engine · ALL universe entries scored 0–10 · top 3 unowned flagged TOP REPLACEMENT</div>
       </div>
-      <div style="font-size:10px;color:#555c6e">SA Rating 30% · Trend 25% · Return 20% · Recency 15% · TENX 10%</div>
+      <div style="font-size:10px;color:#555c6e">SA Rating 30% · Trend 25% · Return 20% · Freshness 15% · TENX 10%</div>
     </div>
-    <div id="sa-rank-table-header" style="display:grid;grid-template-columns:38px 70px 70px 90px 130px 70px 130px;gap:6px;padding:6px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e;border-bottom:1px solid rgba(255,255,255,.08)">
+    <div id="sa-rank-table-header" style="display:grid;grid-template-columns:38px 70px 80px 90px 120px 65px 80px 110px 1fr;gap:6px;padding:6px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e;border-bottom:1px solid rgba(255,255,255,.08)">
       <div style="text-align:center">Rank</div>
       <div>Ticker</div>
-      <div style="text-align:center">Score</div>
+      <div style="text-align:center">Alpha Score</div>
       <div style="text-align:center">SA Rating</div>
       <div>Trend Health</div>
-      <div style="text-align:right">Return</div>
+      <div style="text-align:right">SA Return</div>
+      <div style="text-align:center">Picked</div>
       <div>Status</div>
+      <div>Notes</div>
     </div>
     <div id="sa-rank-list" style="min-height:60px"></div>
   </div>
@@ -6029,7 +6032,7 @@ setTimeout(tenxRender, 1200)
 //
 // SCHEMA — candidate universe (per row in SA_UNIVERSE):
 //   ticker, company, sector, sa_rating, picked_date, sa_return_pct,
-//   holding_pct, winner (boolean)
+//   holding_pct, winner (boolean), notes (string)
 //
 // ISOLATION: this engine reads SG c5/total from INTERNAL_RESULTS, TENX
 // scores from TENX[] via tenxScore(), and earnings dates from
@@ -6087,6 +6090,59 @@ if(!SA_UNIVERSE.length) {
   SA_UNIVERSE = SA_UNIVERSE_DEFAULTS.slice()
   localStorage.setItem('gt_sa_universe', JSON.stringify(SA_UNIVERSE))
 }
+
+// ── EXTENDED ALPHA PICKS SEED ───────────────────────────────────────────────
+// Broader Alpha Picks bench used by the new SA Bench Score / Top Replacement
+// feature. Each entry ships ticker-only with neutral defaults so the user can
+// fill real ratings + picked dates + returns via the ⚙ Universe panel without
+// any fabricated data being shown as authoritative.
+//
+// The bench is most useful once SA Rating + picked_date + sa_return_pct are
+// populated — until then, all unset fields contribute their neutral component
+// score (5/10) and the ranking falls back to whatever Trend Health pulls from
+// the Internal Screener.
+const SA_ALPHA_PICKS_SEED = [
+  'NEXA','CSTM','LITE','FN','GM','DY','NEM','B','TIGO','W','PARR','INCY',
+  'MU','TTMI','CDE','KGC','VISN','STRL','WLDN','SSRM','UNFI','MFC','EAT',
+  'EZPW','ARQT','CRDO','ALL','CLS','CCL','AGX','POWL','SYF','CVSA','BRK.B',
+  'SKYW','BLBD','RCL','OKTA','TWLO','APP','TMUS','UBER','CAAP'
+]
+
+// Merge SA_ALPHA_PICKS_SEED into SA_UNIVERSE without overwriting any existing
+// entry. Only ADDS missing tickers — preserves all manual edits (rating,
+// picked_date, sector, return, notes, winner). Idempotent: re-running on a
+// fully-merged universe is a no-op.
+function saSeedUniverseFromAlphaPicks() {
+  if(!Array.isArray(SA_UNIVERSE)) SA_UNIVERSE = []
+  const have = new Set(SA_UNIVERSE.map(u => String(u && u.ticker || '').toUpperCase()))
+  let added = 0
+  for(const tk of SA_ALPHA_PICKS_SEED) {
+    const TK = String(tk||'').toUpperCase()
+    if(!TK || have.has(TK)) continue
+    SA_UNIVERSE.push({
+      ticker:        TK,
+      company:       '',
+      sector:        '',
+      sa_rating:     'Unknown',     // neutral until user fills in
+      picked_date:   '',
+      sa_return_pct: null,
+      holding_pct:   null,
+      winner:        false,
+      notes:         ''
+    })
+    have.add(TK)
+    added++
+  }
+  if(added > 0) {
+    localStorage.setItem('gt_sa_universe', JSON.stringify(SA_UNIVERSE))
+    if(typeof fbAutoSave === 'function') fbAutoSave(2000)
+    console.info('[SA] universe extended with '+added+' Alpha Picks tickers (manual edits preserved)')
+  }
+  return added
+}
+
+// Run once at module init — adds anything missing, leaves manual edits alone.
+saSeedUniverseFromAlphaPicks()
 
 function saSave() {
   localStorage.setItem('gt_seeking_alpha', JSON.stringify(SA_HOLDINGS))
@@ -6467,11 +6523,20 @@ function saRankAll() {
       })
     })
     .sort((a, b) => {
+      // 1) Alpha Score desc
       if(b.score !== a.score) return b.score - a.score
+      // 2) SA rating priority (Strong Buy > Buy > Hold > Unknown > Sell > Strong Sell)
       const rb = ratingPriority[b.ratingLabel] || 0
       const ra = ratingPriority[a.ratingLabel] || 0
       if(rb !== ra) return rb - ra
-      return (b.returnPct || 0) - (a.returnPct || 0)
+      // 3) SA return desc (nulls treated as 0)
+      const retA = (a.returnPct == null) ? 0 : a.returnPct
+      const retB = (b.returnPct == null) ? 0 : b.returnPct
+      if(retB !== retA) return retB - retA
+      // 4) Newer picked_date first (missing dates sort last)
+      const da = a.picked_date ? new Date(a.picked_date).getTime() : 0
+      const db = b.picked_date ? new Date(b.picked_date).getTime() : 0
+      return db - da
     })
   // Mark top-3 CANDIDATEs as TOP REPLACEMENT (in-place upgrade of status)
   let nMarked = 0
@@ -6800,10 +6865,11 @@ function saUnivAdd() {
     picked_date:   document.getElementById('sa-univ-new-picked').value,
     sa_return_pct: retRaw === '' ? null : +retRaw,
     holding_pct:   holdRaw=== '' ? null : +holdRaw,
-    winner:        document.getElementById('sa-univ-new-winner').value === 'true'
+    winner:        document.getElementById('sa-univ-new-winner').value === 'true',
+    notes:         (document.getElementById('sa-univ-new-notes')||{}).value ? document.getElementById('sa-univ-new-notes').value.trim() : ''
   })
   saSaveUniverse(); saRender()
-  ;['sa-univ-new-ticker','sa-univ-new-company','sa-univ-new-sector','sa-univ-new-picked','sa-univ-new-return','sa-univ-new-holding']
+  ;['sa-univ-new-ticker','sa-univ-new-company','sa-univ-new-sector','sa-univ-new-picked','sa-univ-new-return','sa-univ-new-holding','sa-univ-new-notes']
     .forEach(id => { const el = document.getElementById(id); if(el) el.value = '' })
   document.getElementById('sa-univ-add-form').style.display = 'none'
 }
@@ -6887,16 +6953,27 @@ function saRenderRanking() {
       : '<span style="color:#555c6e">—</span>'
     const rt = ratingColors[r.ratingLabel] || '#555c6e'
     const sc = statusColors[r.status] || statusColors.CANDIDATE
+    // Picked column: relative ("3 mo") if we have monthsSincePick, raw date otherwise
+    const pickedCell = (r.monthsSincePick != null)
+      ? '<span title="'+(r.picked_date||'')+'" style="font-family:monospace;color:'+(r.monthsSincePick<3?'#00d68f':r.monthsSincePick<6?'#4da6ff':r.monthsSincePick<12?'#f0c040':'#8b91a0')+';font-size:11px">'+(r.monthsSincePick<1?'<1mo':Math.round(r.monthsSincePick)+'mo')+'</span>'
+      : '<span style="color:#555c6e">—</span>'
+    // Notes column: free-form universe.notes — truncated, full text on hover
+    const notesText = (r.notes || '').toString()
+    const notesCell = notesText
+      ? '<span title="'+notesText.replace(/"/g,'&quot;')+'" style="color:#8b91a0;font-size:11px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+notesText.replace(/[<>]/g,'')+'</span>'
+      : '<span style="color:#555c6e">—</span>'
     // Component breakdown tooltip — useful when comparing two close scores
-    const tip = ('Score '+r.score.toFixed(2)+' = SA '+r.rating+'×0.30 + Trend '+r.trend+'×0.25 + Return '+r.return+'×0.20 + Recency '+r.recency+'×0.15 + TENX '+r.tenx+'×0.10' + (r.hasTenx?'':' (TENX neutral)')).replace(/"/g,'&quot;')
-    return '<div style="display:grid;grid-template-columns:38px 70px 70px 90px 130px 70px 130px;gap:6px;padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.04);font-size:12px;align-items:center;'+rowBg+'" title="'+tip+'">' +
+    const tip = ('Alpha Score '+r.score.toFixed(2)+' = SA '+r.rating+'×0.30 + Trend '+r.trend+'×0.25 + Return '+r.return+'×0.20 + Freshness '+r.recency+'×0.15 + TENX '+r.tenx+'×0.10' + (r.hasTenx?'':' (TENX neutral)')).replace(/"/g,'&quot;')
+    return '<div style="display:grid;grid-template-columns:38px 70px 80px 90px 120px 65px 80px 110px 1fr;gap:6px;padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.04);font-size:12px;align-items:center;'+rowBg+'" title="'+tip+'">' +
       '<div style="text-align:center;font-family:monospace;font-weight:700;color:'+rankCol+'">'+rank+'</div>' +
       '<div style="font-family:monospace;font-weight:700;color:#f0c040">'+r.ticker+(r.company?' <span title="'+(r.company||'').replace(/"/g,'&quot;')+'" style="font-size:9px;color:#555c6e;font-weight:400;font-family:inherit">ⓘ</span>':'')+'</div>' +
       '<div style="text-align:center"><span style="font-family:monospace;font-weight:700;font-size:14px;color:'+sCol+'">'+r.score.toFixed(1)+'</span><div style="height:2px;background:rgba(255,255,255,.06);border-radius:1px;margin-top:2px"><div style="height:100%;width:'+(r.score*10)+'%;background:'+sCol+';border-radius:1px"></div></div></div>' +
       '<div style="text-align:center"><span style="background:'+rt+'22;color:'+rt+';font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;letter-spacing:.04em;white-space:nowrap">'+r.ratingLabel+'</span></div>' +
       '<div>'+trendCell+'</div>' +
       '<div style="text-align:right">'+retCell+'</div>' +
+      '<div style="text-align:center">'+pickedCell+'</div>' +
       '<div><span style="background:'+sc.bg+';color:'+sc.fg+';border:1px solid '+sc.bd+';font-size:9px;font-weight:800;padding:2px 7px;border-radius:3px;letter-spacing:.05em;white-space:nowrap">'+r.status+'</span></div>' +
+      '<div style="overflow:hidden;min-width:0">'+notesCell+'</div>' +
     '</div>'
   })
   el.innerHTML = rows.join('')
