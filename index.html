@@ -392,7 +392,7 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 <button onclick="show('sizer',this);initPlanner()">Planner</button>
   <button onclick="show('trades',this)">Trade Manager</button>
   <button onclick="show('tenx',this)">10-Bagger</button>
-  <button onclick="show('sa',this);saRender()">Seeking Alpha</button>
+  <button onclick="show('sa',this);if(typeof saMaybeAutoRefreshTrendHealth==='function')saMaybeAutoRefreshTrendHealth();saRender()">Seeking Alpha</button>
   <button onclick="show('backtest',this)">TQQQ 35% Vol Strategy</button>
   <button onclick="show('analytics',this)">Analytics</button>
 </div>
@@ -1276,6 +1276,8 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
       <button class="btn btn-ghost" style="font-size:11px;padding:4px 11px" onclick="document.getElementById('sa-universe-panel').style.display=document.getElementById('sa-universe-panel').style.display==='none'?'block':'none'">⚙ Universe</button>
       <span id="sa-summary" style="font-size:11px;color:#8b91a0"></span>
       <span id="sa-last-refresh" style="font-size:10px;color:#555c6e"></span>
+      <!-- Trend Health freshness — auto-managed by saUpdateTrendHealthStatus -->
+      <span id="sa-trend-health-status" style="font-size:10px;color:#555c6e"></span>
     </div>
   </div>
 
@@ -7272,10 +7274,125 @@ function saRender() {
 
   const sumEl = document.getElementById('sa-summary')
   if(sumEl) sumEl.textContent = SA_HOLDINGS.length + ' holdings · ' + nKeep + ' keep · ' + nWatch + ' watch · ' + nReplace + ' replace · ' + nSell + ' sell review'
+
+  // Trend Health freshness — keep status line in sync with whatever the
+  // Internal Screener has cached. saMaybeAutoRefreshTrendHealth runs at
+  // SA module init + on every show('sa') tab switch; this only repaints.
+  if(typeof saUpdateTrendHealthStatus === 'function') saUpdateTrendHealthStatus()
 }
 
-// Init render on page load
+// ── TREND HEALTH AUTO-REFRESH ────────────────────────────────────────────────
+// Bench + holdings Trend Health is sourced from INTERNAL_RESULTS (the SG
+// Screener output). When INTERNAL_RESULTS is empty or older than 6 hours,
+// most Alpha Picks show "Unknown" trend, which weakens the bench ranking.
+//
+// This helper auto-runs runInternalScreen() once at SA module init AND on
+// every show('sa') tab switch IF the cache is missing/stale AND a Polygon
+// API key is configured. Re-entry is guarded by
+// window.__internalAutoRefreshInFlight so re-renders, multiple tab
+// switches, and concurrent triggers can never stack a duplicate run.
+//
+// Read-only of: KEY (Polygon), INTERNAL_SCORED_AT, INTERNAL_RESULTS.
+// Calls existing runInternalScreen() which writes its own state.
+// Does NOT change SG Score math, SA decision logic, TENX, Planner,
+// Trade Manager, Roll Engine/Review, Stop Comparison, OVTLYR, or order
+// logic — purely a freshness/automation feature.
+const SA_TREND_STALE_MS = 6 * 60 * 60 * 1000   // 6 hours
+
+function saTrendHealthFreshness() {
+  // Returns { state, ageMs } where state ∈
+  //   'fresh' | 'stale' | 'missing' | 'in-flight' | 'no-key'
+  if(window.__internalAutoRefreshInFlight) return { state:'in-flight', ageMs:null }
+  const last = +(typeof INTERNAL_SCORED_AT !== 'undefined' ? INTERNAL_SCORED_AT : 0) || 0
+  const haveResults = (typeof INTERNAL_RESULTS !== 'undefined') && Array.isArray(INTERNAL_RESULTS) && INTERNAL_RESULTS.length > 0
+  if(!haveResults) {
+    return (typeof KEY !== 'undefined' && KEY) ? { state:'missing', ageMs:null } : { state:'no-key', ageMs:null }
+  }
+  const ageMs = Date.now() - last
+  if(ageMs > SA_TREND_STALE_MS) {
+    return (typeof KEY !== 'undefined' && KEY) ? { state:'stale', ageMs } : { state:'no-key', ageMs }
+  }
+  return { state:'fresh', ageMs }
+}
+
+function saUpdateTrendHealthStatus() {
+  const el = document.getElementById('sa-trend-health-status')
+  if(!el) return
+  const f = saTrendHealthFreshness()
+  function fmtAge(ms) {
+    if(ms == null) return ''
+    const min = Math.round(ms / 60000)
+    if(min < 1)  return 'just now'
+    if(min < 60) return min + ' min ago'
+    const hrs = Math.round(min / 60)
+    if(hrs < 24) return hrs + ' hr ago'
+    return Math.round(hrs / 24) + ' day ago'
+  }
+  switch(f.state) {
+    case 'fresh':
+      el.textContent = '· Trend Health updated ' + fmtAge(f.ageMs)
+      el.style.color = '#555c6e'
+      el.title = 'Sourced from Internal Screener · auto-refresh threshold ' + (SA_TREND_STALE_MS/3600000) + 'h'
+      break
+    case 'stale':
+      el.textContent = '· Trend Health updating…'
+      el.style.color = '#f0c040'
+      el.title = 'Cache older than ' + (SA_TREND_STALE_MS/3600000) + 'h — auto-refresh queued'
+      break
+    case 'missing':
+      el.textContent = '· Trend Health updating…'
+      el.style.color = '#f0c040'
+      el.title = 'No Internal Screener cache — auto-refresh queued'
+      break
+    case 'in-flight':
+      el.textContent = '· Trend Health updating…'
+      el.style.color = '#4da6ff'
+      el.title = 'Internal Screener running — Trend Health will refresh when complete'
+      break
+    case 'no-key':
+      el.textContent = '· Trend Health stale — click Run Screen'
+      el.style.color = '#ff8c42'
+      el.title = 'Polygon API key not configured — set KEY in Settings, then click ▶ Run Screen on the Screener tab'
+      break
+  }
+}
+
+function saMaybeAutoRefreshTrendHealth() {
+  // Cheap to call from many places — short-circuits in fresh/in-flight/no-key states
+  if(window.__internalAutoRefreshInFlight) return
+  if(typeof runInternalScreen !== 'function') return  // not loaded yet
+  const f = saTrendHealthFreshness()
+  if(f.state === 'fresh' || f.state === 'in-flight') return
+  if(f.state === 'no-key') {
+    // Just paint the hint — can't run without a key
+    saUpdateTrendHealthStatus()
+    return
+  }
+  // 'stale' or 'missing' — fire one run, guarded
+  window.__internalAutoRefreshInFlight = true
+  saUpdateTrendHealthStatus()
+  ;(async () => {
+    try {
+      console.info('[SA] auto-refreshing Trend Health (Internal Screener) — '+f.state)
+      await runInternalScreen()
+      console.info('[SA] Trend Health refresh complete')
+    } catch(e) {
+      console.warn('[SA] Trend Health auto-refresh failed:', e && e.message)
+    } finally {
+      window.__internalAutoRefreshInFlight = false
+      // Re-render whichever surface is visible — both are cheap
+      try { if(typeof saRender === 'function') saRender() } catch(e) {}
+      try { saUpdateTrendHealthStatus() } catch(e) {}
+    }
+  })()
+}
+
+// Init render on page load — schedule the auto-refresh check 1.2s after
+// saRender. Gives runInternalScreen + KEY + INTERNAL_RESULTS time to be
+// initialized from localStorage / Firebase hydration. Guarded — won't
+// double-run on subsequent tab opens.
 setTimeout(saRender, 1300)
+setTimeout(function(){ try { saMaybeAutoRefreshTrendHealth() } catch(e) {} }, 2500)
 
 
 // ── BACKTEST ENGINE ────────────────────────────────────────────────────────────
