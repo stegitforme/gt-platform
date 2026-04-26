@@ -1400,7 +1400,14 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#555c6e;margin-bottom:3px">Alpha Picks Bench</div>
         <div style="font-size:11px;color:#555c6e">Long-term portfolio-upgrade engine · ALL universe entries scored 0–10 · top 3 unowned flagged TOP REPLACEMENT</div>
       </div>
-      <div style="font-size:10px;color:#555c6e">SA Rating 30% · Trend 25% · Return 20% · Freshness 15% · TENX 10%</div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <!-- [All] / [Candidates Only] toggle — default Candidates Only -->
+        <div id="sa-bench-filter" role="radiogroup" aria-label="Bench filter" style="display:inline-flex;background:#0a0c0f;border:1px solid rgba(255,255,255,.12);border-radius:6px;overflow:hidden">
+          <button type="button" data-bench-filter="candidates" onclick="saSetBenchFilter('candidates')" class="sa-bench-seg" style="background:transparent;border:none;color:#8b91a0;padding:4px 12px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;border-right:1px solid rgba(255,255,255,.07)">Candidates Only</button>
+          <button type="button" data-bench-filter="all" onclick="saSetBenchFilter('all')" class="sa-bench-seg" style="background:transparent;border:none;color:#8b91a0;padding:4px 12px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">All</button>
+        </div>
+        <div style="font-size:10px;color:#555c6e">SA Rating 30% · Trend 25% · Return 20% · Freshness 15% · TENX 10%</div>
+      </div>
     </div>
     <div id="sa-rank-table-header" style="display:grid;grid-template-columns:38px 70px 80px 90px 120px 65px 80px 110px 1fr;gap:6px;padding:6px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555c6e;border-bottom:1px solid rgba(255,255,255,.08)">
       <div style="text-align:center">Rank</div>
@@ -6512,14 +6519,24 @@ function saRankScore(u) {
 // "TOP REPLACEMENT" = the top-3 highest-scoring CANDIDATEs (not held).
 function saRankAll() {
   if(!Array.isArray(SA_UNIVERSE) || !SA_UNIVERSE.length) return []
-  const heldSet = new Set(SA_HOLDINGS.map(x => String(x.ticker||'').toUpperCase()))
+  // heldSet = uppercased tickers from SA_HOLDINGS, excluding empty/falsy.
+  // CRITICAL: this set is the single source of truth for "owned" — the
+  // TOP REPLACEMENT marker AND saSuggestReplacements both consult it
+  // directly so HELD rows can never leak into either path.
+  const heldSet = new Set(
+    SA_HOLDINGS
+      .map(x => String((x && x.ticker) || '').toUpperCase())
+      .filter(t => t.length > 0)
+  )
   const ratingPriority = { 'Strong Buy':5, 'Buy':4, 'Hold':3, 'Unknown':2, 'Sell':1, 'Strong Sell':0 }
   const ranked = SA_UNIVERSE
     .filter(u => u && u.ticker)
     .map(u => {
       const r = saRankScore(u)
+      const TK = String(u.ticker).toUpperCase()
       return Object.assign({}, u, r, {
-        status: heldSet.has(String(u.ticker).toUpperCase()) ? 'HELD' : 'CANDIDATE'
+        ticker: TK,                              // normalize for downstream comparisons
+        status: heldSet.has(TK) ? 'HELD' : 'CANDIDATE'
       })
     })
     .sort((a, b) => {
@@ -6538,10 +6555,13 @@ function saRankAll() {
       const db = b.picked_date ? new Date(b.picked_date).getTime() : 0
       return db - da
     })
-  // Mark top-3 CANDIDATEs as TOP REPLACEMENT (in-place upgrade of status)
+  // Mark top-3 NON-HELD rows as TOP REPLACEMENT. Belt-and-suspenders:
+  // we check status==='CANDIDATE' AND heldSet.has(ticker)===false so a
+  // HELD row can never receive the chip, even if some upstream code
+  // ever set status incorrectly.
   let nMarked = 0
   for(const r of ranked) {
-    if(r.status === 'CANDIDATE') {
+    if(r.status === 'CANDIDATE' && !heldSet.has(r.ticker)) {
       r.status = 'TOP REPLACEMENT'
       nMarked++
       if(nMarked >= 3) break
@@ -6558,8 +6578,16 @@ function saSuggestReplacements(h, count) {
   count = count || 3
   const ranked = saRankAll()
   if(!ranked.length) return []
+  // Belt-and-suspenders: build heldSet directly from SA_HOLDINGS so we
+  // never depend solely on r.status being correct upstream.
+  const heldSet = new Set(
+    SA_HOLDINGS
+      .map(x => String((x && x.ticker) || '').toUpperCase())
+      .filter(t => t.length > 0)
+  )
   return ranked
-    .filter(r => r.status !== 'HELD')
+    .filter(r => r.status !== 'HELD')                                // status check
+    .filter(r => !heldSet.has(String(r.ticker || '').toUpperCase())) // direct ticker check
     .filter(r => r.ratingLabel !== 'Sell' && r.ratingLabel !== 'Strong Sell')
     .slice(0, count)
     .map(r => ({
@@ -6911,16 +6939,48 @@ function saRenderUniverse() {
     '</div>' + rows.join('')
 }
 
-// ── ALPHA PICKS RANKING — render the bench ───────────────────────────────────
+// ── BENCH FILTER STATE ───────────────────────────────────────────────────────
+// 'candidates' (default) = hide HELD rows; 'all' = show every universe entry.
+// Persisted to localStorage so the user's preference survives reloads.
+function saGetBenchFilter() {
+  try { return localStorage.getItem('gt_sa_bench_filter') || 'candidates' }
+  catch(e) { return 'candidates' }
+}
+function saSetBenchFilter(mode) {
+  if(mode !== 'candidates' && mode !== 'all') mode = 'candidates'
+  try { localStorage.setItem('gt_sa_bench_filter', mode) } catch(e) {}
+  saRenderRanking()
+}
+
+// ── ALPHA PICKS BENCH — render the bench ─────────────────────────────────────
 // Reads SA_UNIVERSE + saRankAll(); paints the ranked table beneath the
 // holdings grid. Top 5 visually highlighted; HELD vs CANDIDATE vs TOP
-// REPLACEMENT shown in the Status column.
+// REPLACEMENT shown in the Status column. The [Candidates Only] toggle
+// hides HELD rows so the bench reads as a true "what should I buy next" list.
 function saRenderRanking() {
   const el = document.getElementById('sa-rank-list')
   if(!el) return
   const ranked = saRankAll()
+
+  // Sync the segmented filter UI to the current state on every render
+  const filterMode = saGetBenchFilter()
+  document.querySelectorAll('#sa-bench-filter .sa-bench-seg').forEach(b => {
+    const active = b.getAttribute('data-bench-filter') === filterMode
+    b.style.background = active ? 'rgba(240,192,64,.15)' : 'transparent'
+    b.style.color      = active ? '#f0c040' : '#8b91a0'
+  })
+
   if(!ranked.length) {
     el.innerHTML = '<div style="text-align:center;padding:24px;color:#555c6e;font-size:11px">SA Universe is empty — open the ⚙ Universe panel to seed candidates.</div>'
+    return
+  }
+  // Apply filter — HELD rows are hidden in 'candidates' mode
+  const visible = filterMode === 'candidates'
+    ? ranked.filter(r => r.status !== 'HELD')
+    : ranked
+  if(!visible.length) {
+    const heldCount = ranked.filter(r => r.status === 'HELD').length
+    el.innerHTML = '<div style="text-align:center;padding:24px;color:#555c6e;font-size:11px">All '+heldCount+' universe entries are already held — switch to <b style="color:#f0c040">All</b> to see the full bench, or seed more tickers.</div>'
     return
   }
   const ratingColors = {
@@ -6939,7 +6999,7 @@ function saRenderRanking() {
     if(s >= 3.5) return '#ff8c42'
     return '#ff4560'
   }
-  const rows = ranked.map((r, i) => {
+  const rows = visible.map((r, i) => {
     const rank = i + 1
     const isTop5 = rank <= 5
     const rowBg = isTop5 ? 'background:rgba(240,192,64,.04);' : ''
