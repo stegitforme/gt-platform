@@ -1261,12 +1261,23 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
       <div style="font-size:11px;color:#555c6e">Long-term holdings · independent of SG Score / 10-Bagger · monitored for early-sell signals</div>
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <button class="btn btn-gold" style="font-size:11px;padding:4px 11px" onclick="saRefreshLive()">⟳ Refresh Prices</button>
+      <button class="btn btn-gold" style="font-size:11px;padding:4px 11px" onclick="saSyncFromFidelity()" title="Pull shares + cost basis + last price from the Fidelity Open Positions CSV currently loaded in Trade Manager. Manual SA fields (status, override, thesis, notes, risk notes, warning flag, alert date) are preserved.">⟳ Sync from Fidelity</button>
+      <button class="btn btn-ghost" style="font-size:11px;padding:4px 11px" onclick="saRefreshLive()" title="Pull last close from Polygon for each holding (independent of Fidelity sync)">⟳ Refresh Prices</button>
       <button class="btn btn-ghost" style="font-size:11px;padding:4px 11px" onclick="document.getElementById('sa-add-form').style.display=document.getElementById('sa-add-form').style.display==='none'?'block':'none'">+ Add Holding</button>
       <button class="btn btn-ghost" style="font-size:11px;padding:4px 11px" onclick="document.getElementById('sa-universe-panel').style.display=document.getElementById('sa-universe-panel').style.display==='none'?'block':'none'">⚙ Universe</button>
       <span id="sa-summary" style="font-size:11px;color:#8b91a0"></span>
       <span id="sa-last-refresh" style="font-size:10px;color:#555c6e"></span>
     </div>
+  </div>
+
+  <!-- Fidelity sync status line + non-SA candidates preview -->
+  <div id="sa-fid-sync-line" style="display:none;margin-bottom:10px;padding:8px 12px;background:#111318;border:1px solid rgba(77,166,255,.2);border-radius:6px;font-size:11px;color:#8b91a0">
+    <span id="sa-fid-sync-status"></span>
+  </div>
+  <div id="sa-fid-candidates" style="display:none;margin-bottom:14px;padding:10px 14px;background:rgba(77,166,255,.05);border:1px solid rgba(77,166,255,.3);border-radius:6px">
+    <div style="font-size:11px;font-weight:700;letter-spacing:.07em;color:#4da6ff;text-transform:uppercase;margin-bottom:6px">Found non-SA Fidelity positions</div>
+    <div id="sa-fid-candidates-list" style="font-size:11px;display:flex;flex-wrap:wrap;gap:6px"></div>
+    <div style="margin-top:6px;font-size:10px;color:#555c6e">Click a ticker to add it to your SA basket. Will be created with default fields (status=Unknown, no thesis/notes).</div>
   </div>
 
   <!-- Portfolio risk warning banner (shown when 3+ holdings have weak trend or SELL REVIEW) -->
@@ -6345,6 +6356,190 @@ async function saRefreshLive() {
   if(btn) { btn.textContent = '⟳ Refresh Prices'; btn.disabled = false }
 }
 
+// ── SYNC FROM FIDELITY (CSV-driven, read-only of FID_OPEN) ───────────────────
+// Reads window.FID_OPEN.positions (loaded by Trade Manager's
+// "Import Open Positions CSV") and updates SA_HOLDINGS by ticker match.
+//
+// Field mapping (Fidelity → SA):
+//   underlying        → ticker        (match key)
+//   qty               → shares
+//   avgCost           → entryPx       (cost basis per share)
+//   currentPrice      → lastPx
+//   currentValue      → fidCurrentValue (informational; UI still derives
+//                       value from shares × lastPx for consistency)
+//   costBasisTotal    → fidCostBasis  (informational, for verification)
+//   (sync timestamp)  → fidSyncAt + lastFetched
+//
+// Manual SA fields are NEVER overwritten:
+//   status, recommendation, thesis, notes, riskNotes, earlySellWarn,
+//   alertDate, entryDate, id
+//
+// Behavior:
+//   • SA holding matched in FID_OPEN     → update price/cost/shares; clear notFoundInFidelity
+//   • SA holding NOT matched in FID_OPEN → set notFoundInFidelity = true (kept, flagged in UI)
+//   • Fidelity ticker NOT in SA basket   → listed as "Found non-SA Fidelity positions" with one-click Add
+//
+// Multiple Fidelity rows per underlying (e.g., separate lots) are aggregated:
+//   • shares  = sum of qty
+//   • entryPx = weighted-avg cost (totalCost / totalShares)
+//   • lastPx  = first non-zero currentPrice (Fidelity reports same per ticker)
+//   • fidCurrentValue / fidCostBasis = sums
+//
+// Read-only: this function does NOT mutate FID_OPEN, Trade Manager state,
+// SG/INTERNAL_RESULTS, TENX, Planner, Roll Engine/Review, Stop Comparison,
+// OVTLYR, or order logic.
+function saSyncFromFidelity() {
+  const lineEl = document.getElementById('sa-fid-sync-line')
+  const stEl   = document.getElementById('sa-fid-sync-status')
+  const candEl = document.getElementById('sa-fid-candidates')
+  const candList = document.getElementById('sa-fid-candidates-list')
+  const setLine = (msg, color) => {
+    if(lineEl) lineEl.style.display = 'block'
+    if(stEl) {
+      stEl.innerHTML = msg
+      stEl.style.color = color || '#8b91a0'
+    }
+  }
+
+  // Validate FID_OPEN
+  if(!window.FID_OPEN || !Array.isArray(window.FID_OPEN.positions) || !window.FID_OPEN.positions.length) {
+    setLine('⚠ No Fidelity Open Positions loaded. Go to Trade Manager → upload your Fidelity Portfolio_Positions CSV first, then return here.', '#ff8c42')
+    if(candEl) candEl.style.display = 'none'
+    return
+  }
+
+  // Aggregate stock-only positions by ticker
+  const fidByTicker = {}
+  for(const p of window.FID_OPEN.positions) {
+    if(!p || !p.isStock) continue   // SA tracks long-term stocks only — skip options
+    const tk = String(p.underlying||'').toUpperCase()
+    if(!tk) continue
+    const qty   = +p.qty || 0
+    const avg   = +p.avgCost || 0
+    const last  = +p.currentPrice || 0
+    const val   = +p.currentValue || 0
+    const cost  = +p.costBasisTotal || (qty * avg)
+    if(!fidByTicker[tk]) {
+      fidByTicker[tk] = { ticker:tk, shares:0, totalCost:0, lastPx:0, fidCurrentValue:0, fidCostBasis:0, lots:0 }
+    }
+    const agg = fidByTicker[tk]
+    agg.shares          += qty
+    agg.totalCost       += (avg > 0 && qty > 0) ? (avg * qty) : cost
+    agg.lastPx          =  agg.lastPx || last
+    agg.fidCurrentValue += val
+    agg.fidCostBasis    += cost
+    agg.lots            += 1
+  }
+  // Compute weighted-avg entryPx
+  Object.values(fidByTicker).forEach(a => {
+    a.entryPx = a.shares > 0 ? +(a.totalCost / a.shares).toFixed(4) : 0
+    a.shares  = +a.shares.toFixed(6)
+  })
+
+  // Apply to SA_HOLDINGS — match by ticker, update import fields, preserve manuals
+  const now = Date.now()
+  let nMatched = 0, nMissing = 0
+  const matchedTickers = [], missingTickers = []
+  for(const h of SA_HOLDINGS) {
+    const tk = String(h.ticker||'').toUpperCase()
+    if(!tk) continue
+    const f = fidByTicker[tk]
+    if(f) {
+      h.shares          = f.shares
+      h.entryPx         = f.entryPx
+      h.lastPx          = f.lastPx
+      h.fidCurrentValue = f.fidCurrentValue
+      h.fidCostBasis    = f.fidCostBasis
+      h.fidSyncAt       = now
+      h.lastFetched     = now
+      h.notFoundInFidelity = false
+      nMatched++; matchedTickers.push(tk)
+    } else {
+      h.notFoundInFidelity = true
+      nMissing++; missingTickers.push(tk)
+    }
+  }
+
+  // Find Fidelity stock tickers NOT in SA basket — preview for one-click add
+  const heldSet = new Set(SA_HOLDINGS.map(h => String(h.ticker||'').toUpperCase()))
+  const nonSA = Object.values(fidByTicker)
+    .filter(f => !heldSet.has(f.ticker))
+    .sort((a,b) => a.ticker.localeCompare(b.ticker))
+  // Stash for one-click add handler — keyed by ticker
+  window.__saFidCandidates = {}
+  nonSA.forEach(c => { window.__saFidCandidates[c.ticker] = c })
+
+  if(candEl && candList) {
+    if(nonSA.length) {
+      candList.innerHTML = nonSA.map(c => {
+        const tip = c.shares.toFixed(2)+' sh · entry $'+c.entryPx.toFixed(2)+' · last $'+c.lastPx.toFixed(2)+' · value $'+Math.round(c.fidCurrentValue).toLocaleString()
+        return '<button onclick="saAddFidCandidate(\''+c.ticker+'\')" title="'+tip.replace(/"/g,'&quot;')+'" style="background:rgba(77,166,255,.12);color:#4da6ff;border:1px solid rgba(77,166,255,.4);border-radius:3px;padding:3px 8px;font-size:11px;font-weight:700;font-family:monospace;cursor:pointer">+ '+c.ticker+'</button>'
+      }).join('')
+      candEl.style.display = 'block'
+    } else {
+      candEl.style.display = 'none'
+    }
+  }
+
+  saSave()
+  saRender()
+
+  // Status line — last sync, matched, missing, candidates
+  const importedAt = (window.FID_OPEN && window.FID_OPEN.importedAt)
+    ? new Date(window.FID_OPEN.importedAt).toLocaleString()
+    : 'unknown'
+  const missDetail = nMissing
+    ? ' <span style="color:#ff8c42">· '+nMissing+' not in current Fidelity upload ('+missingTickers.join(', ')+')</span>'
+    : ''
+  const candDetail = nonSA.length
+    ? ' <span style="color:#4da6ff">· '+nonSA.length+' Fidelity-only ticker'+(nonSA.length===1?'':'s')+' (see panel below)</span>'
+    : ''
+  setLine(
+    '<b style="color:#00d68f">✓ Synced</b> from Fidelity at '+new Date(now).toLocaleTimeString() +
+    ' · CSV imported '+importedAt +
+    ' · <b style="color:#e8eaf0">'+nMatched+'</b> matched' +
+    missDetail + candDetail,
+    '#8b91a0'
+  )
+}
+
+// One-click add of a Fidelity-only ticker into SA_HOLDINGS
+function saAddFidCandidate(ticker) {
+  const tk = String(ticker||'').toUpperCase()
+  if(!tk) return
+  if(SA_HOLDINGS.find(h => (h.ticker||'').toUpperCase() === tk)) {
+    alert(tk+' is already in your SA basket'); return
+  }
+  const c = window.__saFidCandidates && window.__saFidCandidates[tk]
+  if(!c) { alert('No Fidelity data cached for '+tk+' — run Sync from Fidelity first'); return }
+  const now = Date.now()
+  SA_HOLDINGS.push({
+    id:                 now + Math.floor(Math.random()*1000),
+    ticker:             tk,
+    shares:             c.shares,
+    entryPx:            c.entryPx,
+    lastPx:             c.lastPx,
+    fidCurrentValue:    c.fidCurrentValue,
+    fidCostBasis:       c.fidCostBasis,
+    fidSyncAt:          now,
+    lastFetched:        now,
+    entryDate:          '',
+    alertDate:          '',
+    status:             'Unknown',
+    recommendation:     '',
+    thesis:             '',
+    notes:              '',
+    riskNotes:          '',
+    earlySellWarn:      false,
+    notFoundInFidelity: false
+  })
+  // Drop from candidate cache + re-render preview
+  if(window.__saFidCandidates) delete window.__saFidCandidates[tk]
+  saSave(); saRender()
+  // Refresh the preview panel (one fewer candidate)
+  saSyncFromFidelity()
+}
+
 // ── ADD / REMOVE / EDIT — personal holdings ──────────────────────────────────
 function saAddHolding() {
   const ticker = document.getElementById('sa-new-ticker').value.trim().toUpperCase()
@@ -6579,6 +6774,8 @@ function saRender() {
       flags.push('<span style="background:rgba(0,214,143,.15);color:#00d68f;font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px">★ WIN</span>')
     if(h.earlySellWarn)
       flags.push('<span style="background:rgba(255,140,66,.15);color:#ff8c42;font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px">manual ⚠</span>')
+    if(h.notFoundInFidelity)
+      flags.push('<span title="Last Fidelity sync did not find this ticker in Open Positions" style="background:rgba(255,140,66,.12);color:#ff8c42;font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px">⚠ NOT IN FIDELITY</span>')
     if(d.override)
       flags.push('<span style="background:rgba(139,145,160,.15);color:#8b91a0;font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px">manual</span>')
     const tx = saGetTenxScore(h.ticker)
